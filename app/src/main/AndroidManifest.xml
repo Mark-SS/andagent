@@ -38,9 +38,9 @@
     <!-- Pre-13 fallback -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
-    <!-- Pre-29 public Downloads/Documents writes (scoped storage starts at 29) -->
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28" />
+    <!-- Pre-29 public Downloads/Documents writes (scoped storage starts at 29).
+         targetSdk=28: legacy external storage fully active, remove maxSdk cap. -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
 
     <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
 

@@ -57,7 +57,7 @@ android {
     defaultConfig {
         applicationId = "io.nous.andagent"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 28
         versionCode = 9
         versionName = "0.10.0"
     }

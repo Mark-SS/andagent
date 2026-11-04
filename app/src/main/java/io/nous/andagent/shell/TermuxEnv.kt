@@ -170,7 +170,7 @@ class TermuxEnv(private val context: Context, private val shizuku: ShizukuShell?
                     if (!proc.waitFor(timeoutSeconds.toLong(), TimeUnit.SECONDS)) { proc.destroyForcibly(); "ERROR: 命令超过 ${timeoutSeconds}s" }
                     else { t1.join(500); t2.join(500); Log.i("TermuxEnv", "exec backend=direct exit=${proc.exitValue()}"); formatResult(proc.exitValue(), out.toString(), err.toString(), "direct") }
                 } catch (e: Exception) {
-                    "ERROR: 执行失败（${e.message ?: e.javaClass.simpleName}）。Android 10+ 禁止应用私有目录内 exec；请激活 Shizuku 后重试，或安装 Termux App 作为回退后端"
+                    "ERROR: 执行失败（${e.message ?: e.javaClass.simpleName}）。可尝试：激活 Shizuku、运行 termux_setup 重装环境，或安装 Termux App 作为回退后端"
                 }
             }
             "termux_app" -> TermuxAppBackend(context).exec(command, timeoutSeconds)
