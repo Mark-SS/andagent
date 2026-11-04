@@ -13,6 +13,7 @@ import { execTool, type Settings } from "./bridge";
 import { PERMISSION_GUIDE } from "./permissionGuide";
 import { toModelMessages } from "./modelMessages";
 import { SessionStore, type SessionMeta } from "./sessions";
+import { EXTRA_TOOL_DEFS } from "./extraTools";
 
 type PiModule = typeof import("@mariozechner/pi-ai");
 
@@ -518,6 +519,7 @@ const TOOL_DEFS = [
   { name: "db_exec", description: "执行参数化 SQL。值使用 ? 占位符和 params_json JSON 数组。DROP TABLE、无 WHERE DELETE 需 confirm=true。", parameters: { type: "object", properties: { name: { type: "string" }, sql: { type: "string" }, params_json: { type: "string" }, confirm: { type: "boolean" } }, required: ["name", "sql"] } },
   { name: "db_query", description: "只读 SELECT，返回最多 limit 行。值使用 ? 和 params_json JSON 数组。", parameters: { type: "object", properties: { name: { type: "string" }, sql: { type: "string" }, params_json: { type: "string" }, limit: { type: "integer" } }, required: ["name", "sql"] } },
   { name: "db_drop", description: "删除整个数据库，必须 confirm=true。", parameters: { type: "object", properties: { name: { type: "string" }, confirm: { type: "boolean" } }, required: ["name"] } },
+  ...EXTRA_TOOL_DEFS,
 ] satisfies PiTool[];
 
 /**

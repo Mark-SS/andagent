@@ -231,7 +231,11 @@ export function ToolCard(props: ToolCallMessagePartProps) {
             "完成"
           )}
         </span>
-        <span className={`tool-chevron${open ? " open" : ""}`}>⌄</span>
+        <span className={`tool-chevron${open ? " open" : ""}`}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </span>
       </button>
 
       {running && notice && <div className="tool-confirm">{notice}</div>}

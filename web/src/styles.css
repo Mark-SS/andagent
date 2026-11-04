@@ -724,8 +724,9 @@ button:disabled {
 
 .tool-chevron {
   flex: none;
+  display: flex;
+  align-items: center;
   color: var(--faint);
-  font-size: 13px;
   transform: rotate(-90deg);
   transition: transform 0.18s ease;
   margin-left: 1px;
