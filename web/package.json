@@ -14,15 +14,18 @@
     "@mariozechner/pi-ai": "^0.73.1",
     "@opentelemetry/api": "^1.10.0",
     "echarts": "^5.6.0",
+    "gridjs": "^6.2.0",
     "highlight.js": "^11.11.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "sql.js": "^1.15.2"
   },
   "devDependencies": {
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
+    "@types/sql.js": "^1.4.9",
     "@vitejs/plugin-react": "^4.3.4",
     "esbuild": "^0.28.2",
     "typescript": "~5.7.2",
