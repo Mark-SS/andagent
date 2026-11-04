@@ -118,48 +118,12 @@ class TermuxEnv(private val context: Context, private val shizuku: ShizukuShell?
             return@withContext "ERROR: 命令被危险路径黑名单拦截"
         when (backend()) {
             "embedded" -> {
-                // Primary path: memfd + fexecve — reads the ELF into an
-                // anonymous memory fd, so Android 10+ W^X (SELinux
-                // execute_no_trans on /data files) never fires. Same process
-                // tree, no Shizuku needed.
-                runCatching {
-                    val memExecEnv = environment().toMutableMap()
-                    val (code, err) = MemExec.exec(
-                        elfFile = dash,
-                        args = listOf(dash.path, "-c", command),
-                        env = memExecEnv,
-                        workDir = home.path,
-                        timeoutSeconds = timeoutSeconds.toLong(),
-                    )
-                    Log.i("TermuxEnv", "exec backend=memfd exit=$code")
-                    return@withContext formatResult(code, err, "", "memfd")  // waitFor mixes stdout+stderr into second field
-                }.getOrElse { e ->
-                    // Fall through to Shizuku if memfd itself failed to load.
-                    Log.w("TermuxEnv", "memfd failed; trying Shizuku then direct", e)
-                    "MEMFD_FAIL: ${e.message}"
-                }
-                // Secondary: Shizuku (shell uid). -1 means Shizuku itself
-                // failed (not granted / dead); fall through to direct exec.
-                shizuku?.let { sh ->
-                    val shizukuCmd = buildString {
-                        append("LD_LIBRARY_PATH=").append(prefix.path).append("/lib ")
-                        append("PREFIX=").append(prefix.path).append(" ")
-                        append("HOME=").append(home.path).append(" ")
-                        append("PATH=").append(prefix.path).append("/bin:/system/bin ")
-                        append("TMPDIR=").append(context.cacheDir.path).append(" ")
-                        append(dash.path).append(" -c '")
-                        append(command.replace("'", "'\\''"))
-                        append("'")
-                    }
-                    val viaShizuku = sh.run(shizukuCmd, timeoutSeconds * 1000L)
-                    // -1 means Shizuku itself failed (not granted / dead);
-                    // fall through to the legacy direct exec, then report.
-                    if (viaShizuku.exitCode != -1 || !viaShizuku.stderr.contains("Shizuku")) {
-                        Log.i("TermuxEnv", "exec backend=shizuku exit=${viaShizuku.exitCode}")
-                        return@withContext formatResult(viaShizuku.exitCode, viaShizuku.stdout, viaShizuku.stderr, "shizuku")
-                    }
-                }
-                // Legacy direct exec (works on old devices / relaxed policies).
+                // Path order under targetSdk 28:
+                //  1. DIRECT exec — data-dir execve is legal (W^X only for
+                //     targetSdk>=29). Fastest, no Shizuku needed.
+                //  2. memfd — for ROMs that somehow still restrict direct exec.
+                //  3. Shizuku (shell uid) — for restricted ROMs.
+                //  4. Termux App bridge.
                 try {
                     val proc = ProcessBuilder(dash.path, "-c", command).directory(home).apply { environment().putAll(environment()) }.start()
                     val out = StringBuilder(); val err = StringBuilder()
@@ -172,8 +136,46 @@ class TermuxEnv(private val context: Context, private val shizuku: ShizukuShell?
                     val t1 = drain(proc.inputStream, out, 4000); val t2 = drain(proc.errorStream, err, 2000)
                     if (!proc.waitFor(timeoutSeconds.toLong(), TimeUnit.SECONDS)) { proc.destroyForcibly(); "ERROR: 命令超过 ${timeoutSeconds}s" }
                     else { t1.join(500); t2.join(500); Log.i("TermuxEnv", "exec backend=direct exit=${proc.exitValue()}"); formatResult(proc.exitValue(), out.toString(), err.toString(), "direct") }
-                } catch (e: Exception) {
-                    "ERROR: 执行失败（${e.message ?: e.javaClass.simpleName}）。可尝试：激活 Shizuku、运行 termux_setup 重装环境，或安装 Termux App 作为回退后端"
+                } catch (e: java.io.IOException) {
+                    // execve denied (e.g. OEM policy despite targetSdk 28) →
+                    // fall through to memfd, then Shizuku.
+                    Log.w("TermuxEnv", "direct exec failed (${e.message}); trying memfd", e)
+                    val memExecEnv = environment().toMutableMap()
+                    runCatching {
+                        val (code, err) = MemExec.exec(
+                            elfFile = dash,
+                            args = listOf(dash.path, "-c", command),
+                            env = memExecEnv,
+                            workDir = home.path,
+                            timeoutSeconds = timeoutSeconds.toLong(),
+                        )
+                        Log.i("TermuxEnv", "exec backend=memfd exit=$code")
+                        if (code != 127 || !err.contains("errno=13"))
+                            return@withContext formatResult(code, err, "", "memfd")
+                        // errno=13 (EACCES) on the memfd itself → this ROM also
+                        // blocks memfd exec; fall through to Shizuku.
+                        "MEMFD_EACCES"
+                    }.getOrElse { e2 ->
+                        Log.w("TermuxEnv", "memfd failed; trying Shizuku", e2)
+                        "MEMFD_FAIL: ${e2.message}"
+                    }
+                    shizuku?.let { sh ->
+                        val shizukuCmd = buildString {
+                            append("LD_LIBRARY_PATH=").append(prefix.path).append("/lib ")
+                            append("PREFIX=").append(prefix.path).append(" ")
+                            append("HOME=").append(home.path).append(" ")
+                            append("PATH=").append(prefix.path).append("/bin:/system/bin ")
+                            append("TMPDIR=").append(context.cacheDir.path).append(" ")
+                            append(dash.path).append(" -c '")
+                            append(command.replace("'", "'\\''"))
+                            append("'")
+                        }
+                        val viaShizuku = sh.run(shizukuCmd, timeoutSeconds * 1000L)
+                        if (viaShizuku.exitCode != -1 || !viaShizuku.stderr.contains("Shizuku")) {
+                            return@withContext formatResult(viaShizuku.exitCode, viaShizuku.stdout, viaShizuku.stderr, "shizuku")
+                        }
+                    }
+                    "ERROR: 三条执行路径都失败（direct 被拦/memfd EACCES/Shizuku 未授权）。请激活 Shizuku（设置页），或安装 Termux App 作回退"
                 }
             }
             "termux_app" -> TermuxAppBackend(context).exec(command, timeoutSeconds)
