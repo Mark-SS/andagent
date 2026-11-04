@@ -159,16 +159,20 @@ class SqliteTool(private val context: Context, override val name: String) : Tool
             return@runCatching "需要确认危险删除；确认后以 confirm=true 重试"
         if (f.length() >= maxBytes && Regex("^(INSERT|UPDATE|CREATE|REPLACE)", RegexOption.IGNORE_CASE).containsMatchIn(inspected))
             return@runCatching "ERROR: 数据库已达到 50MB 上限"
+        val first = inspected.substringBefore(' ').uppercase()
+        if (first in setOf("SELECT", "WITH", "EXPLAIN"))
+            return@runCatching open(safeName, true).use { query(it, sql, values, 100).toString() }
         open(safeName).use { db ->
-            val first = inspected.substringBefore(' ').uppercase()
-            val result = if (first in setOf("SELECT", "WITH", "EXPLAIN")) query(db, sql, values, 100)
-            else {
+            db.beginTransaction()
+            try {
                 db.execSQL(sql, values.map(::bindValue).toTypedArray())
                 val affected = db.rawQuery("SELECT changes()", null).use { if (it.moveToFirst()) it.getInt(0) else 0 }
-                buildJsonObject { put("affectedRows", affected) }
-            }
-            if (f.length() > maxBytes) return@runCatching "ERROR: 数据库超过 50MB 上限"
-            result.toString()
+                val pages = db.rawQuery("PRAGMA page_count", null).use { if (it.moveToFirst()) it.getLong(0) else 0L }
+                val pageSize = db.rawQuery("PRAGMA page_size", null).use { if (it.moveToFirst()) it.getLong(0) else 0L }
+                if (pages * pageSize > maxBytes) throw IllegalStateException("数据库超过 50MB 上限，写入已回滚")
+                db.setTransactionSuccessful()
+                buildJsonObject { put("affectedRows", affected) }.toString()
+            } finally { db.endTransaction() }
         }
     }.getOrElse { error(it) }
 }

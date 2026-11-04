@@ -111,6 +111,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var nfcSession: NfcSession
     private var embeddedDialog: Dialog? = null
     private lateinit var assetLoader: WebViewAssetLoader
+    private lateinit var localMedia: LocalMediaHandler
     private lateinit var bridge: AgentBridge
     private lateinit var permissionBroker: PermissionBroker
     private lateinit var shizuku: ShizukuShell
@@ -301,7 +302,7 @@ class MainActivity : ComponentActivity() {
             },
         )
 
-        val localMedia = LocalMediaHandler(this)
+        localMedia = LocalMediaHandler(this)
         assetLoader = WebViewAssetLoader.Builder()
             .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
             .addPathHandler("/local/", localMedia)
@@ -374,7 +375,7 @@ class MainActivity : ComponentActivity() {
                 settings.allowFileAccess = false
                 settings.allowContentAccess = false
                 webViewClient = object : WebViewClient() {
-                    override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? = assetLoader.shouldInterceptRequest(request.url)
+                    override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? = localMedia.intercept(request) ?: assetLoader.shouldInterceptRequest(request.url)
                     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean = request.url.scheme != "https"
                 }
             }
