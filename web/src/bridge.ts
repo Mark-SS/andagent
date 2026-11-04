@@ -39,6 +39,8 @@ interface AndroidBridge {
   llmFetchStart(id: string, url: string, headersJson: string, body: string): void;
   llmCancel(id: string): void;
   toolExec(id: string, name: string, argsJson: string): void;
+  transcribeAudio(id: string, filePath: string, language: string): void;
+  saveAudioBase64(id: string, base64: string): string;
   requestPermissions(namesJson: string): void;
   permissionStatus(names: string): string;
   openAppSettings(): void;
@@ -133,6 +135,35 @@ export function execTool(name: string, args: unknown): Promise<{ ok: boolean; re
       window.clearTimeout(timer);
       toolPending.delete(id);
       resolve({ ok: false, result: `ERROR: 无法调用工具桥：${String(e)}` });
+    }
+  });
+}
+
+/**
+ * Server-side transcription of a recorded audio file via the native bridge
+ * (OpenAI-compatible /audio/transcriptions on the configured baseUrl).
+ */
+export function transcribeAudio(
+  filePath: string,
+  language = "zh",
+): Promise<{ ok: boolean; result: string }> {
+  const b = bridge();
+  if (!b) {
+    return Promise.resolve({ ok: false, result: "ERROR: 语音转写仅能在 App 内使用" });
+  }
+  const id = `asr-${Date.now()}-${++seq}`;
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(() => {
+      toolPending.delete(id);
+      resolve({ ok: false, result: "ERROR: 转写超时（120s）" });
+    }, 120_000);
+    toolPending.set(id, { resolve, timer });
+    try {
+      b.transcribeAudio(id, filePath, language);
+    } catch (e) {
+      window.clearTimeout(timer);
+      toolPending.delete(id);
+      resolve({ ok: false, result: `ERROR: 无法调用转写桥：${String(e)}` });
     }
   });
 }
@@ -501,6 +532,80 @@ export function getPermissionStatus(names: string[]): Record<string, string> {
 
 export function openAppSettings(): void {
   bridge()?.openAppSettings();
+}
+
+/* ------------------------------------------------------------------ */
+/* Voice input: decode recorded blob → WAV → native file → transcribe   */
+/* ------------------------------------------------------------------ */
+
+/** Decode any browser-recorded audio blob to 16kHz mono PCM WAV. */
+async function blobToWavBlob(blob: Blob): Promise<Blob> {
+  const AudioCtx =
+    window.AudioContext ??
+    (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+  const ctx = new AudioCtx();
+  try {
+    const buf = await blob.arrayBuffer();
+    const audio = await ctx.decodeAudioData(buf);
+    // Downmix to mono 16kHz.
+    const targetRate = 16000;
+    const frames = Math.ceil(audio.duration * targetRate);
+    const offline = new OfflineAudioContext(1, frames, targetRate);
+    const src = offline.createBufferSource();
+    src.buffer = audio;
+    src.connect(offline.destination);
+    src.start();
+    const rendered = await offline.startRendering();
+    const pcm = rendered.getChannelData(0);
+    // 16-bit PCM WAV header + data.
+    const dataLen = pcm.length * 2;
+    const out = new ArrayBuffer(44 + dataLen);
+    const view = new DataView(out);
+    const w = (off: number, s: string) => {
+      for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i));
+    };
+    w(0, "RIFF");
+    view.setUint32(4, 36 + dataLen, true);
+    w(8, "WAVE");
+    w(12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true); // PCM
+    view.setUint16(22, 1, true); // mono
+    view.setUint32(24, targetRate, true);
+    view.setUint32(28, targetRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    w(36, "data");
+    view.setUint32(40, dataLen, true);
+    for (let i = 0; i < pcm.length; i++) {
+      const s = Math.max(-1, Math.min(1, pcm[i]));
+      view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+    }
+    return new Blob([out], { type: "audio/wav" });
+  } finally {
+    void ctx.close();
+  }
+}
+
+/** Save a blob to the native filesystem (base64 through the bridge). */
+export async function saveAudioBlob(blob: Blob): Promise<string> {
+  const b = bridge();
+  if (!b) throw new Error("语音输入仅能在 App 内使用");
+  const wav = await blobToWavBlob(blob);
+  const base64 = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const s = String(reader.result);
+      resolve(s.slice(s.indexOf(",") + 1));
+    };
+    reader.onerror = () => reject(new Error("读取录音失败"));
+    reader.readAsDataURL(wav);
+  });
+  const id = `wav-${Date.now()}-${++seq}`;
+  const raw = b.saveAudioBase64(id, base64);
+  const parsed = JSON.parse(raw) as { ok: boolean; path?: string; message?: string };
+  if (!parsed.ok || !parsed.path) throw new Error(parsed.message ?? "保存音频失败");
+  return parsed.path;
 }
 
 /** Test hook for the Node-side transport harness. */

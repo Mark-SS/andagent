@@ -2,6 +2,7 @@ package io.nous.andagent.bridge
 
 import android.os.Handler
 import android.os.Looper
+import android.content.Context
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import io.nous.andagent.tools.Tool
@@ -22,6 +23,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.Response
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
@@ -43,6 +45,7 @@ class AgentBridge(
     private val settings: SettingsStore,
     private val tools: Map<String, Tool>,
     private val permissions: PermissionBroker,
+    private val appContext: Context? = null,
     private val appVersion: String = "",
     private val shizukuStatus: () -> String = { "{\"status\":\"unavailable\"}" },
     private val shizukuRequest: () -> String = { "{\"requested\":false}" },
@@ -186,6 +189,82 @@ class AgentBridge(
     fun termuxStatus(): String = termuxStatus()
 
     /* ------------------------------ tools ------------------------------- */
+
+    /**
+     * Server-side speech-to-text: POST the recorded file to
+     * <baseUrl>/audio/transcriptions (OpenAI-compatible), return the text.
+     * Runs on OkHttp's dispatcher; result comes back via the tool channel
+     * semantics (single JSON payload event, not SSE).
+     */
+    @JavascriptInterface
+    fun transcribeAudio(reqId: String, filePath: String, language: String) {
+        toolExecutor.execute {
+            val file = java.io.File(filePath)
+            if (!file.exists() || file.length() == 0L) {
+                emitToolResult(reqId, false, "ERROR: 音频文件不存在或为空: $filePath")
+                return@execute
+            }
+            val key = settings.apiKey
+            if (key.isBlank()) {
+                emitToolResult(reqId, false, "ERROR: 未配置 API Key，无法调用转写服务")
+                return@execute
+            }
+            val url = settings.baseUrl.trimEnd('/') + "/audio/transcriptions"
+            val body = okhttp3.MultipartBody.Builder()
+                .setType(okhttp3.MultipartBody.FORM)
+                .addFormDataPart("file", file.name,
+                    file.asRequestBody("audio/mp4".toMediaType()))
+                .addFormDataPart("model", "whisper-1")
+                .addFormDataPart("language", language.ifBlank { "zh" })
+                .addFormDataPart("response_format", "json")
+                .build()
+            val request = okhttp3.Request.Builder()
+                .url(url)
+                .header("Authorization", "Bearer $key")
+                .post(body)
+                .build()
+            val result = runCatching {
+                http.newCall(request).execute().use { resp ->
+                    val text = resp.body?.string().orEmpty().take(8000)
+                    if (resp.isSuccessful) {
+                        val parsed = runCatching {
+                            json.parseToJsonElement(text).jsonObject["text"]?.jsonPrimitive?.contentOrNull
+                        }.getOrNull()
+                        parsed ?: text
+                    } else {
+                        "ERROR: 转写失败 HTTP ${resp.code}: $text"
+                    }
+                }
+            }.getOrElse { "ERROR: 转写请求异常（${it.message ?: it.javaClass.simpleName}）" }
+            emitToolResult(reqId, !result.startsWith("ERROR:"), result)
+        }
+    }
+
+    /**
+     * Save a base64-encoded audio blob (from the WebView recorder) to an app
+     * file so it can be POSTed to the transcription endpoint. Returns the
+     * absolute path as JSON.
+     */
+    @JavascriptInterface
+    fun saveAudioBase64(reqId: String, base64: String): String {
+        val ctx = appContext ?: run {
+            return buildJsonObject { put("ok", false); put("message", "ERROR: bridge 无 context") }.toString()
+        }
+        val result = runCatching {
+            val bytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
+            val out = java.io.File(
+                ctx.getExternalFilesDir(null) ?: ctx.filesDir,
+                "voice_${System.currentTimeMillis()}.wav",
+            )
+            out.writeBytes(bytes)
+            out.absolutePath
+        }.getOrElse { "ERROR: 保存音频失败（${it.message ?: it.javaClass.simpleName}）" }
+        return if (result.startsWith("ERROR:")) {
+            buildJsonObject { put("ok", false); put("message", result) }.toString()
+        } else {
+            buildJsonObject { put("ok", true); put("path", result) }.toString()
+        }
+    }
 
     @JavascriptInterface
     fun toolExec(reqId: String, name: String, argsJson: String) {

@@ -357,6 +357,18 @@ const TOOL_DEFS = [
       required: ["panel"],
     },
   },
+  {
+    name: "mic_record",
+    description:
+      "录制一段麦克风音频并保存为文件（M4A）。用于录音备忘、语音素材；返回文件路径。",
+    parameters: {
+      type: "object",
+      properties: {
+        seconds: { type: "integer", description: "录音时长（秒），默认 10，范围 1-300" },
+      },
+      required: [],
+    },
+  },
 ] satisfies PiTool[];
 
 /**

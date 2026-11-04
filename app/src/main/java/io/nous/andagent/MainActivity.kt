@@ -59,6 +59,7 @@ import io.nous.andagent.tools.ScreenRecordTool
 import io.nous.andagent.tools.SensorListTool
 import io.nous.andagent.tools.SensorReadTool
 import io.nous.andagent.tools.StepsHistoryTool
+import io.nous.andagent.tools.MicRecordTool
 import io.nous.andagent.tools.OpenSettingsTool
 import io.nous.andagent.tools.StepsTodayTool
 import io.nous.andagent.tools.StorageScanTool
@@ -154,7 +155,7 @@ class MainActivity : ComponentActivity() {
         permissionBroker = PermissionBroker(this, permissionLauncher)
         shizuku = ShizukuShell(appContext).also { it.init() }
 
-        val termuxEnv = TermuxEnv(appContext)
+        val termuxEnv = TermuxEnv(appContext, shizuku)
         val btConnect = BtConnectTool(appContext, permissionBroker)
         val tools: Map<String, Tool> = mapOf(
             "get_time" to GetTimeTool(),
@@ -206,11 +207,13 @@ class MainActivity : ComponentActivity() {
             "sensor_read" to SensorReadTool(appContext),
             "steps_today" to StepsTodayTool(appContext, healthPermissionRequester),
             "open_settings" to OpenSettingsTool(appContext),
+            "mic_record" to MicRecordTool(appContext, permissionBroker),
             "steps_history" to StepsHistoryTool(appContext, healthPermissionRequester),
         )
 
         bridge = AgentBridge(
             webViewProvider = { webView },
+            appContext = appContext,
             settings = settingsStore,
             tools = tools,
             permissions = permissionBroker,

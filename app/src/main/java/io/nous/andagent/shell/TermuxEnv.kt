@@ -19,7 +19,7 @@ import kotlin.concurrent.thread
 
 /** Official Termux bootstrap is built for /data/data/com.termux/files/usr.
  * We validate executable behavior before advertising the embedded backend. */
-class TermuxEnv(private val context: Context) {
+class TermuxEnv(private val context: Context, private val shizuku: ShizukuShell? = null) {
     private val prefix = File(context.filesDir, "usr")
     private val home = File(context.filesDir, "home").apply { mkdirs() }
     private val dash = File(prefix, "bin/dash")
@@ -117,6 +117,30 @@ class TermuxEnv(private val context: Context) {
             return@withContext "ERROR: 命令被危险路径黑名单拦截"
         when (backend()) {
             "embedded" -> {
+                // Primary path: run through Shizuku (shell uid). Android 10+
+                // blocks execve() inside an app's own data dir for
+                // targetSdk>=29 (SELinux execute_no_trans), but the shell uid
+                // is exempt — and it can read our private files fine. This is
+                // the same trick scrcpy uses for its server binary.
+                shizuku?.let { sh ->
+                    val shizukuCmd = buildString {
+                        append("LD_LIBRARY_PATH=").append(prefix.path).append("/lib ")
+                        append("PREFIX=").append(prefix.path).append(" ")
+                        append("HOME=").append(home.path).append(" ")
+                        append("PATH=").append(prefix.path).append("/bin:/system/bin ")
+                        append("TMPDIR=").append(context.cacheDir.path).append(" ")
+                        append(dash.path).append(" -c '")
+                        append(command.replace("'", "'\\''"))
+                        append("'")
+                    }
+                    val viaShizuku = sh.run(shizukuCmd, timeoutSeconds * 1000L)
+                    // -1 means Shizuku itself failed (not granted / dead);
+                    // fall through to the legacy direct exec, then report.
+                    if (viaShizuku.exitCode != -1 || !viaShizuku.stderr.contains("Shizuku")) {
+                        return@withContext formatResult(viaShizuku.exitCode, viaShizuku.stdout, viaShizuku.stderr, "shizuku")
+                    }
+                }
+                // Legacy direct exec (works on old devices / relaxed policies).
                 try {
                     val proc = ProcessBuilder(dash.path, "-c", command).directory(home).apply { environment().putAll(environment()) }.start()
                     val out = StringBuilder(); val err = StringBuilder()
@@ -128,13 +152,22 @@ class TermuxEnv(private val context: Context) {
                     }
                     val t1 = drain(proc.inputStream, out, 4000); val t2 = drain(proc.errorStream, err, 2000)
                     if (!proc.waitFor(timeoutSeconds.toLong(), TimeUnit.SECONDS)) { proc.destroyForcibly(); "ERROR: 命令超过 ${timeoutSeconds}s" }
-                    else { t1.join(1000); t2.join(1000); "exit=${proc.exitValue()}\n$out\n[stderr] $err" }
-                } catch (e: Exception) { "ERROR: embedded 执行失败：${e.message}" }
+                    else { t1.join(500); t2.join(500); formatResult(proc.exitValue(), out.toString(), err.toString(), "direct") }
+                } catch (e: Exception) {
+                    "ERROR: 执行失败（${e.message ?: e.javaClass.simpleName}）。Android 10+ 禁止应用私有目录内 exec；请激活 Shizuku 后重试，或安装 Termux App 作为回退后端"
+                }
             }
             "termux_app" -> TermuxAppBackend(context).exec(command, timeoutSeconds)
             else -> "ERROR: 尚无可用脚本后端；请安装 Termux 或先运行 termux_setup"
         }
     }
+
+    private fun formatResult(exitCode: Int, stdout: String, stderr: String, backend: String): String =
+        buildString {
+            append("exit=").append(exitCode).append("\n[backend] ").append(backend).append("\n")
+            if (stdout.isNotBlank()) append(stdout.take(4000))
+            if (stderr.isNotBlank()) append("\n[stderr] ").append(stderr.take(2000))
+        }
 }
 
 class TermuxAppBackend(private val context: Context) {

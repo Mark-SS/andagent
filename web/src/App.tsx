@@ -16,6 +16,8 @@ import {
   hasBridge,
   installLLMFetch,
   loadSettings,
+  saveAudioBlob,
+  transcribeAudio,
   type Settings,
 } from "./bridge";
 import { CopyMenu, useLongPress } from "./CopyMenu";
@@ -111,12 +113,126 @@ function AssistantMessage() {
 function Composer({ hasKey }: { hasKey: boolean }) {
   const aui = useAui();
   const running = useAuiState((state) => state.thread.isRunning);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const [voiceState, setVoiceState] = useState<"idle" | "recording" | "transcribing">("idle");
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const startTimeRef = useRef(0);
+
+  const startRecording = async () => {
+    setVoiceError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      chunksRef.current = [];
+      const mr = new MediaRecorder(stream);
+      mr.ondataavailable = (e) => chunksRef.current.push(e.data);
+      mr.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const seconds = Math.round((Date.now() - startTimeRef.current) / 1000);
+        const blob = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
+        if (blob.size < 800) {
+          setVoiceState("idle");
+          setVoiceError("录音太短，没收到声音");
+          return;
+        }
+        setVoiceState("transcribing");
+        // WebView MediaRecorder emits audio/webm (opus) which most
+        // /audio/transcriptions endpoints reject — decode to 16kHz mono WAV
+        // locally, save through the bridge, then transcribe.
+        try {
+          const wavPath = await saveAudioBlob(blob);
+          const res = await transcribeAudio(wavPath, "zh");
+          if (res.ok && inputRef.current) {
+            const ta = inputRef.current;
+            const existing = ta.value ? ta.value + " " : "";
+            // assistant-ui composer is controlled by its own store; set via native setter
+            const setter = Object.getOwnPropertyDescriptor(
+              window.HTMLTextAreaElement.prototype,
+              "value",
+            )?.set;
+            setter?.call(ta, existing + res.result.trim());
+            ta.dispatchEvent(new Event("input", { bubbles: true }));
+            setVoiceState("idle");
+          } else {
+            setVoiceState("idle");
+            setVoiceError(res.result);
+          }
+        } catch (e) {
+          setVoiceState("idle");
+          setVoiceError(`转写失败：${String(e)}`);
+        }
+      };
+      mr.start();
+      recorderRef.current = mr;
+      startTimeRef.current = Date.now();
+      setVoiceState("recording");
+      // Auto-stop at 60s to protect memory.
+      window.setTimeout(() => {
+        if (voiceStateRef.current === "recording") stopRecording();
+      }, 60_000);
+    } catch (e) {
+      setVoiceError(`无法访问麦克风：${String(e)}（需要 RECORD_AUDIO 权限）`);
+    }
+  };
+
+  const stopRecording = () => {
+    recorderRef.current?.stop();
+    recorderRef.current = null;
+    if (voiceStateRef.current === "recording") setVoiceState("transcribing");
+  };
+
+  const voiceStateRef = useRef(voiceState);
+  voiceStateRef.current = voiceState;
+
+  const onMicClick = () => {
+    if (voiceState === "idle") void startRecording();
+    else if (voiceState === "recording") stopRecording();
+  };
+
   return (
     <div className="composer-dock">
       <ComposerPrimitive.Root className="composer">
+        {hasKey && (
+          <button
+            type="button"
+            className={`mic-btn ${voiceState === "recording" ? "recording" : ""}`}
+            onClick={onMicClick}
+            disabled={voiceState === "transcribing"}
+            title={voiceState === "recording" ? "停止录音" : "语音输入"}
+            aria-label={voiceState === "recording" ? "停止录音" : "语音输入"}
+          >
+            {voiceState === "transcribing" ? (
+              <span className="mic-spinner" aria-hidden="true" />
+            ) : (
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <path
+                  d="M12 15a3.5 3.5 0 003.5-3.5V6a3.5 3.5 0 10-7 0v5.5A3.5 3.5 0 0012 15z"
+                  fill="currentColor"
+                />
+                <path
+                  d="M5.5 11.5a6.5 6.5 0 0013 0M12 18v3m-3.5 0h7"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  fill="none"
+                />
+              </svg>
+            )}
+          </button>
+        )}
         <ComposerPrimitive.Input
+          ref={inputRef as never}
           className="composer-input"
-          placeholder={hasKey ? "给 AndAgent 发消息…" : "先在设置中填入 API Key…"}
+          placeholder={
+            voiceState === "recording"
+              ? "录音中…再次点击停止"
+              : voiceState === "transcribing"
+                ? "转写中…"
+                : hasKey
+                  ? "给 AndAgent 发消息…"
+                  : "先在设置中填入 API Key…"
+          }
           minRows={1}
           maxRows={6}
           autoFocus
@@ -142,6 +258,12 @@ function Composer({ hasKey }: { hasKey: boolean }) {
           </ComposerPrimitive.Send>
         )}
       </ComposerPrimitive.Root>
+      {voiceError && (
+        <div className="composer-hint voice-error" role="alert">
+          {voiceError}
+          <button type="button" onClick={() => setVoiceError(null)}>×</button>
+        </div>
+      )}
       <div className="composer-hint">
         Enter 发送 · Shift+Enter 换行 · AndAgent 可能会调用设备工具，请注意核对结果
       </div>

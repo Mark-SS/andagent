@@ -42,6 +42,20 @@ const META: Record<string, ToolMeta> = {
   input_tap: { label: "点击屏幕", icon: "👆", destructive: true },
   input_swipe: { label: "滑动屏幕", icon: "👆", destructive: true },
   input_text: { label: "输入文本", icon: "⌨️", destructive: true },
+  open_settings: { label: "打开系统设置", icon: "⚙️" },
+  mic_record: { label: "麦克风录音", icon: "🎤" },
+  screen_record: { label: "录屏", icon: "🎥" },
+  screen_record_stop: { label: "停止录屏", icon: "⏹️" },
+  screen_record_list: { label: "录屏列表", icon: "🎞️" },
+  file_download: { label: "下载文件", icon: "📥" },
+  file_search: { label: "搜索文件", icon: "🔎" },
+  file_write: { label: "写文件", icon: "📝", destructive: true },
+  file_read: { label: "读文件", icon: "📄" },
+  file_list: { label: "列文件", icon: "📂" },
+  sensor_list: { label: "传感器列表", icon: "🧭" },
+  sensor_read: { label: "读传感器", icon: "🧭" },
+  steps_today: { label: "今日步数", icon: "👟" },
+  steps_history: { label: "步数历史", icon: "👟" },
 };
 
 const COLLAPSE_LINES = 15;
