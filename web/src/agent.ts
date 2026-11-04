@@ -449,6 +449,47 @@ const TOOL_DEFS = [
       required: ["dir"],
     },
   },
+  {
+    name: "open_uri",
+    description:
+      "通过 URI/URL 跳转到其他应用或页面：网页链接、应用深链（taobao:// weixin:// alipays:// bilibili:// 等任意 scheme）、geo: 地图、mailto: 邮件、market:// 应用商店等。用户说「打开淘宝看看X」「跳转到XX应用」时使用。",
+    parameters: {
+      type: "object",
+      properties: {
+        uri: { type: "string", description: "要打开的 URI（https:// 或 scheme://）" },
+        package: { type: "string", description: "可选：限定目标应用包名（深链歧义时用）" },
+        action: { type: "string", description: "可选：自定义 Intent action，默认 VIEW" },
+      },
+      required: ["uri"],
+    },
+  },
+  {
+    name: "album_photos",
+    description:
+      "查询相册照片（返回缩略图 base64 + content:// uri，可在对话中直接预览；配合 album_open 可在图库打开）。按文件夹/关键词过滤，默认最新 8 张。",
+    parameters: {
+      type: "object",
+      properties: {
+        bucket: { type: "string", description: "相册文件夹名（如 Screenshots/Camera）" },
+        keyword: { type: "string", description: "文件名关键词" },
+        limit: { type: "integer", description: "返回数量，默认 8，上限 20" },
+        thumbnail: { type: "string", description: "是否带缩略图（true/false，默认 true）" },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "album_open",
+    description: "在系统图库中打开一张照片（album_photos 返回的 id 或 uri）。",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "照片 id（album_photos 返回）" },
+        uri: { type: "string", description: "或直接给 content:// uri" },
+      },
+      required: [],
+    },
+  },
 ] satisfies PiTool[];
 
 /**

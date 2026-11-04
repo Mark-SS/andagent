@@ -68,7 +68,12 @@ import io.nous.andagent.tools.ImageSaveTool
 import io.nous.andagent.tools.FilePickResultBridge
 import io.nous.andagent.tools.FilePickTool
 import io.nous.andagent.tools.OpenFolderTool
+import io.nous.andagent.tools.AlbumOpenTool
+import io.nous.andagent.tools.AlbumPhotosTool
 import io.nous.andagent.tools.OpenSettingsTool
+import io.nous.andagent.tools.OpenUriTool
+import io.nous.andagent.widget.WidgetGenerateTool
+import io.nous.andagent.widget.WidgetSaveAndPinTool
 import io.nous.andagent.tools.PhoneCallTool
 import io.nous.andagent.tools.SmsSendTool
 import io.nous.andagent.tools.StepsTodayTool
@@ -177,6 +182,8 @@ class MainActivity : ComponentActivity() {
             "device_info" to DeviceInfoTool(appContext),
             "storage_scan" to StorageScanTool(appContext),
             "album_stats" to AlbumStatsTool(appContext),
+            "album_photos" to AlbumPhotosTool(appContext),
+            "album_open" to AlbumOpenTool(appContext),
             "calendar_list" to CalendarListTool(appContext, permissionBroker),
             "calendar_events" to CalendarEventsTool(appContext, permissionBroker),
             "calendar_add" to CalendarAddTool(appContext, permissionBroker),
@@ -222,6 +229,9 @@ class MainActivity : ComponentActivity() {
             "sensor_read" to SensorReadTool(appContext),
             "steps_today" to StepsTodayTool(appContext, healthPermissionRequester),
             "open_settings" to OpenSettingsTool(appContext),
+            "open_uri" to OpenUriTool(appContext),
+            "widget_generate" to WidgetGenerateTool(appContext),
+            "widget_save_and_pin" to WidgetSaveAndPinTool(appContext),
             "mic_record" to MicRecordTool(appContext, permissionBroker),
             "phone_call" to PhoneCallTool(appContext, permissionBroker),
             "sms_send" to SmsSendTool(appContext, permissionBroker),
