@@ -13,6 +13,7 @@ import {
 import { AgentEngine } from "./agent";
 import {
   getAppVersion,
+  exportConversation,
   hasBridge,
   installLLMFetch,
   loadSettings,
@@ -22,6 +23,7 @@ import {
 } from "./bridge";
 import { CopyMenu, useLongPress } from "./CopyMenu";
 import { Drawer } from "./Drawer";
+import { conversationMarkdown } from "./exportConversation";
 import { MarkdownText } from "./Markdown";
 import { SettingsPanel } from "./Settings";
 import { ToolCard } from "./ToolCard";
@@ -339,6 +341,12 @@ export default function App() {
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
   const [showSettings, setShowSettings] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
+  useEffect(() => {
+    const onExported = (event: Event) => setExportNotice(`已导出到 ${(event as CustomEvent<string>).detail}`);
+    window.addEventListener("andagent:conversation-exported", onExported);
+    return () => window.removeEventListener("andagent:conversation-exported", onExported);
+  }, []);
   const version = useRef<string>("…").current;
   const engineRef = useRef<AgentEngine | null>(null);
   if (!engineRef.current) engineRef.current = new AgentEngine(settings);
@@ -382,6 +390,7 @@ export default function App() {
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <div className="app">
+        {exportNotice && <div className="banner" role="status">{exportNotice}<button type="button" onClick={() => setExportNotice(null)}>关闭</button></div>}
         <header className="app-head">
           <div className="head-left">
             <button
@@ -518,6 +527,12 @@ export default function App() {
           }}
           onSwitch={(id) => engine.switchSession(id)}
           onDelete={(id) => engine.deleteSession(id)}
+          onExport={(id) => {
+            const session = snapshot.sessions.find((s) => s.id === id);
+            if (!session) return;
+            const result = exportConversation(session.title, conversationMarkdown(id, session.title));
+            if (result.startsWith("ERROR:")) setExportNotice(result);
+          }}
         />
       </div>
     </AssistantRuntimeProvider>

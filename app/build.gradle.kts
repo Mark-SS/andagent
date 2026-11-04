@@ -34,6 +34,22 @@ val buildWeb by tasks.registering(Exec::class) {
 
 tasks.named("preBuild").configure { dependsOn(buildWeb) }
 
+/** Maintainer-only refresh. Normal builds always package the checked-in archive. */
+val downloadBootstrap by tasks.registering(Exec::class) {
+    group = "maintenance"
+    description = "Refresh the bundled aarch64 Termux bootstrap after SHA-256 verification"
+    workingDir = rootProject.projectDir
+    commandLine("bash", "-c", """
+        set -euo pipefail
+        target=app/src/main/assets/bootstrap/bootstrap-aarch64.zip
+        tmp="${'$'}{target}.download"
+        trap 'rm -f "${'$'}tmp"' EXIT
+        curl -fL --retry 3 --connect-timeout 20 -o "${'$'}tmp" 'https://ghfast.top/https://github.com/termux/termux-packages/releases/download/bootstrap-2026.11.01-r1%2Bapt.android-7/bootstrap-aarch64.zip'
+        printf '%s  %s\n' '5a1429b6c68ee3bdc17b5fd6e47ba42933ec924cd7283fe74992574e1d5badae' "${'$'}tmp" | sha256sum -c -
+        mv "${'$'}tmp" "${'$'}target"
+    """.trimIndent())
+}
+
 android {
     namespace = "io.nous.andagent"
     compileSdk = 34
@@ -42,8 +58,8 @@ android {
         applicationId = "io.nous.andagent"
         minSdk = 26
         targetSdk = 34
-        versionCode = 8
-        versionName = "0.9.1"
+        versionCode = 9
+        versionName = "0.10.0"
     }
 
     buildFeatures {
@@ -91,4 +107,8 @@ dependencies {
     // newest connect-client whose AAR metadata still allows compileSdk 34 and
     // exposes the same StepsRecord/PermissionController APIs used here.
     implementation("androidx.health.connect:connect-client:1.1.0-alpha07")
+
+    // Same 16 KB page-aligned QuickJS Android artifact used by widget-chat-android.
+    implementation(files("libs/quickjs-wrapper-android-3.2.0.jar"))
+    implementation("wang.harlon.quickjs:wrapper-java:3.2.0")
 }

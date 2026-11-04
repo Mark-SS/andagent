@@ -3,6 +3,10 @@ package io.nous.andagent.bridge
 import android.os.Handler
 import android.os.Looper
 import android.content.Context
+import android.content.ContentValues
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import io.nous.andagent.tools.Tool
@@ -51,6 +55,7 @@ class AgentBridge(
     private val shizukuRequest: () -> String = { "{\"requested\":false}" },
     private val healthPermissionRequest: () -> String = { "{\"requested\":false}" },
     private val termuxStatus: () -> String = { "none" },
+    private val termuxGrant: suspend () -> String = { "ERROR: Shizuku 不可用" },
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val toolExecutor = Executors.newFixedThreadPool(2)
@@ -187,6 +192,50 @@ class AgentBridge(
 
     @JavascriptInterface
     fun termuxStatus(): String = termuxStatus()
+
+    @JavascriptInterface
+    fun termuxGrantViaShizuku(): String = runCatching { runBlocking { termuxGrant() } }
+        .getOrElse { "ERROR: Termux 授权失败：${it.message ?: it.javaClass.simpleName}" }
+
+    @JavascriptInterface
+    fun exportConversation(title: String, markdown: String): String {
+        val context = appContext ?: return "ERROR: Android 环境不可用"
+        if (markdown.isBlank()) return "ERROR: 会话内容为空"
+        if (markdown.length > 5_000_000) return "ERROR: 导出内容超过 5MB"
+        val filename = (title.replace(Regex("[\\\\/:*?\"<>|\\p{Cntrl}]"), "_").trim().take(64)
+            .ifBlank { "对话" }) + "-${System.currentTimeMillis()}.md"
+        return runCatching {
+            if (Build.VERSION.SDK_INT < 29) {
+                val dir = java.io.File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "andagent")
+                if (!dir.exists() && !dir.mkdirs()) error("无法创建导出目录")
+                val file = java.io.File(dir, filename)
+                file.writeText(markdown)
+                file.absolutePath
+            } else {
+                val resolver = context.contentResolver
+                val values = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+                    put(MediaStore.MediaColumns.MIME_TYPE, "text/markdown")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/andagent/")
+                    put(MediaStore.MediaColumns.IS_PENDING, 1)
+                }
+                val uri = resolver.insert(MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY), values)
+                    ?: error("MediaStore 无法创建文件")
+                try {
+                    resolver.openOutputStream(uri)?.bufferedWriter(Charsets.UTF_8)?.use { it.write(markdown) }
+                        ?: error("无法打开导出文件")
+                    values.clear()
+                    values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                    resolver.update(uri, values, null, null)
+                    "/sdcard/${Environment.DIRECTORY_DOWNLOADS}/andagent/$filename"
+                } catch (e: Exception) {
+                    resolver.delete(uri, null, null)
+                    throw e
+                }
+            }
+        }.onSuccess { path -> emit(buildJsonObject { put("type", "conversation.exported"); put("path", path) }) }
+            .getOrElse { "ERROR: 导出失败：${it.message ?: it.javaClass.simpleName}" }
+    }
 
     /* ------------------------------ tools ------------------------------- */
 

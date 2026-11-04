@@ -3,6 +3,7 @@ import type { Settings } from "./bridge";
 import {
   getShizukuStatus,
   getTermuxStatus,
+  grantTermuxViaShizuku,
   hasBridge,
   persistSettings,
   requestHealthPermission,
@@ -22,6 +23,7 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
   const [shizuku, setShizuku] = useState<ShizukuStatus>(() => getShizukuStatus());
   const [shizukuMsg, setShizukuMsg] = useState<string | null>(null);
   const [termuxStatus, setTermuxStatus] = useState(() => getTermuxStatus());
+  const [termuxMsg, setTermuxMsg] = useState<string | null>(null);
   const [healthMsg, setHealthMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -188,7 +190,17 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
             </div>
           </div>
 
-          <div className="settings-card"><div className="settings-card-head"><span>脚本后端</span><span>{termuxStatus}</span></div><p className="settings-card-note">运行 termux_setup 可安装用户空间；Termux App 回退需要 RUN_COMMAND 授权及 allow-external-apps=true。</p></div>
+          <div className="settings-card">
+            <div className="settings-card-head"><span>脚本后端</span><span>{termuxStatus}</span></div>
+            <p className="settings-card-note">运行 termux_setup 可安装用户空间；Termux App 回退需要 RUN_COMMAND 授权及 allow-external-apps=true。</p>
+            <div className="settings-card-actions">
+              <button type="button" className="btn-primary" onClick={() => {
+                setTermuxMsg(grantTermuxViaShizuku());
+                setTermuxStatus(getTermuxStatus());
+              }}>Shizuku 代授权</button>
+            </div>
+            {termuxMsg && <p className={termuxMsg.startsWith("ERROR:") ? "settings-error" : "settings-card-note"}>{termuxMsg}</p>}
+          </div>
 
           {error && <div className="settings-error">{error}</div>}
 

@@ -35,6 +35,7 @@ const META: Record<string, ToolMeta> = {
   wifi_forget: { label: "遗忘网络", icon: "📶", destructive: true },
   wifi_toggle: { label: "Wi-Fi 开关", icon: "📶", destructive: true },
   termux_setup: { label: "脚本环境", icon: "⌨️" },
+  js_eval: { label: "QuickJS 脚本", icon: "📜" },
   shell_exec: { label: "运行脚本", icon: "⌨️" },
   pkg_install: { label: "安装软件包", icon: "📦", destructive: true },
   screen_capture: { label: "屏幕截图", icon: "🖼️" },

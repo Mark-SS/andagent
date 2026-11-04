@@ -32,7 +32,7 @@ export const DEFAULT_SYSTEM_PROMPT = [
   "- 通讯：phone_call / sms_send / clipboard_read / clipboard_write / notify_send / contact 查询暂不支持",
   "- 网络与连接：wifi_info / wifi_toggle / wifi_connect / wifi_connect_strong / wifi_saved_list / wifi_forget / bt_scan / bt_paired_list / bt_connect / bt_connect_direct / bt_toggle",
   "- 屏幕与自动化：screen_record / screen_record_stop / screen_record_list / screen_record_h264 / screen_capture / input_tap / input_swipe / input_text",
-  "- 脚本与包管理：termux_setup / shell_exec / pkg_install（需要先 termux_setup 或装 Termux）",
+  "- 脚本与包管理：termux_setup / shell_exec / pkg_install / js_eval（JS 脚本可用 andagent.tool 调用设备工具）",
   "- 系统导航：open_settings（27 类设置页直达）/ app_list / get_time / device_info",
   "",
   "## 工作纪律",
@@ -69,6 +69,8 @@ interface AndroidBridge {
   permissionStatus(names: string): string;
   openAppSettings(): void;
   termuxStatus(): string;
+  termuxGrantViaShizuku(): string;
+  exportConversation(title: string, markdown: string): string;
   shizukuStatus(): string;
   shizukuRequest(): string;
   healthPermissionRequest(): string;
@@ -448,6 +450,11 @@ function handleEvent(payload: string): void {
     return;
   }
 
+  if (type === "conversation.exported") {
+    window.dispatchEvent(new CustomEvent("andagent:conversation-exported", { detail: String(event.path ?? "") }));
+    return;
+  }
+
   const id = event.id as string;
   const entry = llmPending.get(id);
 
@@ -636,3 +643,11 @@ export async function saveAudioBlob(blob: Blob): Promise<string> {
 export const __internal = { handleEvent, bridgeFetch };
 
 export function getTermuxStatus(): string { try { return bridge()?.termuxStatus() ?? "none"; } catch { return "none"; } }
+export function grantTermuxViaShizuku(): string {
+  try { return bridge()?.termuxGrantViaShizuku() ?? "ERROR: Android 桥不可用"; }
+  catch (e) { return `ERROR: Shizuku 代授权失败：${String(e)}`; }
+}
+export function exportConversation(title: string, markdown: string): string {
+  try { return bridge()?.exportConversation(title, markdown) ?? "ERROR: Android 桥不可用"; }
+  catch (e) { return `ERROR: 导出失败：${String(e)}`; }
+}

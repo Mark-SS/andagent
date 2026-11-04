@@ -15,6 +15,7 @@ export function Drawer({
   onNew,
   onSwitch,
   onDelete,
+  onExport,
 }: {
   open: boolean;
   sessions: SessionMeta[];
@@ -24,6 +25,7 @@ export function Drawer({
   onNew: () => void;
   onSwitch: (id: string) => void;
   onDelete: (id: string) => void;
+  onExport: (id: string) => void;
 }) {
   const [visible, setVisible] = useState(open);
 
@@ -85,6 +87,12 @@ export function Drawer({
                   minute: "2-digit",
                 })}
               </span>
+              <button
+                type="button"
+                className="drawer-export"
+                aria-label={`导出会话 ${s.title}`}
+                onClick={(e) => { e.stopPropagation(); onExport(s.id); }}
+              >导出</button>
               <button
                 type="button"
                 className="drawer-del"

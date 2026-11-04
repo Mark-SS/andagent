@@ -6,10 +6,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.IBinder
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.net.URL
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
@@ -31,7 +31,11 @@ class TermuxEnv(private val context: Context, private val shizuku: ShizukuShell?
         termuxInstalled() -> "termux_app"
         else -> "none"
     }
-    fun status(): String = "${backend()}: $lastSetupError"
+    fun status(): String {
+        val permission = if (context.checkSelfPermission("com.termux.permission.RUN_COMMAND") == PackageManager.PERMISSION_GRANTED)
+            "granted" else "denied"
+        return "${backend()}: $lastSetupError · RUN_COMMAND=$permission"
+    }
 
     @Suppress("DEPRECATION")
     private fun termuxInstalled() = runCatching { context.packageManager.getPackageInfo("com.termux", 0); true }.getOrDefault(false)
@@ -42,16 +46,9 @@ class TermuxEnv(private val context: Context, private val shizuku: ShizukuShell?
             lastSetupError = "当前仅提供 aarch64 bootstrap；设备架构不匹配"
             return@withContext "ERROR: $lastSetupError；后端 ${backend()}"
         }
-        val urls = listOf(
-            "https://github.com/termux/termux-packages/releases/download/bootstrap-2026.11.01-r1%2Bapt.android-7/bootstrap-aarch64.zip",
-            "https://github.com/termux/termux-packages/releases/download/bootstrap-2026.09.13-r1%2Bapt.android-7/bootstrap-aarch64.zip",
-        )
-        val errors = mutableListOf<String>()
-        for (url in urls) {
-            val zip = File(context.cacheDir, "termux-bootstrap.zip")
-            try {
-                val conn = URL(url).openConnection().apply { connectTimeout = 12000; readTimeout = 30000 }
-                conn.getInputStream().use { input -> zip.outputStream().use { output ->
+        val zip = File(context.cacheDir, "termux-bootstrap.zip")
+        try {
+                context.assets.open("bootstrap/bootstrap-aarch64.zip").use { input -> zip.outputStream().use { output ->
                     val buffer = ByteArray(8192); var total = 0L
                     while (true) {
                         val n = input.read(buffer); if (n < 0) break
@@ -99,11 +96,12 @@ class TermuxEnv(private val context: Context, private val shizuku: ShizukuShell?
                 if (!embeddedValidated) error("dash 无法执行；官方包使用 com.termux 固定 PREFIX")
                 lastSetupError = "已就绪"
                 return@withContext "embedded 已安装：${prefix.path}"
-            } catch (e: Exception) { errors += "${url.substringAfterLast('/')}: ${e.message}" }
-            finally { zip.delete() }
+        } catch (e: Exception) {
+            lastSetupError = "内嵌 bootstrap 安装失败：${e.message ?: e.javaClass.simpleName}"
+        } finally {
+            zip.delete()
         }
-        lastSetupError = errors.joinToString("；").take(600)
-        "ERROR: bootstrap 均未通过校验：$lastSetupError；可用后端 ${backend()}。Termux App 需授权 RUN_COMMAND 并在 termux.properties 开启 allow-external-apps=true"
+        "ERROR: $lastSetupError；可用后端 ${backend()}。Termux App 需授权 RUN_COMMAND 并在 termux.properties 开启 allow-external-apps=true"
     }
 
     private fun environment(): Map<String, String> = mapOf(
@@ -130,9 +128,11 @@ class TermuxEnv(private val context: Context, private val shizuku: ShizukuShell?
                         workDir = home.path,
                         timeoutSeconds = timeoutSeconds.toLong(),
                     )
+                    Log.i("TermuxEnv", "exec backend=memfd exit=$code")
                     return@withContext formatResult(code, err, "", "memfd")  // waitFor mixes stdout+stderr into second field
                 }.getOrElse { e ->
                     // Fall through to Shizuku if memfd itself failed to load.
+                    Log.w("TermuxEnv", "memfd failed; trying Shizuku then direct", e)
                     "MEMFD_FAIL: ${e.message}"
                 }
                 // Secondary: Shizuku (shell uid). -1 means Shizuku itself
@@ -152,6 +152,7 @@ class TermuxEnv(private val context: Context, private val shizuku: ShizukuShell?
                     // -1 means Shizuku itself failed (not granted / dead);
                     // fall through to the legacy direct exec, then report.
                     if (viaShizuku.exitCode != -1 || !viaShizuku.stderr.contains("Shizuku")) {
+                        Log.i("TermuxEnv", "exec backend=shizuku exit=${viaShizuku.exitCode}")
                         return@withContext formatResult(viaShizuku.exitCode, viaShizuku.stdout, viaShizuku.stderr, "shizuku")
                     }
                 }
@@ -167,7 +168,7 @@ class TermuxEnv(private val context: Context, private val shizuku: ShizukuShell?
                     }
                     val t1 = drain(proc.inputStream, out, 4000); val t2 = drain(proc.errorStream, err, 2000)
                     if (!proc.waitFor(timeoutSeconds.toLong(), TimeUnit.SECONDS)) { proc.destroyForcibly(); "ERROR: 命令超过 ${timeoutSeconds}s" }
-                    else { t1.join(500); t2.join(500); formatResult(proc.exitValue(), out.toString(), err.toString(), "direct") }
+                    else { t1.join(500); t2.join(500); Log.i("TermuxEnv", "exec backend=direct exit=${proc.exitValue()}"); formatResult(proc.exitValue(), out.toString(), err.toString(), "direct") }
                 } catch (e: Exception) {
                     "ERROR: 执行失败（${e.message ?: e.javaClass.simpleName}）。Android 10+ 禁止应用私有目录内 exec；请激活 Shizuku 后重试，或安装 Termux App 作为回退后端"
                 }
@@ -188,7 +189,7 @@ class TermuxEnv(private val context: Context, private val shizuku: ShizukuShell?
 class TermuxAppBackend(private val context: Context) {
     suspend fun exec(command: String, timeoutSeconds: Int): String = withContext(Dispatchers.IO) {
         if (context.checkSelfPermission("com.termux.permission.RUN_COMMAND") != PackageManager.PERMISSION_GRANTED)
-            return@withContext "ERROR: 未获 Termux RUN_COMMAND 权限。修复步骤：①设置→应用→AndAgent→权限→开通 Termux 权限（或在 Termux 目录执行 pm grant）；②在 Termux 会话里执行 mkdir -p ~/.termux && echo 'allow-external-apps=true' >> ~/.termux/termux.properties 后重启 Termux"
+            return@withContext "ERROR: 未获 Termux RUN_COMMAND 权限。①（推荐）在 AndAgent 设置页点击「Shizuku 代授权」；②在电脑执行 adb shell pm grant io.nous.andagent com.termux.permission.RUN_COMMAND。授权后还需在 Termux 的 termux.properties 设置 allow-external-apps=true 并重启 Termux。"
         val id = UUID.randomUUID().toString()
         val pending = TermuxResultReceiver.Pending(CountDownLatch(1))
         TermuxResultReceiver.pending[id] = pending
@@ -220,4 +221,3 @@ class TermuxAppBackend(private val context: Context) {
         finally { TermuxResultReceiver.pending.remove(id) }
     }
 }
-

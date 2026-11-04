@@ -26,6 +26,8 @@ import io.nous.andagent.bridge.AgentBridge
 import io.nous.andagent.bridge.PermissionBroker
 import io.nous.andagent.shell.ShizukuShell
 import io.nous.andagent.shell.TermuxEnv
+import io.nous.andagent.script.QuickJsEngine
+import io.nous.andagent.script.JsEvalTool
 import io.nous.andagent.tools.TermuxTool
 import io.nous.andagent.tools.ScreenCaptureTool
 import io.nous.andagent.tools.ScreenRecordH264Tool
@@ -93,6 +95,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var bridge: AgentBridge
     private lateinit var permissionBroker: PermissionBroker
     private lateinit var shizuku: ShizukuShell
+    private lateinit var quickJsEngine: QuickJsEngine
+    private val scriptToolExecutor = java.util.concurrent.Executors.newFixedThreadPool(2)
 
     private val healthPermissionResult = AtomicReference<Set<String>?>(null)
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -165,7 +169,9 @@ class MainActivity : ComponentActivity() {
 
         val termuxEnv = TermuxEnv(appContext, shizuku)
         val btConnect = BtConnectTool(appContext, permissionBroker)
-        val tools: Map<String, Tool> = mapOf(
+        val tools: MutableMap<String, Tool> = mutableMapOf()
+        quickJsEngine = QuickJsEngine(tools, scriptToolExecutor)
+        tools.putAll(mapOf(
             "get_time" to GetTimeTool(),
             "device_info" to DeviceInfoTool(appContext),
             "storage_scan" to StorageScanTool(appContext),
@@ -224,7 +230,8 @@ class MainActivity : ComponentActivity() {
             "file_pick" to FilePickTool(appContext, FilePickResultBridge),
             "image_save" to ImageSaveTool(appContext, permissionBroker),
             "steps_history" to StepsHistoryTool(appContext, healthPermissionRequester),
-        )
+            "js_eval" to JsEvalTool(quickJsEngine),
+        ))
 
         bridge = AgentBridge(
             webViewProvider = { webView },
@@ -237,6 +244,16 @@ class MainActivity : ComponentActivity() {
             shizukuRequest = { shizuku.requestPermission() },
             healthPermissionRequest = { requestHealthPermission() },
             termuxStatus = { termuxEnv.status() },
+            termuxGrant = {
+                if (!shizuku.isGranted()) "ERROR: 请先启动 Shizuku 并在设置页授权 AndAgent"
+                else {
+                    val result = shizuku.run("pm grant io.nous.andagent com.termux.permission.RUN_COMMAND")
+                    if (!result.ok) "ERROR: pm grant 失败：${result.stderr.ifBlank { result.stdout.ifBlank { "exit=${result.exitCode}" } }}"
+                    else if (appContext.checkSelfPermission("com.termux.permission.RUN_COMMAND") != android.content.pm.PackageManager.PERMISSION_GRANTED)
+                        "ERROR: pm grant 已返回成功，但权限状态仍未生效；请检查 Termux 安装及签名"
+                    else "Termux RUN_COMMAND 已授权；${termuxEnv.status()}"
+                }
+            },
         )
 
         val assetLoader = WebViewAssetLoader.Builder()
@@ -295,6 +312,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         bridge.shutdown()
+        if (::quickJsEngine.isInitialized) quickJsEngine.shutdown()
+        scriptToolExecutor.shutdownNow()
         if (::shizuku.isInitialized) shizuku.shutdown()
         webView.destroy()
         super.onDestroy()
