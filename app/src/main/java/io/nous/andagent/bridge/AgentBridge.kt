@@ -165,14 +165,16 @@ class AgentBridge(
                             }
                         }
                     }
-                    pump.finish()
-                    emit(buildJsonObject { put("type", "llm.done"); put("id", reqId) })
-                } catch (e: IOException) {
-                    pump.finish()
-                    if (call.isCanceled()) {
+                    pump.finish {
                         emit(buildJsonObject { put("type", "llm.done"); put("id", reqId) })
-                    } else {
-                        emitError(reqId, e.message ?: "stream error")
+                    }
+                } catch (e: IOException) {
+                    pump.finish {
+                        if (call.isCanceled()) {
+                            emit(buildJsonObject { put("type", "llm.done"); put("id", reqId) })
+                        } else {
+                            emitError(reqId, e.message ?: "stream error")
+                        }
                     }
                 } finally {
                     calls.remove(reqId)
@@ -251,7 +253,13 @@ class AgentBridge(
             sink(batch)
         }
 
-        fun finish() = flush()
+        /** Flush the tail, then run [after] on the main thread — keeps chunks ahead of done. */
+        fun finish(after: () -> Unit) {
+            handler.post {
+                flush()
+                after()
+            }
+        }
     }
 
     companion object {
