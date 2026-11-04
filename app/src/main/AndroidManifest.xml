@@ -71,6 +71,11 @@
 
         <!-- Termux RUN_COMMAND result callback (receiver: Android 12+ forbids
              background startService, Termux posts results while backgrounded) -->
+        <activity
+            android:name=".tools.FilePickActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <receiver
             android:name=".shell.TermuxResultReceiver"
             android:exported="false">

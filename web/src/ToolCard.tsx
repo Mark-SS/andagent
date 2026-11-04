@@ -44,6 +44,8 @@ const META: Record<string, ToolMeta> = {
   input_text: { label: "输入文本", icon: "⌨️", destructive: true },
   open_settings: { label: "打开系统设置", icon: "⚙️" },
   phone_call: { label: "拨打电话", icon: "📞" },
+  location_get: { label: "获取位置", icon: "📍" },
+  location_status: { label: "定位状态", icon: "🛰️" },
   sms_send: { label: "发送短信", icon: "💬" },
   mic_record: { label: "麦克风录音", icon: "🎤" },
   screen_record: { label: "录屏", icon: "🎥" },
@@ -127,6 +129,7 @@ export function ToolCard(props: ToolCallMessagePartProps) {
   const failed = !!props.isError;
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     setOpen(running);
@@ -193,6 +196,21 @@ export function ToolCard(props: ToolCallMessagePartProps) {
               <div className="tool-label">
                 结果{formatted.json ? " · JSON" : ""}
                 {canFold ? ` · ${lines.length} 行` : ""}
+                <button
+                  type="button"
+                  className="tool-copy"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(raw);
+                      setCopied(true);
+                      window.setTimeout(() => setCopied(false), 1400);
+                    } catch {
+                      /* clipboard unavailable */
+                    }
+                  }}
+                >
+                  {copied ? "已复制" : "复制"}
+                </button>
               </div>
               <pre className="tool-pre tool-result">{captureImage ? "截图已保存；缩略图见上方" : shown}</pre>
               {canFold && (

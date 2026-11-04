@@ -60,3 +60,6 @@ fun JsonObject.strArg(key: String): String? =
 fun JsonObject.intArg(key: String): Int? = strArg(key)?.toIntOrNull()
 
 fun JsonObject.longArg(key: String): Long? = strArg(key)?.toLongOrNull()
+
+fun JsonObject.boolArg(key: String): Boolean? =
+    strArg(key)?.let { it.equals("true", true) || it == "1" }

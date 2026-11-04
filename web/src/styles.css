@@ -1532,3 +1532,34 @@ button:disabled {
   cursor: pointer;
   padding: 0 4px;
 }
+
+/* copy buttons inside thinking / tool cards */
+.thinking-body-wrap {
+  position: relative;
+}
+
+.thinking-copy,
+.tool-copy {
+  border: none;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 11px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.thinking-copy:hover,
+.tool-copy:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.thinking-copy {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+}
+
+.tool-copy {
+  margin-left: auto;
+}

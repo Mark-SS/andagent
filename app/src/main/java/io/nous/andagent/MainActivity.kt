@@ -60,6 +60,12 @@ import io.nous.andagent.tools.SensorListTool
 import io.nous.andagent.tools.SensorReadTool
 import io.nous.andagent.tools.StepsHistoryTool
 import io.nous.andagent.tools.MicRecordTool
+import io.nous.andagent.tools.LocationGetTool
+import io.nous.andagent.tools.LocationStatusTool
+import io.nous.andagent.tools.ImageSaveTool
+import io.nous.andagent.tools.FilePickResultBridge
+import io.nous.andagent.tools.FilePickTool
+import io.nous.andagent.tools.OpenFolderTool
 import io.nous.andagent.tools.OpenSettingsTool
 import io.nous.andagent.tools.PhoneCallTool
 import io.nous.andagent.tools.SmsSendTool
@@ -212,6 +218,11 @@ class MainActivity : ComponentActivity() {
             "mic_record" to MicRecordTool(appContext, permissionBroker),
             "phone_call" to PhoneCallTool(appContext, permissionBroker),
             "sms_send" to SmsSendTool(appContext, permissionBroker),
+            "location_get" to LocationGetTool(appContext, permissionBroker),
+            "location_status" to LocationStatusTool(appContext),
+            "open_folder" to OpenFolderTool(appContext),
+            "file_pick" to FilePickTool(appContext, FilePickResultBridge),
+            "image_save" to ImageSaveTool(appContext, permissionBroker),
             "steps_history" to StepsHistoryTool(appContext, healthPermissionRequester),
         )
 

@@ -391,6 +391,61 @@ const TOOL_DEFS = [
       required: ["number", "text"],
     },
   },
+  {
+    name: "location_get",
+    description:
+      "获取当前 GPS 位置（经纬度/精度/海拔/速度）。首次调用会弹定位权限；室内可能无 GPS，会回退网络定位或说明原因。",
+    parameters: {
+      type: "object",
+      properties: {
+        max_age_seconds: { type: "integer", description: "允许的缓存位置最大年龄（秒），默认 60" },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "location_status",
+    description: "查询定位服务状态（GPS/网络/被动提供器开关与最后已知位置），不触发定位不弹窗。",
+    parameters: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "file_pick",
+    description:
+      "打开系统文件选择器让用户挑选文件，返回所选文件的 Uri 列表；用户取消或超时（120s）会明确返回。",
+    parameters: {
+      type: "object",
+      properties: {
+        mime: { type: "string", description: "MIME 过滤，如 image/*、application/pdf；默认全部" },
+        multiple: { type: "boolean", description: "是否允许多选，默认 false" },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "image_save",
+    description: "把 base64 图片保存到系统相册 Pictures/AndAgent，保存后相册立即可见。",
+    parameters: {
+      type: "object",
+      properties: {
+        base64: { type: "string", description: "图片 base64（可含 data:image/...;base64, 前缀）" },
+        filename: { type: "string", description: "可选：文件名" },
+        display_name: { type: "string", description: "可选：相册显示名" },
+      },
+      required: ["base64"],
+    },
+  },
+  {
+    name: "open_folder",
+    description:
+      "打开系统文件管理器定位到指定目录（downloads/documents/pictures/movies 或绝对路径），只浏览不修改。",
+    parameters: {
+      type: "object",
+      properties: {
+        dir: { type: "string", description: "downloads | documents | pictures | movies | alarms | notifications 或绝对路径" },
+      },
+      required: ["dir"],
+    },
+  },
 ] satisfies PiTool[];
 
 /**

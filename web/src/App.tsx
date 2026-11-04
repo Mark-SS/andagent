@@ -29,9 +29,53 @@ import { ToolCard } from "./ToolCard";
 function useMessageText(): string {
   return useAuiState((state) =>
     state.message.content
-      .map((part) => (part.type === "text" ? part.text : ""))
+      .map((part) => {
+        if (part.type === "text") return part.text;
+        // Include reasoning so 长按复制 covers 思考过程 too.
+        if (part.type === "reasoning") {
+          const t = (part as { text?: string }).text ?? "";
+          return t ? `【思考过程】\n${t}` : "";
+        }
+        return "";
+      })
       .filter(Boolean)
       .join("\n")
+      .trim(),
+  );
+}
+
+/** Full transcript of an assistant message: thinking + text + tool calls/results. */
+function useFullCopyText(): string {
+  return useAuiState((state) =>
+    state.message.content
+      .map((part) => {
+        if (part.type === "text") return part.text;
+        if (part.type === "reasoning") {
+          const t = (part as { text?: string }).text ?? "";
+          return t ? `【思考过程】\n${t}` : "";
+        }
+        if (part.type === "tool-call") {
+          const tc = part as {
+            toolName?: string;
+            args?: unknown;
+            argsText?: string;
+            result?: string | unknown;
+            isError?: boolean;
+          };
+          const lines = [`【工具】${tc.toolName ?? "?"}`];
+          if (tc.argsText) lines.push(`参数: ${tc.argsText}`);
+          if (tc.result !== undefined && tc.result !== null) {
+            const r =
+              typeof tc.result === "string" ? tc.result : JSON.stringify(tc.result, null, 1);
+            lines.push(`结果: ${r}`);
+          }
+          if (tc.isError) lines.push("(出错)");
+          return lines.join("\n");
+        }
+        return "";
+      })
+      .filter(Boolean)
+      .join("\n\n")
       .trim(),
   );
 }
@@ -61,6 +105,7 @@ function AssistantReasoning(props: {
   status?: { type: string } | null;
 }) {
   const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   const running = props.status?.type === "running";
   return (
     <div className={`thinking ${open || running ? "open" : ""}`}>
@@ -75,14 +120,33 @@ function AssistantReasoning(props: {
         </span>
         {running ? "思考中…" : "思考过程"}
       </button>
-      {(open || running) && <div className="thinking-body">{props.text}</div>}
+      {(open || running) && (
+        <div className="thinking-body-wrap">
+          <div className="thinking-body">{props.text}</div>
+          <button
+            type="button"
+            className="thinking-copy"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(props.text);
+                setCopied(true);
+                window.setTimeout(() => setCopied(false), 1400);
+              } catch {
+                /* clipboard unavailable */
+              }
+            }}
+          >
+            {copied ? "已复制" : "复制"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
 function AssistantMessage() {
   const running = useAuiState((state) => state.message.status?.type === "running");
-  const text = useMessageText();
+  const text = useFullCopyText();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const longPress = useLongPress((x, y) => setMenu({ x, y }));
   return (
