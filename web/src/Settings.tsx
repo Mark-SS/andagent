@@ -9,6 +9,8 @@ import {
   requestHealthPermission,
   requestShizukuPermission,
   type ShizukuStatus,
+  widgetList, widgetSave, widgetPin, widgetRefresh, widgetDelete,
+  type SavedWidget,
 } from "./bridge";
 
 interface Props {
@@ -24,6 +26,11 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
   const [shizukuMsg, setShizukuMsg] = useState<string | null>(null);
   const [termuxStatus, setTermuxStatus] = useState(() => getTermuxStatus());
   const [termuxMsg, setTermuxMsg] = useState<string | null>(null);
+  const [widgets, setWidgets] = useState<SavedWidget[]>(() => widgetList());
+  const [widgetId, setWidgetId] = useState("");
+  const [widgetJson, setWidgetJson] = useState("");
+  const [widgetMsg, setWidgetMsg] = useState("");
+  const refreshWidgets = () => setWidgets(widgetList());
   const [healthMsg, setHealthMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -134,6 +141,26 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
               placeholder="定义助手的身份与行为"
             />
           </label>
+
+          <div className="settings-card">
+            <div className="settings-card-head"><span>桌面小组件</span><span>{widgets.length} 个已保存</span></div>
+            <p className="settings-card-note">可在对话中描述想要的组件，也可在此粘贴并编辑 WidgetSpec v2 JSON。</p>
+            {widgets.map((widget) => <div key={widget.id} className="settings-card-actions">
+              <strong>{widget.name}</strong>
+              <button type="button" className="btn-ghost" onClick={() => { setWidgetId(widget.id); setWidgetJson(widget.specJson); }}>编辑</button>
+              <button type="button" className="btn-ghost" onClick={() => setWidgetMsg(widgetPin(widget.id))}>添加到桌面</button>
+              <button type="button" className="btn-ghost" onClick={() => setWidgetMsg(widgetRefresh(widget.id))}>刷新</button>
+              <button type="button" className="btn-ghost" onClick={() => { setWidgetMsg(widgetDelete(widget.id)); refreshWidgets(); if (widgetId === widget.id) { setWidgetId(""); setWidgetJson(""); } }}>删除</button>
+            </div>)}
+            <label className="field"><span>WidgetSpec JSON {widgetId ? "· 编辑" : "· 新建"}</span>
+              <textarea rows={8} value={widgetJson} onChange={(e) => setWidgetJson(e.target.value)} spellCheck={false} placeholder={'{"schemaVersion":2,"name":"我的组件","root":{"type":"COLUMN","children":[{"type":"TEXT","text":"你好"}]}}'} />
+            </label>
+            <div className="settings-card-actions">
+              <button type="button" className="btn-primary" onClick={() => { const result = widgetSave(widgetJson, widgetId); setWidgetMsg(result.startsWith("ERROR:") ? result : `已保存 ${result}`); if (!result.startsWith("ERROR:")) { setWidgetId(result); refreshWidgets(); } }}>保存 JSON</button>
+              <button type="button" className="btn-ghost" onClick={() => { setWidgetId(""); setWidgetJson(""); }}>新建</button>
+            </div>
+            {widgetMsg && <p className={widgetMsg.startsWith("ERROR:") ? "settings-error" : "settings-card-note"}>{widgetMsg}</p>}
+          </div>
 
           <div className="settings-card">
             <div className="settings-card-head">

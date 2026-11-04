@@ -74,6 +74,7 @@ import io.nous.andagent.tools.SmsSendTool
 import io.nous.andagent.tools.StepsTodayTool
 import io.nous.andagent.tools.StorageScanTool
 import io.nous.andagent.tools.TimerSetTool
+import io.nous.andagent.widget.data.WidgetToolRuntime
 import io.nous.andagent.tools.Tool
 import io.nous.andagent.tools.WifiInfoTool
 import io.nous.andagent.ui.SettingsStore
@@ -233,6 +234,8 @@ class MainActivity : ComponentActivity() {
             "js_eval" to JsEvalTool(quickJsEngine),
         ))
 
+        WidgetToolRuntime.attach(tools, quickJsEngine)
+
         bridge = AgentBridge(
             webViewProvider = { webView },
             appContext = appContext,
@@ -312,7 +315,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         bridge.shutdown()
-        if (::quickJsEngine.isInitialized) quickJsEngine.shutdown()
+        if (::quickJsEngine.isInitialized) { WidgetToolRuntime.detach(quickJsEngine); quickJsEngine.shutdown() }
         scriptToolExecutor.shutdownNow()
         if (::shizuku.isInitialized) shizuku.shutdown()
         webView.destroy()

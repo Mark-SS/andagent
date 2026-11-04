@@ -15,7 +15,7 @@ import { SessionStore, type SessionMeta } from "./sessions";
 
 type PiModule = typeof import("@mariozechner/pi-ai");
 
-const MAX_TOOL_ROUNDS = 8;
+const MAX_TOOL_ROUNDS = 200;
 
 let piPromise: Promise<PiModule> | null = null;
 
@@ -168,6 +168,8 @@ const TOOL_DEFS = [
   { name: "termux_setup", description: "安装并校验 Termux 用户空间；失败时检查 Termux App 回退。", parameters: { type: "object", properties: {}, required: [] } },
   { name: "shell_exec", description: "在 Termux 用户空间执行 shell 命令。", parameters: { type: "object", properties: { cmd: { type: "string", description: "命令" }, timeout_s: { type: "integer", description: "超时秒数，默认 60" } }, required: ["cmd"] } },
   { name: "pkg_install", description: "安装 Termux 包；白名单外须 confirm=true。", parameters: { type: "object", properties: { pkg: { type: "string", description: "包名" }, confirm: { type: "boolean", description: "确认白名单外安装" } }, required: ["pkg"] } },
+  { name: "widget_generate", description: "根据 spec_description 编写 WidgetSpec v2 JSON。schemaVersion=2，name，background=#RRGGBB，padding=0..32，root 为 COLUMN/ROW，children 节点为 COLUMN/ROW/TEXT/SPACER/PROGRESS；TEXT 可用 binding=DATA + source + field。data.sources 为名称到数据源的对象；类型 STATIC(value 对象)、HTTP(https url)、SYSTEM(system=BATTERY/CLOCK/NETWORK/LOCALE/STORAGE/DEVICE_INFO/BATTERY_DETAIL/STEPS_TODAY)、SCRIPT(script 字符串，定义 refresh(ctx) 返回扁平对象；可调用 andagent.tool('steps_today','{}') 并 JSON.parse)。支持 dependsOn、ttlSeconds、fallback、sample。最多 40 节点、6 层、8 数据源。调用后据此输出完整 spec，再调用 widget_save_and_pin。", parameters: { type: "object", properties: { spec_description: { type: "string", description: "用户希望的小组件内容与样式" } }, required: ["spec_description"] } },
+  { name: "widget_save_and_pin", description: "验证并保存 WidgetSpec v2 JSON，然后请求添加到桌面。编辑时可在设置页改 JSON。", parameters: { type: "object", properties: { spec_json: { type: "string", description: "完整 WidgetSpec v2 JSON 字符串" } }, required: ["spec_json"] } },
   { name: "js_eval", description: "在 QuickJS 中执行脚本。脚本可用 andagent.tool(name, argsJson) 同步调用设备工具，andagent.log(msg) 记录日志；最后表达式作为 JSON 结果。", parameters: { type: "object", properties: { script: { type: "string", description: "JavaScript 脚本" }, timeout_s: { type: "integer", description: "超时秒数，默认 30，最大 30" } }, required: ["script"] } },
   { name: "screen_capture", description: "经 scrcpy-server 取一帧屏幕并返回 JPEG 缩略图。", parameters: { type: "object", properties: {}, required: [] } },
   { name: "screen_record_h264", description: "用 scrcpy H.264 录屏到 Movies，可设置时长、码率和最大边长。", parameters: { type: "object", properties: { duration_s: { type: "integer", description: "秒数，默认 30" }, bit_rate: { type: "integer", description: "码率 bps" }, max_size: { type: "integer", description: "最大边长" } }, required: [] } },
@@ -846,7 +848,7 @@ export class AgentEngine {
       }
 
       if (!finished) {
-        this.error = `工具调用超过 ${MAX_TOOL_ROUNDS} 轮，已停止。可以让我继续或换个问法。`;
+        this.error = `工具调用达到 ${MAX_TOOL_ROUNDS} 轮上限，已停止。如需继续可说「继续」。`;
       }
     } catch (e) {
       if (isAbortError(e) || controller.signal.aborted) {

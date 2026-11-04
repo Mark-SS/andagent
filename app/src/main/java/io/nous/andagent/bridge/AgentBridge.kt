@@ -9,6 +9,8 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
+import io.nous.andagent.widget.WidgetApi
+import io.nous.andagent.widget.data.WidgetDataScheduler
 import io.nous.andagent.tools.Tool
 import io.nous.andagent.ui.SettingsStore
 import kotlinx.coroutines.runBlocking
@@ -237,6 +239,33 @@ class AgentBridge(
             .getOrElse { "ERROR: 导出失败：${it.message ?: it.javaClass.simpleName}" }
     }
 
+    @JavascriptInterface
+    fun widgetList(): String = runCatching { WidgetApi.list(requireNotNull(appContext)) }.getOrDefault("[]")
+
+    @JavascriptInterface
+    fun widgetSave(specJson: String, id: String): String = runCatching {
+        WidgetApi.save(requireNotNull(appContext), specJson, id.ifBlank { null })
+    }.getOrElse { "ERROR: ${it.message ?: it.javaClass.simpleName}" }
+
+    @JavascriptInterface
+    fun widgetPin(id: String): String = runCatching {
+        WidgetApi.pin(requireNotNull(appContext), id)
+    }.getOrElse { "ERROR: ${it.message ?: it.javaClass.simpleName}" }
+
+    @JavascriptInterface
+    fun widgetRefresh(id: String): String = runCatching {
+        val context = requireNotNull(appContext)
+        val record = io.nous.andagent.widget.data.WidgetStore(context).read().records.first { it.id == id }
+        WidgetDataScheduler.requestNow(context, id, record.spec)
+        "已安排刷新"
+    }.getOrElse { "ERROR: ${it.message ?: it.javaClass.simpleName}" }
+
+    @JavascriptInterface
+    fun widgetDelete(id: String): String = runCatching {
+        WidgetApi.delete(requireNotNull(appContext), id)
+        "已删除"
+    }.getOrElse { "ERROR: ${it.message ?: it.javaClass.simpleName}" }
+
     /* ------------------------------ tools ------------------------------- */
 
     /**
@@ -318,6 +347,17 @@ class AgentBridge(
     @JavascriptInterface
     fun toolExec(reqId: String, name: String, argsJson: String) {
         toolExecutor.execute {
+            if (name == "widget_save_and_pin") {
+                val result = runCatching {
+                    val args = json.parseToJsonElement(argsJson).jsonObject
+                    val raw = args["spec_json"]?.jsonPrimitive?.content ?: error("缺少 spec_json")
+                    val context = requireNotNull(appContext)
+                    val id = WidgetApi.save(context, raw)
+                    "已保存组件 $id。${WidgetApi.pin(context, id)}"
+                }.getOrElse { "ERROR: ${it.message ?: it.javaClass.simpleName}" }
+                emitToolResult(reqId, !result.startsWith("ERROR:"), result)
+                return@execute
+            }
             val tool = tools[name]
             if (tool == null) {
                 emitToolResult(reqId, false, "ERROR: unknown tool '$name'")

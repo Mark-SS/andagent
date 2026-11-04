@@ -34,6 +34,7 @@ export const DEFAULT_SYSTEM_PROMPT = [
   "- 屏幕与自动化：screen_record / screen_record_stop / screen_record_list / screen_record_h264 / screen_capture / input_tap / input_swipe / input_text",
   "- 脚本与包管理：termux_setup / shell_exec / pkg_install / js_eval（JS 脚本可用 andagent.tool 调用设备工具）",
   "- 系统导航：open_settings（27 类设置页直达）/ app_list / get_time / device_info",
+  "- 桌面小组件：widget_generate 先规划 WidgetSpec v2 JSON，widget_save_and_pin 保存并请求添加；数据可绑定系统或 QuickJS 工具",
   "",
   "## 工作纪律",
   "1. 先读懂意图再选工具；一次任务里相关工具可连续调用，但每步等结果再决定下一步。",
@@ -60,6 +61,11 @@ interface AndroidBridge {
   getSettings(): string;
   saveSettings(json: string): void;
   getAppVersion(): string;
+  widgetList(): string;
+  widgetSave(specJson: string, id: string): string;
+  widgetPin(id: string): string;
+  widgetRefresh(id: string): string;
+  widgetDelete(id: string): string;
   llmFetchStart(id: string, url: string, headersJson: string, body: string): void;
   llmCancel(id: string): void;
   toolExec(id: string, name: string, argsJson: string): void;
@@ -141,6 +147,9 @@ let seq = 0;
  * through window.__andagent.receive({type:"tool.result", ...}).
  */
 export function execTool(name: string, args: unknown): Promise<{ ok: boolean; result: string }> {
+  if (name === "widget_generate") {
+    return Promise.resolve({ ok: true, result: "请根据 spec_description 生成符合 WidgetSpec v2 的完整 JSON，然后调用 widget_save_and_pin({spec_json: JSON.stringify(spec)})。" });
+  }
   const b = bridge();
   if (!b) {
     return Promise.resolve({
@@ -651,3 +660,12 @@ export function exportConversation(title: string, markdown: string): string {
   try { return bridge()?.exportConversation(title, markdown) ?? "ERROR: Android 桥不可用"; }
   catch (e) { return `ERROR: 导出失败：${String(e)}`; }
 }
+
+export type SavedWidget = { id: string; name: string; specJson: string };
+export function widgetList(): SavedWidget[] {
+  try { return JSON.parse(bridge()?.widgetList() ?? "[]") as SavedWidget[]; } catch { return []; }
+}
+export function widgetSave(specJson: string, id = ""): string { return bridge()?.widgetSave(specJson, id) ?? "ERROR: 设备桥不可用"; }
+export function widgetPin(id: string): string { return bridge()?.widgetPin(id) ?? "ERROR: 设备桥不可用"; }
+export function widgetRefresh(id: string): string { return bridge()?.widgetRefresh(id) ?? "ERROR: 设备桥不可用"; }
+export function widgetDelete(id: string): string { return bridge()?.widgetDelete(id) ?? "ERROR: 设备桥不可用"; }
