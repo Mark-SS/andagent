@@ -20,7 +20,10 @@
 | 7 | NFC HCE（可选，设备作卡片模拟）| TODO | 需要 HostApduService + AID 注册，评估后做 |
 | 8 | 对话流内嵌 WebView 打开网站：新增 `web_embed(uri)` 工具——WebView 卡片渲染在消息流里（复用主 WebView 的 bridge 注入，卡片内可关/可全屏） | TODO | 前端 ChartCard 模式扩展 WebViewCard |
 | 9 | 对话流富数据渲染扩展：a) 相册照片网格缩略图（album_photos 的 base64 已有，补渲染）；b) 表格/键值卡片统一组件；c) JSON tree 视图；d) 地图卡片（location_get 的 geo 坐标渲染静态图或链接） | TODO | 前端为主，零 Kotlin 改动 |
-| 10 | MAX_TOOL_ROUNDS=200（已改，随下版发出） | ✅ | |
+| 10 | MAX_TOOL_ROUNDS=200（已改，随下版发出） | ✅ |
+| 10a | **对话流音频/视频播放**：```audio/```video 围栏 + MediaCard 组件 + 工具结果按扩展名内嵌播放器 + WebViewAssetLoader /local/ 媒体映射 | TODO | 已并入 R9 简报 |
+| 10b | **SQLite 数据库工具**（建库/建表/CRUD/查询 + andagent.db JS API） | TODO | R9 简报就绪 |
+| 10c | **外部数据访问**：ContentProvider（联系人/日历/短信 provider 统一读）、FileProvider（分享文件给其他 app）、SAF DocumentsTree 持久授权、MediaStore 全集合（音/视/文）查询 | TODO | R10 | |
 
 ## 🟡 P2 — 增强/补全
 | # | 事项 | 状态 | 备注 |
