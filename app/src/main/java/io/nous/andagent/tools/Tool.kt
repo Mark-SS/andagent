@@ -1,5 +1,6 @@
 package io.nous.andagent.tools
 
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -22,14 +23,17 @@ interface Tool {
     suspend fun execute(args: JsonObject): String
 }
 
-fun jsonSchema(vararg props: Pair<String, JsonElement>, required: List<String> = emptyList()): JsonObject =
+fun jsonSchema(props: Map<String, JsonElement> = emptyMap(), required: List<String> = emptyList()): JsonObject =
     buildJsonObject {
         put("type", "object")
-        put("properties", JsonObject(props.toMap()))
-        if (required.isNotEmpty()) put("required", JsonPrimitive.content.let {
-            kotlinx.serialization.json.JsonArray(required.map { JsonPrimitive(it) })
-        })
+        put("properties", JsonObject(props))
+        if (required.isNotEmpty()) {
+            put("required", JsonArray(required.map { JsonPrimitive(it) }))
+        }
     }
+
+fun schemaOf(vararg props: Pair<String, JsonElement>, required: List<String> = emptyList()): JsonObject =
+    jsonSchema(props.toMap(), required)
 
 fun strParam(description: String): JsonObject = buildJsonObject {
     put("type", "string")

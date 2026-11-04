@@ -14,7 +14,7 @@ class ShellTool(private val engine: ShellEngine) : Tool {
     override val name = "shell"
     override val description = "Run a shell command on the device (toybox: ls, find, du, df, grep, cat, cp, mv, rm...). " +
         "Working dir is the app's private storage. Long output is truncated. Timeout 15s."
-    override val parameters = jsonSchema(
+    override val parameters = schemaOf(
         "command" to strParam("The shell command line to execute"),
         required = listOf("command"),
     )

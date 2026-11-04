@@ -63,7 +63,7 @@ fun ChatScreen() {
             model = settings.model,
             confirmDestructive = { name, args ->
                 kotlinx.coroutines.suspendCancellableCoroutine { cont ->
-                    pendingConfirm = { approved ->
+                    pendingConfirm = { approved: Boolean ->
                         pendingConfirm = null
                         cont.resumeWith(Result.success(approved))
                     } to "$name\n$args"

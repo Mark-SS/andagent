@@ -2,10 +2,11 @@ package io.nous.andagent.agent
 
 import io.nous.andagent.llm.ChatMessage
 import io.nous.andagent.llm.ChatRequest
-import io.nous.andagent.llm.Delta
 import io.nous.andagent.llm.LlmClient
-import io.nous.andagent.llm.StreamEvent
+import io.nous.andagent.llm.LlmClient.StreamEvent
 import io.nous.andagent.llm.ToolCall
+import io.nous.andagent.llm.ToolDefinition
+import io.nous.andagent.llm.Usage
 import io.nous.andagent.tools.ToolRegistry
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -27,16 +28,16 @@ class AgentLoop(
         data class AssistantDelta(val text: String) : AgentEvent
         data class ToolStarted(val call: ToolCall) : AgentEvent
         data class ToolFinished(val call: ToolCall, val result: String, val blocked: Boolean = false) : AgentEvent
-        data class TurnDone(val usage: io.nous.andagent.llm.Usage?) : AgentEvent
+        data class TurnDone(val usage: Usage?) : AgentEvent
         data class Error(val message: String) : AgentEvent
     }
 
     fun run(history: List<ChatMessage>, userMessage: String): Flow<AgentEvent> = flow {
-        val messages = history + ChatMessage(role = "user", content = userMessage)
-        emitEvent(messages)
+        val messages = (history + ChatMessage(role = "user", content = userMessage)).toMutableList()
+        runTurn(messages)
     }
 
-    private suspend fun kotlinx.coroutines.flow.FlowCollector<AgentEvent>.emitEvent(
+    private suspend fun kotlinx.coroutines.flow.FlowCollector<AgentEvent>.runTurn(
         messages: MutableList<ChatMessage>
     ) {
         val request = ChatRequest(
@@ -57,7 +58,6 @@ class AgentLoop(
                     is StreamEvent.ToolRequested -> toolCalls.add(ev.call)
                     is StreamEvent.Done -> {
                         if (ev.finishReason == "tool_calls" || toolCalls.isNotEmpty()) {
-                            // feed assistant message (with tool calls) back into history
                             messages.add(
                                 ChatMessage(role = "assistant", content = assistant.toString(), toolCalls = toolCalls)
                             )
@@ -75,8 +75,8 @@ class AgentLoop(
                                     ChatMessage(role = "tool", content = result, toolCallId = call.id)
                                 )
                             }
-                            // continue the loop with tool results
-                            emitEvent(messages)
+                            // recurse: continue the loop with tool results
+                            runTurn(messages)
                         } else {
                             emit(AgentEvent.TurnDone(ev.usage))
                         }

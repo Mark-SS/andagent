@@ -58,10 +58,10 @@ class LlmClient(
                 val err = resp.body?.string()?.take(2000)
                 throw LlmException("HTTP ${resp.code}: $err")
             }
-            val source = resp.body?.source() ?: throw LlmException("empty body")
+            val src = resp.body?.source() ?: throw LlmException("empty body")
 
             // SSE parsing: split on \n\n, lines start with "data: "
-            val textStream = source.source()
+            val textStream = src
             val sb = StringBuilder()
             // Accumulator for tool calls assembled across deltas
             val toolAcc = mutableMapOf<Int, StringBuilder>()   // args per index
