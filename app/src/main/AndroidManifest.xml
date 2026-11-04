@@ -8,12 +8,20 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+
     <!-- Calendar (runtime) -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
 
     <!-- Local notifications (runtime on Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Silent alarm/timer writes via AlarmClock intents (SKIP_UI=true) -->
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
 
     <!-- app_list: installed apps are otherwise filtered on Android 11+ -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
@@ -29,6 +37,8 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
+    <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
+
     <!-- Shizuku: the manager grants this signature permission to the app -->
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
 
@@ -36,6 +46,7 @@
     <uses-permission android:name="android.permission.health.READ_STEPS" />
 
     <queries>
+        <package android:name="com.termux" />
         <!-- Shizuku manager visibility (status card / install check) -->
         <package android:name="moe.shizuku.privileged.api" />
         <!-- Health Connect provider app on Android 13 and below -->
@@ -52,6 +63,8 @@
         android:theme="@style/Theme.AndAgent"
         android:allowBackup="false"
         android:usesCleartextTraffic="true">
+
+        <service android:name=".shell.TermuxResultService" android:exported="false" />
 
         <!-- Shizuku API 13: runtime binder bridge (must be declared by the app) -->
         <provider

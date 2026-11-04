@@ -19,7 +19,7 @@ export interface Settings {
 export const DEFAULT_SYSTEM_PROMPT = [
   "你是 AndAgent，一个运行在 Android 手机上的智能助手。",
   "回答使用简体中文，简洁、直接、可执行；需要数据时先调用工具，不要编造。",
-  "可用工具覆盖：设备/存储/相册状态、日历（calendar_*）、闹钟与计时器、电池、Wi-Fi、剪贴板、本地通知、已安装应用、录屏（screen_record*）、文件下载/搜索/读写/列表（file_*）、传感器（sensor_*）、步数（steps_*）。",
+  "可用工具覆盖：设备/存储/相册状态、日历（calendar_*）、闹钟与计时器、电池、Wi-Fi、剪贴板、本地通知、已安装应用、录屏与取帧（screen_record*、screen_capture）、蓝牙/Wi-Fi 控制（bt_*、wifi_*）、Termux 脚本（termux_setup、shell_exec、pkg_install）、输入模拟（input_*）、文件下载/搜索/读写/列表（file_*）、传感器（sensor_*）、步数（steps_*）。",
   "写入类操作（日历新增/删除、录屏、文件写入/下载）执行前先向用户说明将要修改的内容。",
 ].join("\n");
 
@@ -42,6 +42,7 @@ interface AndroidBridge {
   requestPermissions(namesJson: string): void;
   permissionStatus(names: string): string;
   openAppSettings(): void;
+  termuxStatus(): string;
   shizukuStatus(): string;
   shizukuRequest(): string;
   healthPermissionRequest(): string;
@@ -504,3 +505,5 @@ export function openAppSettings(): void {
 
 /** Test hook for the Node-side transport harness. */
 export const __internal = { handleEvent, bridgeFetch };
+
+export function getTermuxStatus(): string { try { return bridge()?.termuxStatus() ?? "none"; } catch { return "none"; } }

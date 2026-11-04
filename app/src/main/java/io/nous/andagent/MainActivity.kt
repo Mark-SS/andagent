@@ -25,6 +25,16 @@ import androidx.webkit.WebViewAssetLoader
 import io.nous.andagent.bridge.AgentBridge
 import io.nous.andagent.bridge.PermissionBroker
 import io.nous.andagent.shell.ShizukuShell
+import io.nous.andagent.shell.TermuxEnv
+import io.nous.andagent.tools.TermuxTool
+import io.nous.andagent.tools.ScreenCaptureTool
+import io.nous.andagent.tools.ScreenRecordH264Tool
+import io.nous.andagent.tools.InputTool
+import io.nous.andagent.tools.BtScanTool
+import io.nous.andagent.tools.BtPairedListTool
+import io.nous.andagent.tools.BtConnectTool
+import io.nous.andagent.tools.WifiConnectTool
+import io.nous.andagent.tools.ShellConnectivityTool
 import io.nous.andagent.tools.AlarmSetTool
 import io.nous.andagent.tools.AlbumStatsTool
 import io.nous.andagent.tools.AppListTool
@@ -143,6 +153,8 @@ class MainActivity : ComponentActivity() {
         permissionBroker = PermissionBroker(this, permissionLauncher)
         shizuku = ShizukuShell(appContext).also { it.init() }
 
+        val termuxEnv = TermuxEnv(appContext)
+        val btConnect = BtConnectTool(appContext, permissionBroker)
         val tools: Map<String, Tool> = mapOf(
             "get_time" to GetTimeTool(),
             "device_info" to DeviceInfoTool(appContext),
@@ -156,11 +168,29 @@ class MainActivity : ComponentActivity() {
             "timer_set" to TimerSetTool(appContext),
             "battery_detail" to BatteryDetailTool(appContext),
             "wifi_info" to WifiInfoTool(appContext, permissionBroker),
+            "termux_setup" to TermuxTool(termuxEnv, "termux_setup"),
+            "shell_exec" to TermuxTool(termuxEnv, "shell_exec"),
+            "pkg_install" to TermuxTool(termuxEnv, "pkg_install"),
+            "bt_scan" to BtScanTool(appContext, permissionBroker),
+            "bt_paired_list" to BtPairedListTool(appContext, permissionBroker),
+            "bt_connect" to btConnect,
+            "wifi_connect" to WifiConnectTool(appContext),
+            "wifi_toggle" to ShellConnectivityTool(shizuku, "wifi_toggle"),
+            "bt_toggle" to ShellConnectivityTool(shizuku, "bt_toggle"),
+            "wifi_connect_strong" to ShellConnectivityTool(shizuku, "wifi_connect_strong"),
+            "wifi_saved_list" to ShellConnectivityTool(shizuku, "wifi_saved_list"),
+            "wifi_forget" to ShellConnectivityTool(shizuku, "wifi_forget"),
+            "bt_connect_direct" to ShellConnectivityTool(shizuku, "bt_connect_direct", btConnect),
             "clipboard_write" to ClipboardWriteTool(appContext),
             "clipboard_read" to ClipboardReadTool(appContext),
             "notify_send" to NotifySendTool(appContext, permissionBroker),
             "app_list" to AppListTool(appContext),
             // R3a: Shizuku-backed screen recording
+            "screen_capture" to ScreenCaptureTool(appContext, shizuku),
+            "screen_record_h264" to ScreenRecordH264Tool(appContext, shizuku),
+            "input_tap" to InputTool(shizuku, "input_tap"),
+            "input_swipe" to InputTool(shizuku, "input_swipe"),
+            "input_text" to InputTool(shizuku, "input_text"),
             "screen_record" to ScreenRecordTool(appContext, shizuku),
             "screen_record_stop" to ScreenRecordStopTool(appContext, shizuku),
             "screen_record_list" to ScreenRecordListTool(appContext, shizuku, permissionBroker),
@@ -186,6 +216,7 @@ class MainActivity : ComponentActivity() {
             shizukuStatus = { shizuku.statusJson() },
             shizukuRequest = { shizuku.requestPermission() },
             healthPermissionRequest = { requestHealthPermission() },
+            termuxStatus = { termuxEnv.status() },
         )
 
         val assetLoader = WebViewAssetLoader.Builder()

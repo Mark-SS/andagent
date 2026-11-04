@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Settings } from "./bridge";
 import {
   getShizukuStatus,
+  getTermuxStatus,
   hasBridge,
   persistSettings,
   requestHealthPermission,
@@ -20,11 +21,12 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [shizuku, setShizuku] = useState<ShizukuStatus>(() => getShizukuStatus());
   const [shizukuMsg, setShizukuMsg] = useState<string | null>(null);
+  const [termuxStatus, setTermuxStatus] = useState(() => getTermuxStatus());
   const [healthMsg, setHealthMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (!hasBridge()) return;
-    const refresh = () => setShizuku(getShizukuStatus());
+    const refresh = () => { setShizuku(getShizukuStatus()); setTermuxStatus(getTermuxStatus()); };
     refresh();
     const timer = window.setInterval(refresh, 4000);
     return () => window.clearInterval(timer);
@@ -185,6 +187,8 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
               </button>
             </div>
           </div>
+
+          <div className="settings-card"><div className="settings-card-head"><span>脚本后端</span><span>{termuxStatus}</span></div><p className="settings-card-note">运行 termux_setup 可安装用户空间；Termux App 回退需要 RUN_COMMAND 授权及 allow-external-apps=true。</p></div>
 
           {error && <div className="settings-error">{error}</div>}
 

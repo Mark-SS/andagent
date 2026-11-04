@@ -47,6 +47,7 @@ class AgentBridge(
     private val shizukuStatus: () -> String = { "{\"status\":\"unavailable\"}" },
     private val shizukuRequest: () -> String = { "{\"requested\":false}" },
     private val healthPermissionRequest: () -> String = { "{\"requested\":false}" },
+    private val termuxStatus: () -> String = { "none" },
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val toolExecutor = Executors.newFixedThreadPool(2)
@@ -180,6 +181,9 @@ class AgentBridge(
     fun openAppSettings() {
         permissions.openAppSettings()
     }
+
+    @JavascriptInterface
+    fun termuxStatus(): String = termuxStatus()
 
     /* ------------------------------ tools ------------------------------- */
 

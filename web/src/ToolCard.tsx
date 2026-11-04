@@ -24,6 +24,24 @@ const META: Record<string, ToolMeta> = {
   clipboard_read: { label: "读取剪贴板", icon: "📋" },
   notify_send: { label: "发送通知", icon: "🔔" },
   app_list: { label: "应用列表", icon: "📦" },
+  bt_scan: { label: "蓝牙扫描", icon: "📡" },
+  bt_paired_list: { label: "已配对设备", icon: "🔵" },
+  bt_connect: { label: "蓝牙连接", icon: "🔵" },
+  bt_connect_direct: { label: "蓝牙直接连接", icon: "🔵", destructive: true },
+  bt_toggle: { label: "蓝牙开关", icon: "🔵", destructive: true },
+  wifi_connect: { label: "Wi-Fi 面板", icon: "📶" },
+  wifi_connect_strong: { label: "Wi-Fi 连接", icon: "📶", destructive: true },
+  wifi_saved_list: { label: "已存网络", icon: "📶" },
+  wifi_forget: { label: "遗忘网络", icon: "📶", destructive: true },
+  wifi_toggle: { label: "Wi-Fi 开关", icon: "📶", destructive: true },
+  termux_setup: { label: "脚本环境", icon: "⌨️" },
+  shell_exec: { label: "运行脚本", icon: "⌨️" },
+  pkg_install: { label: "安装软件包", icon: "📦", destructive: true },
+  screen_capture: { label: "屏幕截图", icon: "🖼️" },
+  screen_record_h264: { label: "H.264 录屏", icon: "🎥" },
+  input_tap: { label: "点击屏幕", icon: "👆", destructive: true },
+  input_swipe: { label: "滑动屏幕", icon: "👆", destructive: true },
+  input_text: { label: "输入文本", icon: "⌨️", destructive: true },
 };
 
 const COLLAPSE_LINES = 15;
@@ -104,7 +122,11 @@ export function ToolCard(props: ToolCallMessagePartProps) {
   const lines = formatted.text.split("\n");
   const canFold = lines.length > COLLAPSE_LINES;
   const shown = canFold && !expanded ? lines.slice(0, COLLAPSE_LINES).join("\n") : formatted.text;
-  const written = /^(WRITTEN|DELETED)/.test(raw);
+  const written = /^(WRITTEN|DELETED|TOGGLED)/.test(raw);
+  let captureImage: string | null = null;
+  if (props.toolName === "screen_capture" && !running && !failed) {
+    try { const result = JSON.parse(raw) as { thumbnailBase64?: string }; if (result.thumbnailBase64) captureImage = `data:image/jpeg;base64,${result.thumbnailBase64}`; } catch { /* no image */ }
+  }
 
   const preview = running ? "正在执行…" : summarize(raw);
 
@@ -142,6 +164,8 @@ export function ToolCard(props: ToolCallMessagePartProps) {
         </div>
       )}
 
+      {captureImage && <img src={captureImage} alt="屏幕截图缩略图" style={{ display: "block", maxWidth: "100%", borderRadius: 8, margin: "8px auto" }} />}
+
       {open && (
         <div className="tool-body">
           <div className="tool-section">
@@ -154,7 +178,7 @@ export function ToolCard(props: ToolCallMessagePartProps) {
                 结果{formatted.json ? " · JSON" : ""}
                 {canFold ? ` · ${lines.length} 行` : ""}
               </div>
-              <pre className="tool-pre tool-result">{shown}</pre>
+              <pre className="tool-pre tool-result">{captureImage ? "截图已保存；缩略图见上方" : shown}</pre>
               {canFold && (
                 <button
                   type="button"
