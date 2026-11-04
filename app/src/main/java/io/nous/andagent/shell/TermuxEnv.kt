@@ -173,14 +173,21 @@ class TermuxEnv(private val context: Context, private val shizuku: ShizukuShell?
 class TermuxAppBackend(private val context: Context) {
     suspend fun exec(command: String, timeoutSeconds: Int): String = withContext(Dispatchers.IO) {
         if (context.checkSelfPermission("com.termux.permission.RUN_COMMAND") != PackageManager.PERMISSION_GRANTED)
-            return@withContext "ERROR: 未获 Termux RUN_COMMAND 权限；请到应用系统设置授权，且在 Termux 的 termux.properties 设 allow-external-apps=true"
+            return@withContext "ERROR: 未获 Termux RUN_COMMAND 权限。修复步骤：①设置→应用→AndAgent→权限→开通 Termux 权限（或在 Termux 目录执行 pm grant）；②在 Termux 会话里执行 mkdir -p ~/.termux && echo 'allow-external-apps=true' >> ~/.termux/termux.properties 后重启 Termux"
         val id = UUID.randomUUID().toString()
-        val pending = TermuxResultService.Pending(CountDownLatch(1))
-        TermuxResultService.pending[id] = pending
+        val pending = TermuxResultReceiver.Pending(CountDownLatch(1))
+        TermuxResultReceiver.pending[id] = pending
         try {
-            val reply = Intent(context, TermuxResultService::class.java).putExtra("id", id)
-            val pi = PendingIntent.getService(context, id.hashCode(), reply,
-                PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_MUTABLE)
+            // BroadcastReceiver result intent: works even though Termux is a
+            // background app when it posts the result (startService would be
+            // blocked by Android 12+ background service restrictions).
+            val reply = Intent(TermuxResultReceiver.ACTION)
+                .setPackage(context.packageName)
+                .putExtra(TermuxResultReceiver.EXTRA_ID, id)
+            val pi = PendingIntent.getBroadcast(
+                context, id.hashCode(), reply,
+                PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_MUTABLE,
+            )
             val intent = Intent("com.termux.RUN_COMMAND").apply {
                 setClassName("com.termux", "com.termux.app.RunCommandService")
                 putExtra("com.termux.RUN_COMMAND_PATH", "/data/data/com.termux/files/usr/bin/sh")
@@ -189,30 +196,13 @@ class TermuxAppBackend(private val context: Context) {
                 putExtra("com.termux.RUN_COMMAND_BACKGROUND", true)
                 putExtra("com.termux.RUN_COMMAND_PENDING_INTENT", pi)
             }
-            context.startService(intent) ?: return@withContext "ERROR: Termux 服务未启动；请先打开 Termux"
+            val started = runCatching { context.startService(intent) }.getOrNull()
+                ?: return@withContext "ERROR: 无法启动 Termux 的 RunCommandService；请先手动打开一次 Termux，并确认安装的是同一签名版本（F-Droid 与 Play 版签名不同，混装会 ServiceNotFound）"
             if (!pending.latch.await((timeoutSeconds + 10).toLong(), TimeUnit.SECONDS))
-                "ERROR: Termux 命令未在时限内返回；请检查 Termux 的外部应用设置"
+                "ERROR: Termux 命令未在时限内返回。最常见原因：Termux 的 ~/.termux/termux.properties 缺 allow-external-apps=true（改完需重启 Termux）"
             else pending.result ?: "ERROR: Termux 未返回结果"
         } catch (e: Exception) { "ERROR: Termux App 执行失败：${e.message}" }
-        finally { TermuxResultService.pending.remove(id) }
+        finally { TermuxResultReceiver.pending.remove(id) }
     }
 }
 
-class TermuxResultService : Service() {
-    data class Pending(val latch: CountDownLatch, @Volatile var result: String? = null)
-    companion object { val pending = ConcurrentHashMap<String, Pending>() }
-    override fun onBind(intent: Intent?): IBinder? = null
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val id = intent?.getStringExtra("id")
-        val bundle = intent?.getBundleExtra("result")
-        if (id != null) pending[id]?.let { p ->
-            p.result = if (bundle == null) "ERROR: Termux 未提供结果包" else {
-                val code = bundle.getInt("exitCode", -1)
-                "exit=$code\n${bundle.getString("stdout", "").take(4000)}\n[stderr] ${bundle.getString("stderr", "").take(2000)}${bundle.getString("errmsg")?.let { "\n$it" } ?: ""}"
-            }
-            p.latch.countDown()
-        }
-        stopSelf(startId)
-        return START_NOT_STICKY
-    }
-}

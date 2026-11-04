@@ -66,7 +66,15 @@
         android:allowBackup="false"
         android:usesCleartextTraffic="true">
 
-        <service android:name=".shell.TermuxResultService" android:exported="false" />
+        <!-- Termux RUN_COMMAND result callback (receiver: Android 12+ forbids
+             background startService, Termux posts results while backgrounded) -->
+        <receiver
+            android:name=".shell.TermuxResultReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="io.nous.andagent.TERMUX_RESULT" />
+            </intent-filter>
+        </receiver>
 
         <!-- Shizuku API 13: runtime binder bridge (must be declared by the app) -->
         <provider
