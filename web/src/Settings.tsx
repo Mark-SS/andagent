@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Settings } from "./bridge";
 import {
+  getDevToolsStatus,
   getShizukuStatus,
   getTermuxStatus,
   grantTermuxViaShizuku,
@@ -8,6 +9,8 @@ import {
   persistSettings,
   requestHealthPermission,
   requestShizukuPermission,
+  setDevToolsEnabled,
+  type DevToolsStatus,
   type ShizukuStatus,
   widgetList, widgetSave, widgetPin, widgetRefresh, widgetDelete,
   type SavedWidget,
@@ -32,6 +35,8 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
   const [widgetMsg, setWidgetMsg] = useState("");
   const refreshWidgets = () => setWidgets(widgetList());
   const [healthMsg, setHealthMsg] = useState<string | null>(null);
+  const [devtools, setDevtools] = useState<DevToolsStatus | null>(() => (hasBridge() ? getDevToolsStatus() : null));
+  const [devtoolsMsg, setDevtoolsMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (!hasBridge()) return;
@@ -215,6 +220,45 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
                 授权步数读取
               </button>
             </div>
+          </div>
+
+          <div className="settings-card">
+            <div className="settings-card-head">
+              <span>DevTools 远程调试</span>
+              <span className={`status-pill ${devtools?.enabled ? "status-granted" : "status-not_granted"}`}>
+                {devtools?.enabled ? "已开启" : "未开启"}
+              </span>
+            </div>
+            <p className="settings-card-note">
+              开启后 agent 可用 devtools_eval / devtools_console / devtools_screenshot 检查内嵌网页；
+              USB 连接电脑后可在 Chrome 的 chrome://inspect 查看这些页面。release 包默认关闭，开启为显式操作。
+            </p>
+            {devtools?.error && <p className="settings-error">{devtools.error}</p>}
+            {devtools && devtools.pages.length > 0 && (
+              <p className="settings-card-note">
+                可调试页面 {devtools.pages.length} 个：{devtools.pages.slice(0, 4).map((p) => p.title || p.url).join(" · ")}
+                {devtools.pages.length > 4 ? " …" : ""}
+              </p>
+            )}
+            <div className="settings-card-actions">
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => {
+                  const ack = setDevToolsEnabled(!devtools?.enabled);
+                  setDevtoolsMsg(ack.message ?? null);
+                  window.setTimeout(() => setDevtools(getDevToolsStatus()), 600);
+                }}
+              >
+                {devtools?.enabled ? "关闭调试" : "开启调试"}
+              </button>
+              <button type="button" className="btn-ghost" onClick={() => setDevtools(getDevToolsStatus())}>
+                刷新状态
+              </button>
+            </div>
+            {devtoolsMsg && (
+              <p className={devtoolsMsg.startsWith("ERROR:") ? "settings-error" : "settings-card-note"}>{devtoolsMsg}</p>
+            )}
           </div>
 
           <div className="settings-card">

@@ -140,4 +140,9 @@ class SettingsStore(context: Context) {
     var systemPrompt: String
         get() = prefs.getString("system_prompt", DEFAULT_SYSTEM_PROMPT)!!
         set(value) = prefs.edit().putString("system_prompt", value).apply()
+
+    /** R25: WebView 远程调试（release 包下用户在设置页显式开启才持久化）。 */
+    var devtoolsDebugging: Boolean
+        get() = prefs.getBoolean("devtools_debugging", false)
+        set(value) = prefs.edit().putBoolean("devtools_debugging", value).apply()
 }

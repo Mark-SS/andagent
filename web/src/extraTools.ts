@@ -65,4 +65,10 @@ export const EXTRA_TOOL_DEFS = [
   { name: "fdroid_search", description: "在 F-Droid 官方仓库索引中按关键词搜索开源应用，返回包名、名称、简介、最新版本。", parameters: { type: "object", properties: { keyword: { type: "string" }, limit: { type: "integer" } }, required: ["keyword"] } },
   { name: "fdroid_download", description: "下载指定 F-Droid 包名的最新 APK 到 Downloads/AndAgent，并校验 SHA-256。", parameters: { type: "object", properties: { package: { type: "string" } }, required: ["package"] } },
   { name: "app_install", description: "经 Shizuku 静默安装 APK：path 与 confirm=true 必填。", parameters: { type: "object", properties: { path: { type: "string" }, confirm: { type: "boolean" } }, required: ["path", "confirm"] } },
+
+  { name: "devtools_status", description: "查询 WebView 远程调试开关状态与可调试页面列表（序号/标题/URL）。", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "devtools_debugging", description: "运行时开关 WebView 远程调试（release 包同样生效，持久化到设置）。开启后 devtools_* 工具与 USB chrome://inspect 均可用。", parameters: { type: "object", properties: { enable: { type: "boolean" } }, required: ["enable"] } },
+  { name: "devtools_eval", description: "在指定页面执行 JavaScript 并返回结果（awaitPromise，可做 DOM 检查/抓取内容）。page 为 devtools_status 的序号或 URL/标题关键词，缺省第一个页面；web_embed 打开的页面可用此工具检查。", parameters: { type: "object", properties: { page: { type: "string" }, js: { type: "string" } }, required: ["js"] } },
+  { name: "devtools_console", description: "读取指定页面的 console 输出缓存（log/warn/error 与未捕获异常，自建立监听起）。先用 devtools_eval 让页面产生输出再读取。", parameters: { type: "object", properties: { page: { type: "string" }, lines: { type: "integer" } }, required: [] } },
+  { name: "devtools_screenshot", description: "截取指定页面当前画面为 PNG 存入相册 Pictures/AndAgent；缩略图由工具卡片展示。", parameters: { type: "object", properties: { page: { type: "string" } }, required: [] } },
 ] satisfies PiTool[];

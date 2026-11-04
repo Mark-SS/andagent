@@ -193,7 +193,7 @@ export function ToolCard(props: ToolCallMessagePartProps) {
   const shown = canFold && !expanded ? lines.slice(0, COLLAPSE_LINES).join("\n") : formatted.text;
   const written = /^(WRITTEN|DELETED|TOGGLED)/.test(raw);
   let captureImage: string | null = null;
-  if (["screen_capture", "image_edit", "image_preview", "image_collage"].includes(props.toolName) && !running && !failed) {
+  if (["screen_capture", "image_edit", "image_preview", "image_collage", "devtools_screenshot"].includes(props.toolName) && !running && !failed) {
     try { const result = JSON.parse(raw) as { thumbnailBase64?: string; thumbnailMime?: string }; if (result.thumbnailBase64) captureImage = `data:${result.thumbnailMime ?? "image/jpeg"};base64,${result.thumbnailBase64}`; } catch { /* no image */ }
   }
   let beforeImage: string | null = null;

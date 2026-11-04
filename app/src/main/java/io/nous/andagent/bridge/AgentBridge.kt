@@ -61,6 +61,9 @@ class AgentBridge(
     private val healthPermissionRequest: () -> String = { "{\"requested\":false}" },
     private val termuxStatus: () -> String = { "none" },
     private val termuxGrant: suspend () -> String = { "ERROR: Shizuku 不可用" },
+    // R25: 与同名 @JavascriptInterface 方法错开命名，避免调用点歧义。
+    private val devtoolsStatusJson: () -> String = { "{\"enabled\":false,\"error\":\"devtools 桥不可用\"}" },
+    private val devtoolsSetDebugging: (Boolean) -> String = { "ERROR: devtools 桥不可用" },
     private val embeddedWebviewOpen: (String) -> String = { "ERROR: 浏览器不可用" },
     private val dbGuiOpen: (String) -> String = { "ERROR: 数据库浏览器不可用" },
 ) {
@@ -249,6 +252,16 @@ class AgentBridge(
 
     @JavascriptInterface
     fun termuxStatus(): String = termuxStatus()
+
+    /** R25: WebView 远程调试状态（开关 + 可调试页面列表），给设置页用。 */
+    @JavascriptInterface
+    fun devtoolsStatus(): String = runCatching { devtoolsStatusJson() }
+        .getOrElse { "{\"enabled\":false,\"error\":\"${it.message ?: it.javaClass.simpleName}\"}" }
+
+    /** R25: 设置页开关 → 运行时切换 setWebContentsDebuggingEnabled + SP 持久化。 */
+    @JavascriptInterface
+    fun devtoolsSetEnabled(enabled: Boolean): String = runCatching { devtoolsSetDebugging(enabled) }
+        .getOrElse { "ERROR: 切换 DevTools 失败：${it.message ?: it.javaClass.simpleName}" }
 
     @JavascriptInterface
     fun termuxGrantViaShizuku(): String = runCatching { runBlocking { termuxGrant() } }

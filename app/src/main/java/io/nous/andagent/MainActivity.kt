@@ -35,6 +35,8 @@ import androidx.webkit.WebViewAssetLoader
 import io.nous.andagent.bridge.AgentBridge
 import io.nous.andagent.bridge.DbGuiBridge
 import io.nous.andagent.bridge.PermissionBroker
+import io.nous.andagent.shell.devtoolsStatusJson
+import io.nous.andagent.shell.setDevToolsDebugging
 import io.nous.andagent.shell.ShizukuShell
 import io.nous.andagent.shell.TermuxEnv
 import io.nous.andagent.script.QuickJsEngine
@@ -113,8 +115,11 @@ import io.nous.andagent.tools.EmailTool
 import io.nous.andagent.tools.EMAIL_TOOLS
 import io.nous.andagent.tools.StoreTool
 import io.nous.andagent.tools.STORE_TOOLS
+import io.nous.andagent.tools.DevToolsTool
+import io.nous.andagent.tools.DEVTOOLS_TOOLS
 import io.nous.andagent.tools.WifiInfoTool
 import io.nous.andagent.ui.SettingsStore
+import java.io.File
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -321,6 +326,7 @@ class MainActivity : ComponentActivity() {
         tools.putAll(ZIP_TOOLS.associateWith { ZipTool(it) })
         tools.putAll(EMAIL_TOOLS.associateWith { EmailTool(appContext, it) })
         tools.putAll(STORE_TOOLS.associateWith { StoreTool(shizuku, it) })
+        tools.putAll(DEVTOOLS_TOOLS.associateWith { DevToolsTool(appContext, it) })
 
         WidgetToolRuntime.attach(tools, quickJsEngine)
 
@@ -335,6 +341,8 @@ class MainActivity : ComponentActivity() {
             shizukuRequest = { shizuku.requestPermission() },
             healthPermissionRequest = { requestHealthPermission() },
             termuxStatus = { termuxEnv.status() },
+            devtoolsStatusJson = { devtoolsStatusJson(appContext) },
+            devtoolsSetDebugging = { enable -> setDevToolsDebugging(appContext, enable) },
             embeddedWebviewOpen = { uri -> openEmbeddedWebview(uri) },
             dbGuiOpen = { name -> dbGuiOpen(name) },
             termuxGrant = {
@@ -417,7 +425,10 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+        // R25: debug 构建自动开；release 包须用户在设置页显式开启（SP 持久化）。
+        if (settingsStore.devtoolsDebugging ||
+            applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+        ) {
             WebView.setWebContentsDebuggingEnabled(true)
         }
 
@@ -458,7 +469,29 @@ class MainActivity : ComponentActivity() {
 
     private fun openEmbeddedWebview(raw: String): String {
         val uri = Uri.parse(raw)
-        if (uri.scheme != "https" || uri.host.isNullOrBlank()) return "ERROR: 内嵌浏览器仅允许 HTTPS 网页"
+        // https: remote pages. Local HTML files: load their bytes through the
+        // appassets/local route (file:/// would be blocked by allowFileAccess=false,
+        // and content:// needs a grant — copying into the route sidesteps both).
+        val loadUrl: String = when (uri.scheme) {
+            "https" -> raw
+            "file" -> {
+                val f = File(uri.path ?: return "ERROR: file uri 缺少路径")
+                if (!f.isFile) return "ERROR: 本地文件不存在：${f.absolutePath}"
+                stageLocalHtml(f) ?: return "ERROR: 本地文件读取失败"
+            }
+            "content" -> {
+                val name = (uri.lastPathSegment ?: "embedded").substringAfterLast('/').ifBlank { "embedded" }
+                val staged = File(java.io.File(getExternalFilesDir(null), "webview-local"), name)
+                    .let { if (it.extension != "html" && it.extension != "htm") java.io.File(it.parentFile, it.nameWithoutExtension + ".html") else it }
+                runCatching {
+                    staged.parentFile?.mkdirs()
+                    contentResolver.openInputStream(uri)?.use { input -> staged.outputStream().use { input.copyTo(it) } }
+                        ?: return "ERROR: 无法读取 content uri"
+                }.getOrElse { return "ERROR: 读取失败（${it.message}）" }
+                stageLocalHtml(staged) ?: return "ERROR: 本地文件读取失败"
+            }
+            else -> return "ERROR: 内嵌浏览器支持 https 网页与本地 HTML 文件（file:/// 或 content://）；其他 scheme 请用 open_uri"
+        }
         runOnUiThread {
             embeddedDialog?.dismiss()
             val browser = WebView(this).apply {
@@ -468,7 +501,7 @@ class MainActivity : ComponentActivity() {
                 settings.allowContentAccess = false
                 webViewClient = object : WebViewClient() {
                     override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? = localMedia.intercept(request) ?: assetLoader.shouldInterceptRequest(request.url)
-                    override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean = request.url.scheme != "https"
+                    override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean = request.url.scheme != "https" && request.url.scheme != "appassets"
                 }
             }
             val dialog = Dialog(this)
@@ -482,10 +515,21 @@ class MainActivity : ComponentActivity() {
             embeddedDialog = dialog
             dialog.show()
             dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-            browser.loadUrl(raw)
+            browser.loadUrl(loadUrl)
         }
         return "OPENED"
     }
+
+    /** Copy a local HTML file into the appassets/local route (readable by the
+     *  embedded WebView) and return the https-style URL to load. */
+    private fun stageLocalHtml(source: File): String? = runCatching {
+        val base = File(getExternalFilesDir(null), "webview-local")
+        base.mkdirs()
+        val dest = File(base, "page_${System.currentTimeMillis()}.html")
+        source.inputStream().use { input -> dest.outputStream().use { input.copyTo(it) } }
+        val encoded = java.net.URLEncoder.encode(dest.name, "UTF-8")
+        "https://appassets.androidplatform.net/local/$encoded"
+    }.getOrNull()
 
     private fun dbGuiOpen(name: String): String {
         if (!name.matches(Regex("[A-Za-z0-9_]{1,64}"))) return "ERROR: 数据库名只允许字母数字下划线，最长 64 字符"
@@ -528,6 +572,7 @@ class MainActivity : ComponentActivity() {
         embeddedDialog?.dismiss()
         if (::nfcSession.isInitialized) nfcSession.close()
         bridge.shutdown()
+        io.nous.andagent.shell.DevToolsClient.shutdown()
         if (::quickJsEngine.isInitialized) { WidgetToolRuntime.detach(quickJsEngine); quickJsEngine.shutdown() }
         scriptToolExecutor.shutdownNow()
         if (::shizuku.isInitialized) shizuku.shutdown()

@@ -187,7 +187,7 @@ const TOOL_DEFS = [
   { name: "nfc_read", description: "等待贴卡最多 60 秒，读取 UID、技术和 NDEF 记录。调用前提示用户贴卡。", parameters: { type: "object", properties: {}, required: [] } },
   { name: "nfc_write_text", description: "覆盖 NFC 卡片的 NDEF 内容为文本；调用前说明写入内容并提示贴卡。", parameters: { type: "object", properties: { text: { type: "string", description: "写入文本" } }, required: ["text"] } },
   { name: "nfc_write_uri", description: "覆盖 NFC 卡片的 NDEF 内容为 URI；调用前说明写入 URI 并提示贴卡。", parameters: { type: "object", properties: { uri: { type: "string", description: "写入 URI" } }, required: ["uri"] } },
-  { name: "web_embed", description: "在对话中展示内嵌浏览器按钮，支持 HTTPS 网站。", parameters: { type: "object", properties: { uri: { type: "string", description: "HTTPS 网站地址" } }, required: ["uri"] } },
+  { name: "web_embed", description: "在对话中展示内嵌浏览器按钮，支持 HTTPS 网站；打开后可用 devtools_eval 在该页面执行 JS 检查（需 DevTools 调试开启）。", parameters: { type: "object", properties: { uri: { type: "string", description: "HTTPS 网站地址" } }, required: ["uri"] } },
   { name: "screen_capture", description: "经 scrcpy-server 取一帧屏幕并返回 JPEG 缩略图。", parameters: { type: "object", properties: {}, required: [] } },
   { name: "screen_record_h264", description: "用 scrcpy H.264 录屏到 Movies，可设置时长、码率和最大边长。", parameters: { type: "object", properties: { duration_s: { type: "integer", description: "秒数，默认 30" }, bit_rate: { type: "integer", description: "码率 bps" }, max_size: { type: "integer", description: "最大边长" } }, required: [] } },
   { name: "input_tap", description: "经 Shizuku 模拟屏幕点击。", parameters: { type: "object", properties: { x: { type: "integer", description: "横坐标" }, y: { type: "integer", description: "纵坐标" } }, required: ["x", "y"] } },

@@ -23,12 +23,17 @@ internal class TermuxSession(
     private val output = ByteArrayOutputStream()
     private val writer = process.outputStream.bufferedWriter()
     @Volatile private var startupDiagnostics = ""
+    @Volatile private var closed = false
 
     init {
         thread(name = "andagent-termux-reader", isDaemon = true) {
+            // close() destroys the process; the blocking read() then throws
+            // InterruptedIOException. An uncaught throwable on any thread kills
+            // the whole app (FATAL EXCEPTION), so swallow it here — the session
+            // is closing anyway.
             try {
                 val bytes = ByteArray(4096)
-                while (true) {
+                while (!closed) {
                     val n = process.inputStream.read(bytes)
                     if (n < 0) break
                     synchronized(monitor) {
@@ -41,6 +46,10 @@ internal class TermuxSession(
                         monitor.notifyAll()
                     }
                 }
+            } catch (_: java.io.InterruptedIOException) {
+                /* expected on close() — reader interrupted by stream teardown */
+            } catch (_: Exception) {
+                /* stream closed under us or process died — nothing to report */
             } finally { synchronized(monitor) { monitor.notifyAll() } }
         }
     }
@@ -94,5 +103,8 @@ internal class TermuxSession(
         })
     }
 
-    fun close() { process.destroyForcibly() }
+    fun close() {
+        closed = true
+        process.destroyForcibly()
+    }
 }

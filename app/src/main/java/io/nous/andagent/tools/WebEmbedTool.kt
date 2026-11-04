@@ -7,7 +7,7 @@ import kotlinx.serialization.json.put
 
 class WebEmbedTool : Tool {
     override val name = "web_embed"
-    override val description = "在对话卡片中提供内嵌浏览器按钮，仅接受 HTTPS 网页。"
+    override val description = "在对话卡片中提供内嵌浏览器按钮，仅接受 HTTPS 网页；打开后可用 devtools_eval 在该页面执行 JS 检查（需 DevTools 调试开启）。"
     override val parameters = schemaOf("uri" to strParam("HTTPS 网页地址"), required = listOf("uri"))
     override suspend fun execute(args: JsonObject): String {
         val uri = args.strArg("uri") ?: return "ERROR: 缺少 uri"

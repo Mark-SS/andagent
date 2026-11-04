@@ -94,6 +94,8 @@ interface AndroidBridge {
   openAppSettings(): void;
   termuxStatus(): string;
   termuxGrantViaShizuku(): string;
+  devtoolsStatus(): string;
+  devtoolsSetEnabled(enabled: boolean): string;
   exportConversation(title: string, markdown: string): string;
   shizukuStatus(): string;
   shizukuRequest(): string;
@@ -685,6 +687,52 @@ export function getTermuxStatus(): string { try { return bridge()?.termuxStatus(
 export function grantTermuxViaShizuku(): string {
   try { return bridge()?.termuxGrantViaShizuku() ?? "ERROR: Android 桥不可用"; }
   catch (e) { return `ERROR: Shizuku 代授权失败：${String(e)}`; }
+}
+
+/* ------------------------------------------------------------------ */
+/* DevTools 远程调试（R25：设置页开关 + 状态查询）                      */
+/* ------------------------------------------------------------------ */
+
+export interface DevToolsPageInfo {
+  index: number;
+  type: string;
+  title: string;
+  url: string;
+}
+
+export interface DevToolsStatus {
+  enabled: boolean;
+  debugBuild: boolean;
+  socketHint?: string;
+  error?: string;
+  pages: DevToolsPageInfo[];
+}
+
+export function getDevToolsStatus(): DevToolsStatus {
+  const fallback: DevToolsStatus = {
+    enabled: false,
+    debugBuild: false,
+    pages: [],
+    error: "浏览器预览模式：DevTools 仅能在 App 内使用",
+  };
+  const b = bridge();
+  if (!b) return fallback;
+  try {
+    const parsed = JSON.parse(b.devtoolsStatus()) as Partial<DevToolsStatus>;
+    return { ...fallback, ...parsed, pages: parsed.pages ?? [] };
+  } catch (e) {
+    return { ...fallback, error: `读取 DevTools 状态失败：${String(e)}` };
+  }
+}
+
+export function setDevToolsEnabled(enable: boolean): { enabled: boolean; message?: string } {
+  const b = bridge();
+  if (!b) return { enabled: false, message: "浏览器预览模式：DevTools 仅能在 App 内使用" };
+  try {
+    return JSON.parse(b.devtoolsSetEnabled(enable)) as { enabled: boolean; message?: string };
+  } catch (e) {
+    return { enabled: false, message: `ERROR: 切换 DevTools 失败：${String(e)}` };
+  }
 }
 export function exportConversation(title: string, markdown: string): string {
   try { return bridge()?.exportConversation(title, markdown) ?? "ERROR: Android 桥不可用"; }

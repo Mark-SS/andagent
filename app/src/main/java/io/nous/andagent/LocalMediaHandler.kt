@@ -12,7 +12,7 @@ import java.io.InputStream
 /** Read-only media route under the app's external files directory. */
 class LocalMediaHandler(context: Context) : WebViewAssetLoader.PathHandler {
     private val root = context.getExternalFilesDir(null)?.canonicalFile
-    private val types = mapOf("mp3" to "audio/mpeg", "m4a" to "audio/mp4", "mp4" to "video/mp4", "webm" to "video/webm", "ogg" to "audio/ogg", "wav" to "audio/wav", "flac" to "audio/flac")
+    private val types = mapOf("mp3" to "audio/mpeg", "m4a" to "audio/mp4", "mp4" to "video/mp4", "webm" to "video/webm", "ogg" to "audio/ogg", "wav" to "audio/wav", "flac" to "audio/flac", "html" to "text/html", "htm" to "text/html", "css" to "text/css", "js" to "application/javascript", "png" to "image/png", "jpg" to "image/jpeg", "jpeg" to "image/jpeg", "gif" to "image/gif", "svg" to "image/svg+xml")
     override fun handle(path: String): WebResourceResponse? = response(path, null)
     fun intercept(request: WebResourceRequest): WebResourceResponse? {
         if (request.url.host != "appassets.androidplatform.net" || !request.url.path.orEmpty().startsWith("/local/")) return null
