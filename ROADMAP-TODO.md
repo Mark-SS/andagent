@@ -50,4 +50,9 @@ web 化重构（pi+assistant-ui）/ 日历闹钟剪贴板通知 / ECharts / Shiz
 | R13 | 设备管理：torch/screen_state/brightness_set/volume_dnd/installed_app_details/usage_stats/biometric_check | +7 |
 | R14 | 自动化效率：alarm_wait/countdown/calendar_reminder_check/hotspot/airplane/tts/screenshot_quick | +6 |
 （R9 SQLite+媒体播放 → R10 外部数据 → R11 Scriptable UI → R12-R14 系统API → R15 图片编辑）
-| R15 | 图片编辑套件 | +4 |
+| R15 | 图片编辑套件（简报就绪） | +4 |
+| R16 | ZIP 套件（zip4j 业界标准库，含加密 zip 支持） | +5 |
+| R17 | 文件管理补全（简报就绪） | +7 |
+| R18 | LUT 滤镜：.cube 解析+3D 插值+强度混合，内置预置色调，接 R15 管线（简报就绪） | +3 |
+| R19 | 视频剪辑：ffmpeg-kit 静态链接（LGPL min 变体），video_clip/concat/filter 三工具（简报就绪） | +3 |
+|  | **R19 完成后累计约 90+ 工具** |  |
