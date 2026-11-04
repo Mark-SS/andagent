@@ -78,6 +78,7 @@ import io.nous.andagent.tools.MicRecordTool
 import io.nous.andagent.tools.LocationGetTool
 import io.nous.andagent.tools.LocationStatusTool
 import io.nous.andagent.tools.ImageSaveTool
+import io.nous.andagent.tools.ImageEditTool
 import io.nous.andagent.tools.FilePickResultBridge
 import io.nous.andagent.tools.FilePickTool
 import io.nous.andagent.tools.OpenFolderTool
@@ -266,6 +267,10 @@ class MainActivity : ComponentActivity() {
             "open_folder" to OpenFolderTool(appContext),
             "file_pick" to FilePickTool(appContext, FilePickResultBridge),
             "image_save" to ImageSaveTool(appContext, permissionBroker),
+            "image_edit" to ImageEditTool(appContext, "image_edit"),
+            "image_preview" to ImageEditTool(appContext, "image_preview"),
+            "image_info" to ImageEditTool(appContext, "image_info"),
+            "image_collage" to ImageEditTool(appContext, "image_collage"),
             "steps_history" to StepsHistoryTool(appContext, healthPermissionRequester),
             "js_eval" to JsEvalTool(quickJsEngine),
             "script_save" to ScriptFsTool(appContext, quickJsEngine, "script_save"),

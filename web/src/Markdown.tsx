@@ -7,12 +7,12 @@ import remarkGfm from "remark-gfm";
 import hljs from "highlight.js";
 import { ChartCard } from "./ChartCard";
 import { MediaCard } from "./MediaCard";
-import { PhotosCard, KvCard, GeoCard } from "./RichCards";
+import { PhotosCard, ImageCard, KvCard, GeoCard } from "./RichCards";
 
 function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighlighterProps) {
   const [copied, setCopied] = useState(false);
   const kind = (language ?? "").toLowerCase();
-  const isChart = ["chart", "photos", "kv", "geo", "audio", "video"].includes(kind);
+  const isChart = ["chart", "photos", "image", "kv", "geo", "audio", "video"].includes(kind);
 
   const html = useMemo(() => {
     if (isChart) return "";
@@ -29,6 +29,7 @@ function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighligh
   // ```chart fences carry ECharts option JSON, not source code.
   if (kind === "chart") return <ChartCard code={code} />;
   if (kind === "photos") return <PhotosCard code={code} />;
+  if (kind === "image") return <ImageCard code={code} />;
   if (kind === "kv") return <KvCard code={code} />;
   if (kind === "geo") return <GeoCard code={code} />;
   if (kind === "audio" || kind === "video") {

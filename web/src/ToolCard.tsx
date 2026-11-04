@@ -63,6 +63,10 @@ const META: Record<string, ToolMeta> = {
   shell_exec: { label: "运行脚本", icon: "⌨️" },
   pkg_install: { label: "安装软件包", icon: "📦", destructive: true },
   screen_capture: { label: "屏幕截图", icon: "🖼️" },
+  image_edit: { label: "图片编辑", icon: "🎨" },
+  image_preview: { label: "图片预览", icon: "🖼️" },
+  image_info: { label: "图片信息", icon: "ℹ️" },
+  image_collage: { label: "图片拼图", icon: "🧩" },
   screen_record_h264: { label: "H.264 录屏", icon: "🎥" },
   input_tap: { label: "点击屏幕", icon: "👆", destructive: true },
   input_swipe: { label: "滑动屏幕", icon: "👆", destructive: true },
@@ -188,8 +192,12 @@ export function ToolCard(props: ToolCallMessagePartProps) {
   const shown = canFold && !expanded ? lines.slice(0, COLLAPSE_LINES).join("\n") : formatted.text;
   const written = /^(WRITTEN|DELETED|TOGGLED)/.test(raw);
   let captureImage: string | null = null;
-  if (props.toolName === "screen_capture" && !running && !failed) {
-    try { const result = JSON.parse(raw) as { thumbnailBase64?: string }; if (result.thumbnailBase64) captureImage = `data:image/jpeg;base64,${result.thumbnailBase64}`; } catch { /* no image */ }
+  if (["screen_capture", "image_edit", "image_preview", "image_collage"].includes(props.toolName) && !running && !failed) {
+    try { const result = JSON.parse(raw) as { thumbnailBase64?: string; thumbnailMime?: string }; if (result.thumbnailBase64) captureImage = `data:${result.thumbnailMime ?? "image/jpeg"};base64,${result.thumbnailBase64}`; } catch { /* no image */ }
+  }
+  let beforeImage: string | null = null;
+  if (["image_edit", "image_preview"].includes(props.toolName) && captureImage) {
+    try { const result = JSON.parse(raw) as { sourceThumbnailBase64?: string }; if (result.sourceThumbnailBase64) beforeImage = `data:image/png;base64,${result.sourceThumbnailBase64}`; } catch { /* no image */ }
   }
 
   const preview = running ? (props.toolName.startsWith("nfc_") && props.toolName !== "nfc_status" ? "请贴近 NFC 卡片，最多等待 60 秒…" : "正在执行…") : summarize(raw);
@@ -235,7 +243,7 @@ export function ToolCard(props: ToolCallMessagePartProps) {
 
       {webUri && <WebViewCard uri={webUri} />}
       {media && <MediaCard kind={media.kind} uri={media.uri} />}
-      {captureImage && <img src={captureImage} alt="屏幕截图缩略图" style={{ display: "block", maxWidth: "100%", borderRadius: 8, margin: "8px auto" }} />}
+      {captureImage && <div className="tool-image-comparison">{beforeImage && <figure><img src={beforeImage} alt="编辑前" /><figcaption>编辑前</figcaption></figure>}<figure><img src={captureImage} alt="编辑后" /><figcaption>{beforeImage ? "编辑后" : "图片预览"}</figcaption></figure></div>}
 
       {open && (
         <div className="tool-body">

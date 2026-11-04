@@ -3,6 +3,21 @@ import { execTool } from "./bridge";
 
 type Photo = { id?: string; uri?: string; name?: string; thumbnailBase64?: string; thumb?: string };
 
+export function ImageCard({ code }: { code: string }) {
+  const [expanded, setExpanded] = useState(false);
+  let data: { base64?: string; uri?: string; caption?: string };
+  try { data = JSON.parse(code); } catch { return <div className="rich-error">图片数据格式错误</div>; }
+  const src = data.base64 ? `data:image/png;base64,${data.base64}` : data.uri;
+  if (!src || !(src.startsWith("data:image/") || src.startsWith("content://") || src.startsWith("https://"))) return <div className="rich-error">图片来源无效</div>;
+  return <div className="image-card">
+    <button type="button" onClick={() => setExpanded(true)} aria-label="放大图片"><img src={src} alt={data.caption ?? "编辑图片"} /></button>
+    {data.caption && <div className="image-caption">{data.caption}</div>}
+    {expanded && <div className="image-lightbox" role="dialog" aria-modal="true" aria-label="图片预览" onClick={() => setExpanded(false)}>
+      <button type="button" onClick={() => setExpanded(false)} aria-label="关闭预览">×</button><img src={src} alt={data.caption ?? "编辑图片"} />
+    </div>}
+  </div>;
+}
+
 export function PhotosCard({ code }: { code: string }) {
   const [error, setError] = useState("");
   let photos: Photo[] = [];
