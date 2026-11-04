@@ -12,6 +12,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
 import java.util.concurrent.Callable
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.ExecutorService
@@ -75,6 +76,21 @@ class QuickJsEngine(private val tools: Map<String, Tool>, private val toolExecut
                         "ERROR: 工具 $name 执行超时或失败：${e.message ?: e.javaClass.simpleName}"
                     }
                 })
+                for ((extension, key) in listOf("docx" to "content_spec_json", "pptx" to "slides_json", "xlsx" to "sheets_json")) {
+                    api.setProperty(extension, JSCallFunction { args ->
+                        val raw = args.getOrNull(0)?.toString() ?: return@JSCallFunction "ERROR: 缺少规格 JSON"
+                        val filename = args.getOrNull(1)?.toString() ?: "andagent.$extension"
+                        val tool = tools["${extension}_create"] ?: return@JSCallFunction "ERROR: 文档工具不可用"
+                        val parsed = kotlinx.serialization.json.buildJsonObject { put("filename", filename); put(key, raw) }
+                        val future = toolExecutor.submit<String> {
+                            runCatching { runBlocking { tool.execute(parsed) } }.getOrElse { "ERROR: ${it.message}" }
+                        }
+                        try { future.get(30, TimeUnit.SECONDS) } catch (e: Exception) {
+                            future.cancel(true)
+                            "ERROR: 文档生成超时或失败：${e.message ?: e.javaClass.simpleName}"
+                        }
+                    })
+                }
                 api.setProperty("log", JSCallFunction { args ->
                     Log.i("QuickJsEngine", args.getOrNull(0)?.toString()?.take(1000) ?: "")
                     null

@@ -33,6 +33,7 @@
 | 16 | 短信读取（READ_SMS） | TODO | 同上，权限敏感 |
 
 ## ✅ 已完成（v0.2.1 → v0.10.0 战果存档）
+- ✅ 文档生成（纯 Kotlin DOCX/PPTX/XLSX、对话工具、QuickJS API；R8）
 web 化重构（pi+assistant-ui）/ 日历闹钟剪贴板通知 / ECharts / Shizuku / 录屏取帧 / 文件三件套 / 传感器步数 / 多会话抽屉 / 动态授权 / Termux 内嵌（memfd+direct+重定位）/ 蓝牙 WiFi 控制 / 设置直达 / 思考过程显示 / 语音输入 / 电话短信 / GPS / 文件选择器 / 存图相册 / open_uri 跳转 / 快速小组件框架 / QuickJS 脚本引擎 / 导出对话 / MAX_ROUNDS=200
 
 ## 里程碑

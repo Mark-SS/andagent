@@ -60,6 +60,7 @@ import io.nous.andagent.tools.FileDownloadTool
 import io.nous.andagent.tools.FileListTool
 import io.nous.andagent.tools.FileReadTool
 import io.nous.andagent.tools.FileSearchTool
+import io.nous.andagent.tools.DocumentCreateTool
 import io.nous.andagent.tools.FileWriteTool
 import io.nous.andagent.tools.GetTimeTool
 import io.nous.andagent.tools.NotifySendTool
@@ -261,6 +262,9 @@ class MainActivity : ComponentActivity() {
             "image_save" to ImageSaveTool(appContext, permissionBroker),
             "steps_history" to StepsHistoryTool(appContext, healthPermissionRequester),
             "js_eval" to JsEvalTool(quickJsEngine),
+            "docx_create" to DocumentCreateTool(appContext, permissionBroker, "docx"),
+            "pptx_create" to DocumentCreateTool(appContext, permissionBroker, "pptx"),
+            "xlsx_create" to DocumentCreateTool(appContext, permissionBroker, "xlsx"),
         ))
 
         WidgetToolRuntime.attach(tools, quickJsEngine)
