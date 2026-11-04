@@ -26,7 +26,9 @@ class LlmClient(
     private val json = Json {
         ignoreUnknownKeys = true
         explicitNulls = false
-        encodeDefaults = false
+        // GLM (Zhipu) requires tools[].type and tool_calls[].type to be present;
+        // encodeDefaults=false silently dropped type="function" -> HTTP 400 code 1214.
+        encodeDefaults = true
     }
     private val http = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
