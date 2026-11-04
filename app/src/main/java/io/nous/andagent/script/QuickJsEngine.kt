@@ -7,11 +7,10 @@ import com.whl.quickjs.android.QuickJSLoader
 import com.whl.quickjs.wrapper.JSCallFunction
 import com.whl.quickjs.wrapper.QuickJSContext
 import io.nous.andagent.tools.Tool
+import io.nous.andagent.tools.JsonFixer
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import java.util.concurrent.Callable
 import java.util.concurrent.ExecutionException
@@ -23,15 +22,20 @@ import java.util.concurrent.TimeUnit
 class QuickJsEngine(private val tools: Map<String, Tool>, private val toolExecutor: ExecutorService) {
     private val thread = HandlerThread("andagent-quickjs").apply { start() }
     private val handler = Handler(thread.looper)
-    private val json = Json { ignoreUnknownKeys = true }
+
+    companion object {
+        fun sourceWithArgs(script: String, injectArgs: JsonObject?): String =
+            if (injectArgs == null) script else "var args = ${injectArgs};\n$script"
+    }
 
     private external fun installInterrupt(context: QuickJSContext, timeoutMs: Int): Boolean
     private external fun clearInterrupt(context: QuickJSContext)
 
-    fun eval(script: String, timeoutSeconds: Int): String {
-        if (script.length > 100_000) return "ERROR: 脚本超过 100KB"
+    fun eval(script: String, timeoutSeconds: Int, injectArgs: JsonObject? = null): String {
+        val source = sourceWithArgs(script, injectArgs)
+        if (source.length > 100_000) return "ERROR: 脚本超过 100KB"
         val seconds = timeoutSeconds.coerceIn(1, 30)
-        val task = FutureTask(Callable { runScript(script, seconds) })
+        val task = FutureTask(Callable { runScript(source, seconds) })
         if (!handler.post(task)) return "ERROR: QuickJS 线程不可用"
         return try {
             task.get(seconds + 32L, TimeUnit.SECONDS)
@@ -39,6 +43,29 @@ class QuickJsEngine(private val tools: Map<String, Tool>, private val toolExecut
             task.cancel(true)
             "ERROR: QuickJS 执行超时或失败：${e.message ?: e.javaClass.simpleName}"
         }
+    }
+
+    fun check(script: String): String {
+        if (script.length > 100_000) return "{\"valid\":false,\"error\":\"script exceeds 100KB\"}"
+        val task = FutureTask(Callable { checkScript(script) })
+        if (!handler.post(task)) return "{\"valid\":false,\"error\":\"QuickJS thread unavailable\"}"
+        return try { task.get(32, TimeUnit.SECONDS) }
+        catch (e: Exception) { task.cancel(true); "{\"valid\":false,\"error\":${JsonPrimitive(e.message ?: "syntax check failed")}}" }
+    }
+
+    private fun checkScript(script: String): String = try {
+        QuickJSLoader.init()
+        System.loadLibrary("scriptinterrupt")
+        QuickJSContext.create().use { context ->
+            context.setMemoryLimit(64 * 1024 * 1024)
+            if (!installInterrupt(context, 30000)) return "{\"valid\":false,\"error\":\"interrupt hook unavailable\"}"
+            try {
+                val probe = "try { new Function(${JsonPrimitive(script)}); JSON.stringify({valid:true}) } catch(e) { JSON.stringify({valid:false,error:String(e)}) }"
+                context.evaluate(probe, "andagent-check.js")?.toString() ?: "{\"valid\":false,\"error\":\"empty check result\"}"
+            } finally { clearInterrupt(context) }
+        }
+    } catch (e: Throwable) {
+        "{\"valid\":false,\"error\":${JsonPrimitive(e.message ?: e.javaClass.simpleName)}}"
     }
 
     private fun runScript(script: String, seconds: Int): String = try {
@@ -62,9 +89,9 @@ class QuickJsEngine(private val tools: Map<String, Tool>, private val toolExecut
                 api.setProperty("tool", JSCallFunction { args ->
                     val name = args.getOrNull(0)?.toString().orEmpty()
                     val raw = args.getOrNull(1)?.toString() ?: "{}"
-                    if (name == "js_eval") return@JSCallFunction "ERROR: 不允许递归执行 js_eval"
+                    if (name in setOf("js_eval", "script_run", "script_save", "script_check")) return@JSCallFunction "ERROR: 不允许递归执行 $name"
                     val tool = tools[name] ?: return@JSCallFunction "ERROR: 未知工具 $name"
-                    val parsed: JsonObject = try { json.parseToJsonElement(raw).jsonObject }
+                    val parsed: JsonObject = try { JsonFixer.parseObject(raw) }
                         catch (e: Exception) { return@JSCallFunction "ERROR: 工具参数不是 JSON 对象" }
                     val future = toolExecutor.submit<String> {
                         runCatching { runBlocking { tool.execute(parsed) } }
@@ -81,7 +108,9 @@ class QuickJsEngine(private val tools: Map<String, Tool>, private val toolExecut
                         val raw = args.getOrNull(0)?.toString() ?: return@JSCallFunction "ERROR: 缺少规格 JSON"
                         val filename = args.getOrNull(1)?.toString() ?: "andagent.$extension"
                         val tool = tools["${extension}_create"] ?: return@JSCallFunction "ERROR: 文档工具不可用"
-                        val parsed = kotlinx.serialization.json.buildJsonObject { put("filename", filename); put(key, raw) }
+                        val repaired = try { JsonFixer.fix(raw).also { if (!it.valid) error(it.error ?: "invalid JSON") }.json }
+                            catch (e: Exception) { return@JSCallFunction "ERROR: 规格 JSON 无法修复：${e.message}" }
+                        val parsed = kotlinx.serialization.json.buildJsonObject { put("filename", filename); put(key, repaired) }
                         val future = toolExecutor.submit<String> {
                             runCatching { runBlocking { tool.execute(parsed) } }.getOrElse { "ERROR: ${it.message}" }
                         }

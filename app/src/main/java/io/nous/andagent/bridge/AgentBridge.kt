@@ -12,6 +12,7 @@ import android.webkit.WebView
 import io.nous.andagent.widget.WidgetApi
 import io.nous.andagent.widget.data.WidgetDataScheduler
 import io.nous.andagent.tools.Tool
+import io.nous.andagent.tools.JsonFixer
 import io.nous.andagent.ui.SettingsStore
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -358,7 +359,7 @@ class AgentBridge(
         toolExecutor.execute {
             if (name == "widget_save_and_pin") {
                 val result = runCatching {
-                    val args = json.parseToJsonElement(argsJson).jsonObject
+                    val args = JsonFixer.parseObject(argsJson)
                     val raw = args["spec_json"]?.jsonPrimitive?.content ?: error("缺少 spec_json")
                     val context = requireNotNull(appContext)
                     val id = WidgetApi.save(context, raw)
@@ -373,7 +374,7 @@ class AgentBridge(
                 return@execute
             }
             val args = runCatching {
-                json.parseToJsonElement(argsJson.ifBlank { "{}" }).jsonObject
+                JsonFixer.parseObject(argsJson.ifBlank { "{}" })
             }.getOrElse {
                 emitToolResult(reqId, false, "ERROR: bad arguments JSON: ${it.message}")
                 return@execute

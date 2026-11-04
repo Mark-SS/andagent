@@ -36,6 +36,7 @@ import io.nous.andagent.shell.ShizukuShell
 import io.nous.andagent.shell.TermuxEnv
 import io.nous.andagent.script.QuickJsEngine
 import io.nous.andagent.script.JsEvalTool
+import io.nous.andagent.tools.ScriptFsTool
 import io.nous.andagent.tools.SqliteTool
 import io.nous.andagent.tools.TermuxTool
 import io.nous.andagent.tools.ScreenCaptureTool
@@ -264,6 +265,13 @@ class MainActivity : ComponentActivity() {
             "image_save" to ImageSaveTool(appContext, permissionBroker),
             "steps_history" to StepsHistoryTool(appContext, healthPermissionRequester),
             "js_eval" to JsEvalTool(quickJsEngine),
+            "script_save" to ScriptFsTool(appContext, quickJsEngine, "script_save"),
+            "script_list" to ScriptFsTool(appContext, quickJsEngine, "script_list"),
+            "script_read" to ScriptFsTool(appContext, quickJsEngine, "script_read"),
+            "script_run" to ScriptFsTool(appContext, quickJsEngine, "script_run"),
+            "script_delete" to ScriptFsTool(appContext, quickJsEngine, "script_delete"),
+            "script_check" to ScriptFsTool(appContext, quickJsEngine, "script_check"),
+            "json_fix" to ScriptFsTool(appContext, quickJsEngine, "json_fix"),
             "db_create" to SqliteTool(appContext, "db_create"),
             "db_list" to SqliteTool(appContext, "db_list"),
             "db_tables" to SqliteTool(appContext, "db_tables"),

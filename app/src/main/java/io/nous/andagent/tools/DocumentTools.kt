@@ -52,7 +52,7 @@ class DocumentCreateTool(
         val filename = safeFilename(args.strArg("filename") ?: error("缺少 filename"))
         val raw = args.strArg(specKey) ?: error("缺少 $specKey")
         require(raw.length <= 2_000_000) { "规格超过 2MB" }
-        val spec = Json.parseToJsonElement(raw)
+        val spec = JsonFixer.parse(raw)
         val out = ByteArrayOutputStream()
         when (format) {
             "docx" -> {
