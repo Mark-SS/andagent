@@ -96,6 +96,20 @@ class QuickJsEngine(private val tools: Map<String, Tool>, private val toolExecut
                     null
                 })
                 context.getGlobalObject().setProperty("andagent", api)
+                context.evaluate("""
+                    andagent.db = function(name) {
+                      var call = function(tool, args) {
+                        var result = andagent.tool(tool, JSON.stringify(args));
+                        try { return JSON.parse(result); } catch (_) { return result; }
+                      };
+                      call('db_create', {name: name});
+                      return {
+                        exec: function(sql, params) { return call('db_exec', {name: name, sql: sql, params_json: JSON.stringify(params || [])}); },
+                        query: function(sql, params, limit) { return call('db_query', {name: name, sql: sql, params_json: JSON.stringify(params || []), limit: limit || 100}); },
+                        tables: function() { return call('db_tables', {name: name}); }
+                      };
+                    };
+                """.trimIndent(), "andagent-db.js")
                 // No Java Class object or reflection bridge is exposed to JS.
                 val program = "JSON.stringify((0,eval)(${JsonPrimitive(script)}))"
                 context.evaluate(program, "andagent-script.js")?.toString() ?: "null"

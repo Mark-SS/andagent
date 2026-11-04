@@ -1593,3 +1593,10 @@ button:disabled {
 .json-tree button span, .json-leaf span { color: var(--muted); }
 .json-leaf { overflow-wrap: anywhere; padding: 2px 0; }
 @media(max-width:360px) { .photos-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+
+.media-card { margin: 10px 0; padding: 10px; border: 1px solid #343b49; border-radius: 10px; background: #171b24; max-width: 100%; }
+.media-title { font-size: 13px; margin-bottom: 8px; overflow-wrap: anywhere; }
+.media-duration { float: right; color: #aeb8c9; }
+.media-card audio, .media-card video { display: block; width: 100%; }
+.media-card video { max-height: 360px; border-radius: 6px; }
+.media-error { color: #f0ad84; font-size: 12px; }

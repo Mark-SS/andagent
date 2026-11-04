@@ -6,12 +6,13 @@ import {
 import remarkGfm from "remark-gfm";
 import hljs from "highlight.js";
 import { ChartCard } from "./ChartCard";
+import { MediaCard } from "./MediaCard";
 import { PhotosCard, KvCard, GeoCard } from "./RichCards";
 
 function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighlighterProps) {
   const [copied, setCopied] = useState(false);
   const kind = (language ?? "").toLowerCase();
-  const isChart = ["chart", "photos", "kv", "geo"].includes(kind);
+  const isChart = ["chart", "photos", "kv", "geo", "audio", "video"].includes(kind);
 
   const html = useMemo(() => {
     if (isChart) return "";
@@ -30,6 +31,13 @@ function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighligh
   if (kind === "photos") return <PhotosCard code={code} />;
   if (kind === "kv") return <KvCard code={code} />;
   if (kind === "geo") return <GeoCard code={code} />;
+  if (kind === "audio" || kind === "video") {
+    try {
+      const data = JSON.parse(code) as { uri?: string; title?: string; poster?: string };
+      if (typeof data.uri === "string") return <MediaCard kind={kind} uri={data.uri} title={data.title} poster={data.poster} />;
+    } catch { /* invalid media JSON */ }
+    return <div className="media-error">媒体数据格式错误</div>;
+  }
 
   const copy = async () => {
     try {

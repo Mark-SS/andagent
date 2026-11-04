@@ -32,6 +32,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.Response
 import java.io.IOException
+import java.io.File
+import android.net.Uri
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -378,8 +380,32 @@ class AgentBridge(
             }
             val result = runCatching { runBlocking { tool.execute(args) } }
                 .getOrElse { "ERROR: ${it.message ?: it.javaClass.simpleName}" }
-            emitToolResult(reqId, !result.startsWith("ERROR:"), result)
+            emitToolResult(reqId, !result.startsWith("ERROR:"), mediaPreviewResult(name, result))
         }
+    }
+
+    private fun mediaPreviewResult(toolName: String, raw: String): String {
+        if (toolName !in setOf("file_download", "screen_record_h264", "screen_record_stop") || raw.startsWith("ERROR:")) return raw
+        return runCatching {
+            val obj = runCatching { json.parseToJsonElement(raw) as? JsonObject }.getOrNull()
+            val path = obj?.get("path")?.jsonPrimitive?.contentOrNull
+                ?: Regex("/(?:sdcard|storage/emulated/0)/Movies/andagent_[^\\s,，]+\\.mp4").find(raw)?.value
+                ?: return@runCatching raw
+            val ext = path.substringAfterLast('.', "").lowercase()
+            if (ext !in setOf("mp3", "m4a", "mp4", "webm", "ogg", "wav", "flac")) return@runCatching raw
+            val ctx = appContext ?: return@runCatching raw
+            val root = ctx.getExternalFilesDir(null) ?: return@runCatching raw
+            val source = File(path).canonicalFile
+            val allowed = listOf("/sdcard/Download/andagent/", "/storage/emulated/0/Download/andagent/", "/sdcard/Movies/andagent_", "/storage/emulated/0/Movies/andagent_")
+            if (allowed.none { path.startsWith(it) }) return@runCatching raw
+            val target = File(root, "media-previews/${System.currentTimeMillis()}_${source.name}")
+            target.parentFile?.mkdirs()
+            val input = obj?.get("uri")?.jsonPrimitive?.contentOrNull?.takeIf { it.startsWith("content://") }?.let { ctx.contentResolver.openInputStream(Uri.parse(it)) }
+                ?: source.inputStream()
+            input.use { stream -> target.outputStream().use { output -> stream.copyTo(output) } }
+            if (obj == null) "$raw\n预览文件：${target.absolutePath}"
+            else buildJsonObject { obj.forEach { (key, value) -> put(key, value) }; put("previewPath", target.absolutePath) }.toString()
+        }.getOrDefault(raw)
     }
 
     private fun emitToolResult(reqId: String, ok: Boolean, result: String) {

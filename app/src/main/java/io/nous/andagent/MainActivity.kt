@@ -36,6 +36,7 @@ import io.nous.andagent.shell.ShizukuShell
 import io.nous.andagent.shell.TermuxEnv
 import io.nous.andagent.script.QuickJsEngine
 import io.nous.andagent.script.JsEvalTool
+import io.nous.andagent.tools.SqliteTool
 import io.nous.andagent.tools.TermuxTool
 import io.nous.andagent.tools.ScreenCaptureTool
 import io.nous.andagent.tools.ScreenRecordH264Tool
@@ -262,6 +263,13 @@ class MainActivity : ComponentActivity() {
             "image_save" to ImageSaveTool(appContext, permissionBroker),
             "steps_history" to StepsHistoryTool(appContext, healthPermissionRequester),
             "js_eval" to JsEvalTool(quickJsEngine),
+            "db_create" to SqliteTool(appContext, "db_create"),
+            "db_list" to SqliteTool(appContext, "db_list"),
+            "db_tables" to SqliteTool(appContext, "db_tables"),
+            "db_schema" to SqliteTool(appContext, "db_schema"),
+            "db_exec" to SqliteTool(appContext, "db_exec"),
+            "db_query" to SqliteTool(appContext, "db_query"),
+            "db_drop" to SqliteTool(appContext, "db_drop"),
             "docx_create" to DocumentCreateTool(appContext, permissionBroker, "docx"),
             "pptx_create" to DocumentCreateTool(appContext, permissionBroker, "pptx"),
             "xlsx_create" to DocumentCreateTool(appContext, permissionBroker, "xlsx"),
@@ -293,8 +301,10 @@ class MainActivity : ComponentActivity() {
             },
         )
 
+        val localMedia = LocalMediaHandler(this)
         assetLoader = WebViewAssetLoader.Builder()
             .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+            .addPathHandler("/local/", localMedia)
             .build()
 
         webView = WebView(this).apply {
@@ -315,7 +325,7 @@ class MainActivity : ComponentActivity() {
                 override fun shouldInterceptRequest(
                     view: WebView,
                     request: WebResourceRequest,
-                ): WebResourceResponse? = assetLoader.shouldInterceptRequest(request.url)
+                ): WebResourceResponse? = localMedia.intercept(request) ?: assetLoader.shouldInterceptRequest(request.url)
 
                 override fun shouldOverrideUrlLoading(
                     view: WebView,

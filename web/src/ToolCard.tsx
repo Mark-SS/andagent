@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ToolCallMessagePartProps } from "@assistant-ui/react";
 import { WebViewCard } from "./WebViewCard";
+import { MediaCard, mediaFromResult } from "./MediaCard";
 
 interface ToolMeta {
   label: string;
@@ -10,6 +11,13 @@ interface ToolMeta {
 
 const META: Record<string, ToolMeta> = {
   get_time: { label: "获取时间", icon: "🕐" },
+  db_create: { label: "创建数据库", icon: "🗄️" },
+  db_list: { label: "数据库列表", icon: "🗄️" },
+  db_tables: { label: "数据表列表", icon: "🗄️" },
+  db_schema: { label: "数据表结构", icon: "🗄️" },
+  db_exec: { label: "执行 SQL", icon: "🗄️", destructive: true },
+  db_query: { label: "查询数据库", icon: "🗄️" },
+  db_drop: { label: "删除数据库", icon: "🗑️", destructive: true },
   nfc_status: { label: "NFC 状态", icon: "📶" },
   nfc_read: { label: "读取 NFC", icon: "📶" },
   nfc_write_text: { label: "写入 NFC 文本", icon: "📶", destructive: true },
@@ -178,6 +186,7 @@ export function ToolCard(props: ToolCallMessagePartProps) {
 
   const preview = running ? (props.toolName.startsWith("nfc_") && props.toolName !== "nfc_status" ? "请贴近 NFC 卡片，最多等待 60 秒…" : "正在执行…") : summarize(raw);
   const parsed = useMemo(() => { try { return formatted.json ? JSON.parse(raw) : null; } catch { return null; } }, [raw, formatted.json]);
+  const media = !running && !failed && ["file_download", "mic_record", "screen_record_h264", "screen_record", "screen_record_stop"].includes(props.toolName) ? mediaFromResult(raw) : null;
   const webUri = props.toolName === "web_embed" && parsed?.type === "webview" && typeof parsed.uri === "string" ? parsed.uri : null;
 
   return (
@@ -217,6 +226,7 @@ export function ToolCard(props: ToolCallMessagePartProps) {
       )}
 
       {webUri && <WebViewCard uri={webUri} />}
+      {media && <MediaCard kind={media.kind} uri={media.uri} />}
       {captureImage && <img src={captureImage} alt="屏幕截图缩略图" style={{ display: "block", maxWidth: "100%", borderRadius: 8, margin: "8px auto" }} />}
 
       {open && (

@@ -498,6 +498,13 @@ const TOOL_DEFS = [
       required: [],
     },
   },
+  { name: "db_create", description: "创建持久化 SQLite 数据库。", parameters: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
+  { name: "db_list", description: "列出 SQLite 数据库。", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "db_tables", description: "列出数据库的表、列数和行数。", parameters: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
+  { name: "db_schema", description: "查看表结构。", parameters: { type: "object", properties: { name: { type: "string" }, table: { type: "string" } }, required: ["name", "table"] } },
+  { name: "db_exec", description: "执行参数化 SQL。值使用 ? 占位符和 params_json JSON 数组。DROP TABLE、无 WHERE DELETE 需 confirm=true。", parameters: { type: "object", properties: { name: { type: "string" }, sql: { type: "string" }, params_json: { type: "string" }, confirm: { type: "boolean" } }, required: ["name", "sql"] } },
+  { name: "db_query", description: "只读 SELECT，返回最多 limit 行。值使用 ? 和 params_json JSON 数组。", parameters: { type: "object", properties: { name: { type: "string" }, sql: { type: "string" }, params_json: { type: "string" }, limit: { type: "integer" } }, required: ["name", "sql"] } },
+  { name: "db_drop", description: "删除整个数据库，必须 confirm=true。", parameters: { type: "object", properties: { name: { type: "string" }, confirm: { type: "boolean" } }, required: ["name"] } },
 ] satisfies PiTool[];
 
 /**
@@ -515,6 +522,12 @@ const CHART_GUIDE = [
   "```chart",
   '{"tooltip":{},"legend":{},"xAxis":{"type":"category","data":["一月","二月","三月"]},"yAxis":{"type":"value"},"series":[{"name":"照片数","type":"bar","data":[12,20,8]}]}',
   "```",
+].join("\n");
+
+const STORAGE_MEDIA_GUIDE = [
+  "结构化存储：用户要记账、清单或笔记库时，先用 db_create 建库，再用 db_exec 建表，后续用参数化 INSERT 和 db_query SELECT。",
+  "记账表例：CREATE TABLE records(id INTEGER PRIMARY KEY, date TEXT, item TEXT, amount REAL)。",
+  "输出呈现：给用户音频或视频文件时，用 ```audio 或 ```video 围栏，内容为 JSON，例如 {\"uri\":\"/本地路径/file.mp4\",\"title\":\"文件名\"}；uri 可为本地文件路径或 https。",
 ].join("\n");
 
 const ZERO_USAGE = {
@@ -808,7 +821,7 @@ export class AgentEngine {
         const stream = pi.stream(
           model,
           {
-            systemPrompt: [this.settings.systemPrompt.trim(), CHART_GUIDE, PERMISSION_GUIDE]
+            systemPrompt: [this.settings.systemPrompt.trim(), CHART_GUIDE, STORAGE_MEDIA_GUIDE, PERMISSION_GUIDE]
               .filter(Boolean)
               .join("\n\n"),
             messages: this.messages,
