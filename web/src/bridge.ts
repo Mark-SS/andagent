@@ -35,10 +35,13 @@ const DEV_SETTINGS_KEY = "andagent.settings.dev.v1";
 interface AndroidBridge {
   getSettings(): string;
   saveSettings(json: string): void;
+  getAppVersion(): string;
   llmFetchStart(id: string, url: string, headersJson: string, body: string): void;
   llmCancel(id: string): void;
   toolExec(id: string, name: string, argsJson: string): void;
   requestPermissions(namesJson: string): void;
+  permissionStatus(names: string): string;
+  openAppSettings(): void;
   shizukuStatus(): string;
   shizukuRequest(): string;
   healthPermissionRequest(): string;
@@ -468,6 +471,36 @@ function handleEvent(payload: string): void {
 // Install the callback as early as possible — Kotlin may push events while the
 // React tree is still mounting (e.g. a retry right after launch).
 window.__andagent = { receive: handleEvent };
+
+/* ------------------------------------------------------------------ */
+/* App version (from BuildConfig via the bridge; dev fallback)          */
+/* ------------------------------------------------------------------ */
+
+export function getAppVersion(): string {
+  const b = bridge();
+  if (!b) return "dev";
+  try {
+    const parsed = JSON.parse(b.getAppVersion()) as { version?: string };
+    return parsed.version || "dev";
+  } catch {
+    return "dev";
+  }
+}
+
+/** Promptless per-permission state: "granted"|"denied"|"permanently_denied". */
+export function getPermissionStatus(names: string[]): Record<string, string> {
+  const b = bridge();
+  if (!b) return {};
+  try {
+    return JSON.parse(b.permissionStatus(JSON.stringify(names))) as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+export function openAppSettings(): void {
+  bridge()?.openAppSettings();
+}
 
 /** Test hook for the Node-side transport harness. */
 export const __internal = { handleEvent, bridgeFetch };

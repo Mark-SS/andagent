@@ -10,10 +10,11 @@ import type {
 } from "@mariozechner/pi-ai";
 import type { ThreadMessageLike } from "@assistant-ui/react";
 import { execTool, type Settings } from "./bridge";
+import { PERMISSION_GUIDE } from "./permissionGuide";
+import { SessionStore, type SessionMeta } from "./sessions";
 
 type PiModule = typeof import("@mariozechner/pi-ai");
 
-const MESSAGES_KEY = "andagent.messages.v1";
 const MAX_TOOL_ROUNDS = 8;
 
 let piPromise: Promise<PiModule> | null = null;
@@ -387,6 +388,8 @@ export interface AgentSnapshot {
   messages: ThreadMessageLike[];
   running: boolean;
   error: string | null;
+  sessionId: string;
+  sessions: SessionMeta[];
 }
 
 function toUiMessages(messages: PiMessage[], draft: Draft | null): ThreadMessageLike[] {
@@ -476,18 +479,8 @@ function toUiMessages(messages: PiMessage[], draft: Draft | null): ThreadMessage
   return ui;
 }
 
-function loadPersisted(): PiMessage[] {
-  try {
-    const raw = localStorage.getItem(MESSAGES_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (m) => m && (m.role === "user" || m.role === "assistant" || m.role === "toolResult"),
-    ) as PiMessage[];
-  } catch {
-    return [];
-  }
+function newId(): string {
+  return `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function isAbortError(error: unknown): boolean {
@@ -514,11 +507,58 @@ export class AgentEngine {
   private settings: Settings;
   private snapshot: AgentSnapshot;
   private listeners = new Set<() => void>();
+  private sessionId = "";
+  private sessions: SessionMeta[] = [];
 
   constructor(settings: Settings) {
     this.settings = settings;
-    this.messages = loadPersisted();
-    this.snapshot = { messages: toUiMessages(this.messages, null), running: false, error: null };
+    this.sessionId = newId();
+    this.messages = [];
+    this.sessions = SessionStore.list();
+    this.snapshot = {
+      messages: [],
+      running: false,
+      error: null,
+      sessionId: this.sessionId,
+      sessions: this.sessions,
+    };
+  }
+
+  /* ------------------------- multi-session --------------------------- */
+
+  switchSession(id: string): void {
+    if (this.running || id === this.sessionId) return;
+    SessionStore.save(this.sessionId, this.messages); // flush current first
+    this.sessionId = id;
+    this.messages = SessionStore.load(id);
+    this.draft = null;
+    this.error = null;
+    this.sessions = SessionStore.list();
+    this.emit();
+  }
+
+  newSession(): void {
+    if (this.running) return;
+    SessionStore.save(this.sessionId, this.messages);
+    this.sessionId = newId();
+    this.messages = [];
+    this.draft = null;
+    this.error = null;
+    this.sessions = SessionStore.list();
+    this.emit();
+  }
+
+  deleteSession(id: string): void {
+    const wasCurrent = id === this.sessionId;
+    const sessions = SessionStore.remove(id);
+    if (wasCurrent) {
+      this.sessionId = newId();
+      this.messages = [];
+      this.draft = null;
+      this.error = null;
+    }
+    this.sessions = sessions;
+    this.emit();
   }
 
   subscribe = (listener: () => void): (() => void) => {
@@ -549,16 +589,14 @@ export class AgentEngine {
       messages: toUiMessages(this.messages, this.draft),
       running: this.running,
       error: this.error,
+      sessionId: this.sessionId,
+      sessions: this.sessions,
     };
     for (const listener of this.listeners) listener();
   }
 
   private persist(): void {
-    try {
-      localStorage.setItem(MESSAGES_KEY, JSON.stringify(this.messages));
-    } catch (e) {
-      console.warn("persist messages failed", e);
-    }
+    this.sessions = SessionStore.save(this.sessionId, this.messages);
   }
 
   async send(text: string): Promise<void> {
@@ -586,7 +624,7 @@ export class AgentEngine {
         const stream = pi.stream(
           model,
           {
-            systemPrompt: [this.settings.systemPrompt.trim(), CHART_GUIDE]
+            systemPrompt: [this.settings.systemPrompt.trim(), CHART_GUIDE, PERMISSION_GUIDE]
               .filter(Boolean)
               .join("\n\n"),
             messages: this.messages,

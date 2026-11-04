@@ -67,13 +67,26 @@ private suspend fun readSteps(client: HealthConnectClient, start: Instant, end: 
     return response.records.sumOf { it.count }
 }
 
-class StepsTodayTool(private val context: Context) : Tool {
+class StepsTodayTool(
+    private val context: Context,
+    private val requestPermission: (suspend () -> Boolean)? = null,
+) : Tool {
     override val name = "steps_today"
     override val description = "读取今天的步数（Health Connect，需用户授权步数读取权限）。"
     override val parameters = schemaOf()
 
     override suspend fun execute(args: JsonObject): String {
-        val ready = healthReady(context)
+        var ready = healthReady(context)
+        // Permission missing → trigger the on-device consent screen once,
+        // then re-check. This is the "dialog pops exactly when the agent
+        // needs it" path; without the requester we degrade to the hint.
+        if (ready is HealthReady.NotReady &&
+            ready.message.startsWith("ERROR: 未授予") &&
+            requestPermission != null &&
+            requestPermission()
+        ) {
+            ready = healthReady(context)
+        }
         if (ready is HealthReady.NotReady) return ready.message
         val client = (ready as HealthReady.Ready).client
         return runCatching {
@@ -92,7 +105,10 @@ class StepsTodayTool(private val context: Context) : Tool {
     }
 }
 
-class StepsHistoryTool(private val context: Context) : Tool {
+class StepsHistoryTool(
+    private val context: Context,
+    private val requestPermission: (suspend () -> Boolean)? = null,
+) : Tool {
     override val name = "steps_history"
     override val description = "读取最近 N 天每日步数（Health Connect），默认 7 天，最多 30 天。"
     override val parameters = schemaOf(
@@ -100,7 +116,14 @@ class StepsHistoryTool(private val context: Context) : Tool {
     )
 
     override suspend fun execute(args: JsonObject): String {
-        val ready = healthReady(context)
+        var ready = healthReady(context)
+        if (ready is HealthReady.NotReady &&
+            ready.message.startsWith("ERROR: 未授予") &&
+            requestPermission != null &&
+            requestPermission()
+        ) {
+            ready = healthReady(context)
+        }
         if (ready is HealthReady.NotReady) return ready.message
         val client = (ready as HealthReady.Ready).client
         val days = (args.intArg("days") ?: 7).coerceIn(1, 30)

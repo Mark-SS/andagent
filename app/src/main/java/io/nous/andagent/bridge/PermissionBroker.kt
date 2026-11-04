@@ -39,6 +39,38 @@ class PermissionBroker(
         false
     }
 
+    /**
+     * Promptless state for one permission: "granted" | "denied" |
+     * "permanently_denied". A permission is permanently denied when it is
+     * not granted and the system would no longer show the rationale dialog
+     * (`shouldShowRequestPermissionRationale == false` after a previous
+     * denial).
+     */
+    fun statusOf(name: String): String {
+        if (isGranted(name)) return "granted"
+        return try {
+            if (activity.shouldShowRequestPermissionRationale(name)) "denied" else "permanently_denied"
+        } catch (_: Exception) {
+            "denied"
+        }
+    }
+
+    /** Open the system app-details page (user can flip permanently denied perms). */
+    fun openAppSettings() {
+        main.post {
+            try {
+                activity.startActivity(
+                    android.content.Intent(
+                        android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        android.net.Uri.fromParts("package", activity.packageName, null),
+                    ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            } catch (_: Exception) {
+                /* no settings activity on this device — nothing to do */
+            }
+        }
+    }
+
     fun areGranted(names: List<String>): Boolean = names.all(::isGranted)
 
     /**

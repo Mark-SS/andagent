@@ -43,6 +43,7 @@ class AgentBridge(
     private val settings: SettingsStore,
     private val tools: Map<String, Tool>,
     private val permissions: PermissionBroker,
+    private val appVersion: String = "",
     private val shizukuStatus: () -> String = { "{\"status\":\"unavailable\"}" },
     private val shizukuRequest: () -> String = { "{\"requested\":false}" },
     private val healthPermissionRequest: () -> String = { "{\"requested\":false}" },
@@ -53,6 +54,11 @@ class AgentBridge(
 
     @Volatile
     private var released = false
+
+    /** {"version":"0.6.0"} — shown on the home screen. */
+    @JavascriptInterface
+    fun getAppVersion(): String =
+        buildJsonObject { put("version", appVersion) }.toString()
 
     private val http = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -144,6 +150,35 @@ class AgentBridge(
             put("requested", false)
             put("message", it.message ?: "Health Connect 授权请求失败")
         }.toString()
+    }
+
+    /**
+     * Per-permission state without prompting: "granted" | "denied" |
+     * "permanently_denied" (user checked "don't ask again" — the system
+     * dialog would not show; user must flip it in app settings).
+     */
+    @JavascriptInterface
+    fun permissionStatus(names: String): String {
+        val requested = runCatching {
+            val element = json.parseToJsonElement(names)
+            if (element is JsonArray) {
+                element.mapNotNull { it.jsonPrimitive.contentOrNull }
+            } else {
+                null
+            }
+        }.getOrNull() ?: names.split(',', ' ', '\n').filter { it.isNotBlank() }
+        return buildJsonObject {
+            requested.forEach { name ->
+                val state = runCatching { permissions.statusOf(name) }.getOrElse { "unknown" }
+                put(name, state)
+            }
+        }.toString()
+    }
+
+    /** Deep link to the system app-settings page (for permanently denied perms). */
+    @JavascriptInterface
+    fun openAppSettings() {
+        permissions.openAppSettings()
     }
 
     /* ------------------------------ tools ------------------------------- */

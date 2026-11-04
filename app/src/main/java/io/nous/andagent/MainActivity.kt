@@ -57,6 +57,10 @@ import io.nous.andagent.tools.WifiInfoTool
 import io.nous.andagent.ui.SettingsStore
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import android.os.Handler
+import android.os.Looper
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -70,7 +74,53 @@ class MainActivity : ComponentActivity() {
     private lateinit var permissionBroker: PermissionBroker
     private lateinit var shizuku: ShizukuShell
 
-    private val healthPermissionResult = AtomicReference<Set<String>>(emptySet())
+    private val healthPermissionResult = AtomicReference<Set<String>?>(null)
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    /**
+     * Tool-level on-demand Health Connect authorization: launches the
+     * consent screen and suspends until the user answers (or 90s timeout).
+     * Called from StepsTools when a read hits the permission wall, so the
+     * dialog appears exactly when the agent needs it.
+     */
+    private val healthPermissionRequester: suspend () -> Boolean = {
+        suspendCancellableCoroutine { cont ->
+            mainHandler.post {
+                try {
+                    val status = runCatching { HealthConnectClient.getSdkStatus(this) }
+                        .getOrElse { HealthConnectClient.SDK_UNAVAILABLE }
+                    if (status != HealthConnectClient.SDK_AVAILABLE) {
+                        cont.resume(false)
+                        return@post
+                    }
+                    healthPermissionResult.set(null)
+                    healthPermissionLauncher.launch(
+                        setOf(HealthPermission.getReadPermission(StepsRecord::class)),
+                    )
+                    // Poll the AtomicReference set by the launcher callback.
+                    val deadline = System.currentTimeMillis() + 90_000
+                    fun poll() {
+                        if (!cont.isActive) return
+                        val granted = healthPermissionResult.get()
+                        if (granted != null) {
+                            cont.resume(
+                                granted.contains(
+                                    HealthPermission.getReadPermission(StepsRecord::class),
+                                ),
+                            )
+                        } else if (System.currentTimeMillis() > deadline) {
+                            cont.resume(false)
+                        } else {
+                            mainHandler.postDelayed(::poll, 300)
+                        }
+                    }
+                    poll()
+                } catch (_: Throwable) {
+                    if (cont.isActive) cont.resume(false)
+                }
+            }
+        }
+    }
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
@@ -123,8 +173,8 @@ class MainActivity : ComponentActivity() {
             // R3a: sensors + health
             "sensor_list" to SensorListTool(appContext),
             "sensor_read" to SensorReadTool(appContext),
-            "steps_today" to StepsTodayTool(appContext),
-            "steps_history" to StepsHistoryTool(appContext),
+            "steps_today" to StepsTodayTool(appContext, healthPermissionRequester),
+            "steps_history" to StepsHistoryTool(appContext, healthPermissionRequester),
         )
 
         bridge = AgentBridge(
@@ -132,6 +182,7 @@ class MainActivity : ComponentActivity() {
             settings = settingsStore,
             tools = tools,
             permissions = permissionBroker,
+            appVersion = BuildConfig.VERSION_NAME,
             shizukuStatus = { shizuku.statusJson() },
             shizukuRequest = { shizuku.requestPermission() },
             healthPermissionRequest = { requestHealthPermission() },

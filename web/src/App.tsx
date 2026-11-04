@@ -12,12 +12,14 @@ import {
 } from "@assistant-ui/react";
 import { AgentEngine } from "./agent";
 import {
+  getAppVersion,
   hasBridge,
   installLLMFetch,
   loadSettings,
   type Settings,
 } from "./bridge";
 import { CopyMenu, useLongPress } from "./CopyMenu";
+import { Drawer } from "./Drawer";
 import { MarkdownText } from "./Markdown";
 import { SettingsPanel } from "./Settings";
 import { ToolCard } from "./ToolCard";
@@ -125,11 +127,17 @@ function Composer({ hasKey }: { hasKey: boolean }) {
 export default function App() {
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
   const [showSettings, setShowSettings] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const version = useRef<string>("…").current;
   const engineRef = useRef<AgentEngine | null>(null);
   if (!engineRef.current) engineRef.current = new AgentEngine(settings);
   const engine = engineRef.current;
 
   const snapshot = useSyncExternalStore(engine.subscribe, engine.getSnapshot, engine.getSnapshot);
+  const [appVersion, setAppVersion] = useState(version);
+  useEffect(() => {
+    setAppVersion(getAppVersion());
+  }, []);
 
   useEffect(() => {
     installLLMFetch(settings.baseUrl);
@@ -164,11 +172,29 @@ export default function App() {
     <AssistantRuntimeProvider runtime={runtime}>
       <div className="app">
         <header className="app-head">
-          <div className="brand">
-            <div className="brand-mark">A</div>
-            <div className="brand-text">
-              <strong>AndAgent</strong>
-              <span>{hasBridge() ? "设备智能助手" : "浏览器预览"}</span>
+          <div className="head-left">
+            <button
+              type="button"
+              className="icon-btn"
+              title="会话列表"
+              aria-label="打开会话列表"
+              onClick={() => setDrawerOpen(true)}
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <path
+                  d="M4 6h16M4 12h16M4 18h16"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </button>
+            <div className="brand">
+              <div className="brand-mark">A</div>
+              <div className="brand-text">
+                <strong>AndAgent</strong>
+                <span>{hasBridge() ? `v${appVersion}` : `浏览器预览 v${appVersion}`}</span>
+              </div>
             </div>
           </div>
           <div className="head-actions">
@@ -181,7 +207,7 @@ export default function App() {
               title="新对话"
               aria-label="新对话"
               disabled={!hasMessages || snapshot.running}
-              onClick={() => engine.clear()}
+              onClick={() => engine.newSession()}
             >
               <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
                 <path
@@ -268,6 +294,20 @@ export default function App() {
             onSave={saveSettings}
           />
         )}
+
+        <Drawer
+          open={drawerOpen}
+          sessions={snapshot.sessions}
+          currentId={snapshot.sessionId}
+          version={appVersion}
+          onClose={() => setDrawerOpen(false)}
+          onNew={() => {
+            engine.newSession();
+            setDrawerOpen(false);
+          }}
+          onSwitch={(id) => engine.switchSession(id)}
+          onDelete={(id) => engine.deleteSession(id)}
+        />
       </div>
     </AssistantRuntimeProvider>
   );
