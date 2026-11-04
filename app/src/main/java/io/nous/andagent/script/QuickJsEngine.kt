@@ -45,6 +45,15 @@ class QuickJsEngine(private val tools: Map<String, Tool>, private val toolExecut
         System.loadLibrary("scriptinterrupt")
         QuickJSContext.create().use { context ->
             context.setMemoryLimit(64 * 1024 * 1024)
+            // wrapper's built-in console.js requires a Console backend —
+            // without setConsole() any console.log throws "should be set a
+            // stdout of platform". Route console output to logcat + andagent.log.
+            context.setConsole(object : QuickJSContext.Console {
+                override fun log(msg: String) { Log.i("QuickJsConsole", msg.take(1000)) }
+                override fun info(msg: String) { Log.i("QuickJsConsole", msg.take(1000)) }
+                override fun warn(msg: String) { Log.w("QuickJsConsole", msg.take(1000)) }
+                override fun error(msg: String) { Log.e("QuickJsConsole", msg.take(1000)) }
+            })
             if (!installInterrupt(context, seconds * 1000))
                 return "ERROR: QuickJS 中断钩子加载失败，脚本未执行"
             try {
