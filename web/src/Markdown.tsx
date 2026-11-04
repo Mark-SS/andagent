@@ -8,11 +8,13 @@ import hljs from "highlight.js";
 import { ChartCard } from "./ChartCard";
 import { MediaCard } from "./MediaCard";
 import { PhotosCard, ImageCard, KvCard, GeoCard } from "./RichCards";
+import { CameraCard } from "./CameraCard";
+import { WidgetPreviewCard } from "./WidgetPreviewCard";
 
 function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighlighterProps) {
   const [copied, setCopied] = useState(false);
   const kind = (language ?? "").toLowerCase();
-  const isChart = ["chart", "photos", "image", "kv", "geo", "audio", "video"].includes(kind);
+  const isChart = ["chart", "photos", "image", "kv", "geo", "audio", "video", "camera", "widget"].includes(kind);
 
   const html = useMemo(() => {
     if (isChart) return "";
@@ -32,6 +34,8 @@ function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighligh
   if (kind === "image") return <ImageCard code={code} />;
   if (kind === "kv") return <KvCard code={code} />;
   if (kind === "geo") return <GeoCard code={code} />;
+  if (kind === "camera") return <CameraCard code={code} />;
+  if (kind === "widget") return <WidgetPreviewCard code={code} />;
   if (kind === "audio" || kind === "video") {
     try {
       const data = JSON.parse(code) as { uri?: string; title?: string; poster?: string };

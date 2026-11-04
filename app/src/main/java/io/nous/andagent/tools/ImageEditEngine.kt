@@ -131,7 +131,7 @@ object ImageEditEngine {
             require(op.degrees.isFinite()) { "旋转角度无效" }
             val m = Matrix().apply { setRotate(op.degrees) }
             val box = RectF(0f, 0f, b.width.toFloat(), b.height.toFloat()); m.mapRect(box)
-            val w = ceil(box.width()).toInt(); val h = ceil(box.height()).toInt(); checkSize(w, h)
+            val w = ceil(box.width() - .001f).toInt(); val h = ceil(box.height() - .001f).toInt(); checkSize(w, h)
             m.postTranslate(-box.left, -box.top)
             Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).also { Canvas(it).drawBitmap(b, m, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)) }
         }
@@ -173,8 +173,23 @@ object ImageEditEngine {
             finally { overlay.recycle() }
         }
     }
-    private fun color(b: Bitmap, matrix: ColorMatrix): Bitmap = Bitmap.createBitmap(b.width, b.height, Bitmap.Config.ARGB_8888).also {
-        Canvas(it).drawBitmap(b, 0f, 0f, Paint().apply { colorFilter = ColorMatrixColorFilter(matrix) })
+    private fun color(b: Bitmap, matrix: ColorMatrix): Bitmap {
+        val out = Bitmap.createBitmap(b.width, b.height, Bitmap.Config.ARGB_8888)
+        val pixels = IntArray(b.width * b.height)
+        b.getPixels(pixels, 0, b.width, 0, 0, b.width, b.height)
+        // Apply the ColorMatrix manually: Robolectric's shadow Paint/ColorFilter
+        // does not perform real pixel math (unit tests would compare stale pixels).
+        val m = matrix.array
+        for (i in pixels.indices) {
+            val c = pixels[i]
+            val r = c ushr 16 and 255; val g = c ushr 8 and 255; val bl = c and 255; val a = c ushr 24 and 255
+            // Standard 4x5 ColorMatrix: out = M[off]*R + M[off+1]*G + M[off+2]*B + M[off+3]*A + M[off+4] (offset in 0..255).
+            fun row(off: Int) = (m[off] * r + m[off + 1] * g + m[off + 2] * bl + m[off + 3] * a + m[off + 4] * 255).roundToInt().coerceIn(0, 255)
+            val nr = row(0); val ng = row(5); val nb = row(10)
+            pixels[i] = (a shl 24) or (nr shl 16) or (ng shl 8) or nb
+        }
+        out.setPixels(pixels, 0, b.width, 0, 0, b.width, b.height)
+        return out
     }
     private fun convolve(b: Bitmap, strength: Float): Bitmap {
         if (strength <= 0) return b
@@ -188,7 +203,7 @@ object ImageEditEngine {
         }
         return Bitmap.createBitmap(dst, w, h, Bitmap.Config.ARGB_8888)
     }
-    private fun border(b: Bitmap, op: ImageOp): Bitmap {
+    private fun border(b: Bitmap, op: ImageOp.Border): Bitmap {
         val pad = op.widthPx; require(pad in 0..512) { "边框宽度须为 0..512" }
         val bottom = if (op.style == "polaroid") pad * 3 else pad
         checkSize(b.width + 2*pad, b.height + pad + bottom)

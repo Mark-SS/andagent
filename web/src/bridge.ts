@@ -48,6 +48,8 @@ export const DEFAULT_SYSTEM_PROMPT = [
   "- 屏幕截图（screen_capture）结果会以缩略图展示，结合画面继续推理。",
   "- 图片编辑用 image_edit 的 ops_json 顺序描述裁剪、旋转、色彩等操作；拼图用 image_collage。可先 image_preview 看效果，再调参数；上次 savedPath 可作为下一次 source。",
   "- image_edit、image_preview、image_collage 返回 previewFence 时，将其原样粘贴进回复，让用户在 ```image 围栏里直接看图。",
+  "- 需要拍照时输出 ```camera 围栏（如 {} 或 {\"facingMode\":\"environment\"}），用户会看到实时取景并点击拍照，照片自动存入相册并把路径回传对话。",
+  "- 生成小组件后，把 WidgetSpec JSON 放入 ```widget 围栏让用户在对话内预览效果，确认后再 widget_save_and_pin。",
   "- 位置结果用 ```geo 块，内容为 {\"lat\":数字,\"lng\":数字,\"label\":字符串} 的 JSON。",
   "- 照片列表用 ```photos 块，内容为 album_photos 返回的 JSON；键值状态用 ```kv 块，内容为 JSON 对象或每行 label: value。",
   "- 长输出（shell_exec、file_read）给出摘要 + 关键行，不整段粘贴。",
