@@ -22,6 +22,7 @@ internal class TermuxSession(
     private val monitor = Object()
     private val output = ByteArrayOutputStream()
     private val writer = process.outputStream.bufferedWriter()
+    @Volatile private var startupDiagnostics = ""
 
     init {
         thread(name = "andagent-termux-reader", isDaemon = true) {
@@ -47,9 +48,15 @@ internal class TermuxSession(
     fun alive(): Boolean = process.isAlive
 
     @Synchronized fun execute(command: String, timeoutSeconds: Int): String {
-        check(alive()) { "shell 已退出" }
+        if (!alive()) failure("shell 已退出")
         val marker = "__ANDAGENT_END_${UUID.randomUUID().toString().replace("-", "")}__"
-        synchronized(monitor) { output.reset() }
+        synchronized(monitor) {
+            // 启动期的 linker/execve 报错会先进入 output，保留下来供诊断。
+            if (startupDiagnostics.isEmpty() && output.size() > 0) {
+                startupDiagnostics = output.toString("UTF-8").take(600)
+            }
+            output.reset()
+        }
         writer.write(command)
         writer.write("\nprintf '$marker:%s\\n' \"\$?\"\n")
         writer.flush()
@@ -65,15 +72,26 @@ internal class TermuxSession(
                         return "exit=$code\n[backend] session\n${value.substring(0, start).take(4000)}"
                     }
                 }
-                if (!alive()) error("shell 意外退出")
+                if (!alive()) failure("shell 意外退出")
                 val remaining = deadline - System.nanoTime()
                 if (remaining <= 0) {
                     close()
-                    error("命令超过 ${timeoutSeconds}s")
+                    failure("命令超过 ${timeoutSeconds}s")
                 }
                 TimeUnit.NANOSECONDS.timedWait(monitor, remaining)
             }
         }
+    }
+
+    /** 把 bash 的真实输出（linker 报错、启动错误）带进异常，避免只剩一句
+     * "shell 意外退出" 而无法定位。 */
+    private fun failure(reason: String): Nothing {
+        val buffered = synchronized(monitor) { output.toString("UTF-8").take(600) }
+        error(buildString {
+            append(reason)
+            if (startupDiagnostics.isNotBlank()) append("；shell 启动输出：").append(startupDiagnostics)
+            if (buffered.isNotBlank() && buffered != startupDiagnostics) append("；shell 输出：").append(buffered)
+        })
     }
 
     fun close() { process.destroyForcibly() }

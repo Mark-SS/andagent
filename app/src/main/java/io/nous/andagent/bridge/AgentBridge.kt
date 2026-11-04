@@ -87,6 +87,42 @@ class AgentBridge(
 
     fun emitNotice(message: String) { emit(buildJsonObject { put("type", "notice"); put("message", message) }) }
 
+    /* ------------------------- deep links (#14) ------------------------- */
+
+    private val deeplinkQueue = java.util.ArrayDeque<JsonObject>()
+
+    /**
+     * Queue an `andagent://send?prompt=...&auto=1` intent and wake the page.
+     * The payload is pulled by JS through [consumeDeeplink], so links that
+     * launched the app before the bundle mounted are not lost.
+     */
+    fun queueDeeplink(uri: Uri) {
+        val prompt = (uri.getQueryParameter("prompt") ?: uri.getQueryParameter("text"))
+            ?.trim()?.take(2000)?.takeIf { it.isNotEmpty() } ?: return
+        val auto = uri.getQueryParameter("auto") in setOf("1", "true", "yes")
+        synchronized(deeplinkQueue) {
+            deeplinkQueue.addLast(buildJsonObject {
+                put("uri", uri.toString())
+                put("prompt", prompt)
+                put("auto", auto)
+            })
+            // Bound memory if the app is opened repeatedly without a WebView.
+            while (deeplinkQueue.size > 20) deeplinkQueue.removeFirst()
+        }
+        emit(buildJsonObject { put("type", "deeplink.flush") })
+    }
+
+    /** JS-facing: drain queued deep links as a JSON array. */
+    @JavascriptInterface
+    fun consumeDeeplink(): String {
+        val list = synchronized(deeplinkQueue) {
+            val out = ArrayList<JsonObject>(deeplinkQueue)
+            deeplinkQueue.clear()
+            out
+        }
+        return JsonArray(list).toString()
+    }
+
     @JavascriptInterface
     fun openEmbeddedWebview(uri: String): String = runCatching { embeddedWebviewOpen(uri) }
         .getOrElse { "ERROR: 打开内嵌浏览器失败：${it.message ?: it.javaClass.simpleName}" }
@@ -98,12 +134,16 @@ class AgentBridge(
     /* ----------------------------- settings ----------------------------- */
 
     @JavascriptInterface
-    fun getSettings(): String = buildJsonObject {
-        put("baseUrl", settings.baseUrl)
-        put("apiKey", settings.apiKey)
-        put("model", settings.model)
-        put("systemPrompt", settings.systemPrompt)
-    }.toString()
+    fun getSettings(): String {
+        // Pick up edits to Download/config.json without restarting the app.
+        settings.reloadExternalConfig()
+        return buildJsonObject {
+            put("baseUrl", settings.baseUrl)
+            put("apiKey", settings.apiKey)
+            put("model", settings.model)
+            put("systemPrompt", settings.systemPrompt)
+        }.toString()
+    }
 
     @JavascriptInterface
     fun saveSettings(raw: String) {

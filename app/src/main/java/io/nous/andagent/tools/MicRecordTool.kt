@@ -12,8 +12,8 @@ import java.io.File
 
 /**
  * Records microphone audio to an M4A/AAC file for transcription.
- * RECORD_AUDIO is requested on demand via [PermissionBroker] — the dialog
- * pops exactly when the agent (or the voice-input button) needs it.
+ * RECORD_AUDIO is requested at startup and re-checked here via
+ * [PermissionBroker], so a previously denied grant can be re-requested.
  */
 class MicRecordTool(
     private val context: Context,

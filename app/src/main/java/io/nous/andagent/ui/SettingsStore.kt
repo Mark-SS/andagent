@@ -1,29 +1,128 @@
 package io.nous.andagent.ui
 
+import android.content.ContentUris
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
+import android.util.Log
+import org.json.JSONObject
+import java.io.File
 
 /**
- * Settings persisted in SharedPreferences. The WebView reads/writes these
- * through AgentBridge, so no credentials ever ship inside web assets.
+ * Settings persisted in SharedPreferences.
+ *
+ * No endpoint, model ID or API key is compiled into the app: they are loaded
+ * at runtime from `Download/config.json` on the device (see
+ * [reloadExternalConfig]). If that file is missing, the fields stay empty and
+ * must be filled in through the Settings panel.
  */
 class SettingsStore(context: Context) {
+    private val appContext = context.applicationContext
     private val prefs: SharedPreferences =
-        context.getSharedPreferences("andagent_settings", Context.MODE_PRIVATE)
+        appContext.getSharedPreferences("andagent_settings", Context.MODE_PRIVATE)
 
     companion object {
-        // Zhipu GLM defaults (OpenAI-compatible endpoint).
-        // NOTE (2026-11-04 live test): glm-5.3-flash returns "余额不足" (code 1113) on
-        // this key; glm-4.5-flash works FREE incl. streaming tool calls. Kept as
-        // default. glm-4-flash (non-thinking) also verified working.
-        const val DEFAULT_BASE_URL = "https://open.bigmodel.cn/api/paas/v4"
-        const val DEFAULT_API_KEY = "REDACTED"
-        const val DEFAULT_MODEL = "glm-4.5-flash"
+        private const val TAG = "SettingsStore"
+        const val CONFIG_FILE_NAME = "config.json"
+
+        private const val DEFAULT_BASE_URL = ""
+        private const val DEFAULT_API_KEY = ""
+        private const val DEFAULT_MODEL = ""
+        private val CONFIG_FIELDS = mapOf(
+            "baseUrl" to "base_url",
+            "apiKey" to "api_key",
+            "model" to "model",
+            "systemPrompt" to "system_prompt",
+        )
+
         const val DEFAULT_SYSTEM_PROMPT =
             "你是 AndAgent，一个运行在 Android 手机上的智能助手。\n" +
                 "回答使用简体中文，简洁、直接、可执行；需要数据时先调用工具，不要编造。\n" +
                 "可用工具覆盖：设备/存储/相册状态、日历（calendar_*）、闹钟与计时器、电池、Wi-Fi、剪贴板、本地通知、已安装应用。\n" +
                 "写入类操作（日历新增/删除）执行前先向用户说明将要修改的内容。"
+    }
+
+    init {
+        reloadExternalConfig()
+    }
+
+    /**
+     * Import settings from `Download/config.json`. Supported keys: baseUrl,
+     * apiKey, model, systemPrompt (all optional). Values in the file take
+     * precedence, so editing the file and reopening Settings applies them.
+     * Missing/unreadable/invalid files are ignored without failing startup.
+     */
+    fun reloadExternalConfig(): Boolean {
+        val raw = readConfigFile()
+        if (raw == null) {
+            Log.w(TAG, "No readable $CONFIG_FILE_NAME in Download/ or app external files")
+            return false
+        }
+        val config = runCatching { JSONObject(raw) }.getOrElse {
+            Log.w(TAG, "Invalid JSON in $CONFIG_FILE_NAME: ${it.javaClass.simpleName}")
+            return false
+        }
+        val editor = prefs.edit()
+        var changed = 0
+        for ((key, prefKey) in CONFIG_FIELDS) {
+            if (!config.has(key)) continue
+            val value = config.optString(key, "")
+            if (prefs.getString(prefKey, null) != value) {
+                editor.putString(prefKey, value)
+                changed++
+            }
+        }
+        if (changed > 0) {
+            editor.apply()
+            Log.i(TAG, "Imported $changed settings from $CONFIG_FILE_NAME")
+        }
+        return true
+    }
+
+    /**
+     * Prefer the public Downloads directory (user-editable). Modern Android
+     * may deny direct File access there, so fall back to MediaStore and then to
+     * the app's private external files dir, which needs no storage permission.
+     */
+    private fun readConfigFile(): String? {
+        listOf(
+            File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), CONFIG_FILE_NAME),
+            File("/sdcard/Download", CONFIG_FILE_NAME),
+            File("/storage/emulated/0/Download", CONFIG_FILE_NAME),
+        ).forEach { file ->
+            if (runCatching { file.isFile && file.canRead() }.getOrDefault(false)) {
+                runCatching { file.readText() }.getOrNull()?.let { return it }
+            }
+        }
+        readFromMediaStore()?.let { return it }
+        return appContext.getExternalFilesDir(null)?.let { dir ->
+            val file = File(dir, CONFIG_FILE_NAME)
+            if (file.isFile) runCatching { file.readText() }.getOrNull() else null
+        }
+    }
+
+    private fun readFromMediaStore(): String? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL)
+        val cursor = runCatching {
+            appContext.contentResolver.query(
+                collection,
+                arrayOf(MediaStore.MediaColumns._ID),
+                "${MediaStore.MediaColumns.DISPLAY_NAME} = ?",
+                arrayOf(CONFIG_FILE_NAME),
+                null,
+            )
+        }.getOrNull() ?: return null
+        return cursor.use {
+            if (!it.moveToFirst()) return@use null
+            val id = it.getLong(it.getColumnIndexOrThrow(MediaStore.MediaColumns._ID))
+            val itemUri = ContentUris.withAppendedId(collection, id)
+            runCatching {
+                appContext.contentResolver.openInputStream(itemUri)?.bufferedReader()?.use { reader -> reader.readText() }
+            }.getOrNull()
+        }
     }
 
     var baseUrl: String

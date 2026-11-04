@@ -12,6 +12,7 @@ import {
 } from "@assistant-ui/react";
 import { AgentEngine } from "./agent";
 import {
+  consumeDeeplink,
   getAppVersion,
   exportConversation,
   hasBridge,
@@ -19,6 +20,7 @@ import {
   loadSettings,
   saveAudioBlob,
   transcribeAudio,
+  type DeeplinkDetail,
   type Settings,
 } from "./bridge";
 import { CopyMenu, useLongPress } from "./CopyMenu";
@@ -153,9 +155,6 @@ function AssistantMessage() {
   const longPress = useLongPress((x, y) => setMenu({ x, y }));
   return (
     <MessagePrimitive.Root className="msg msg-assistant" {...longPress}>
-      <div className="avatar" aria-hidden="true">
-        <span>A</span>
-      </div>
       <div className="assistant-body">
         <MessagePrimitive.Parts
           components={{
@@ -250,6 +249,24 @@ function Composer({ hasKey }: { hasKey: boolean }) {
 
   const voiceStateRef = useRef(voiceState);
   voiceStateRef.current = voiceState;
+
+  // An andagent:// link may prefill the composer instead of sending directly.
+  useEffect(() => {
+    const fill = (event: Event) => {
+      const text = String((event as CustomEvent<string>).detail ?? "");
+      const ta = inputRef.current;
+      if (!text || !ta) return;
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype,
+        "value",
+      )?.set;
+      setter?.call(ta, text);
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+      ta.focus();
+    };
+    window.addEventListener("andagent:composer-fill", fill);
+    return () => window.removeEventListener("andagent:composer-fill", fill);
+  }, []);
 
   const onMicClick = () => {
     if (voiceState === "idle") void startRecording();
@@ -363,6 +380,23 @@ export default function App() {
     engine.setSettings(settings);
   }, [engine, settings]);
 
+  // Deep links: andagent://send?prompt=...&auto=1 (external apps / widgets).
+  useEffect(() => {
+    const handle = (detail: DeeplinkDetail | null) => {
+      if (!detail?.prompt) return;
+      if (detail.auto) void engine.send(detail.prompt);
+      else window.dispatchEvent(new CustomEvent("andagent:composer-fill", { detail: detail.prompt }));
+    };
+    const drain = () => consumeDeeplink().forEach(handle);
+    window.addEventListener("andagent:deeplink-flush", drain);
+    // Links received before the JS bundle mounted are queued by MainActivity.
+    const timer = window.setTimeout(drain, 250);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("andagent:deeplink-flush", drain);
+    };
+  }, [engine]);
+
   const runtime = useExternalStoreRuntime<ThreadMessageLike>({
     messages: snapshot.messages,
     convertMessage: (message) => message,
@@ -410,7 +444,6 @@ export default function App() {
               </svg>
             </button>
             <div className="brand">
-              <div className="brand-mark">A</div>
               <div className="brand-text">
                 <strong>AndAgent</strong>
                 <span>{hasBridge() ? `v${appVersion}` : `浏览器预览 v${appVersion}`}</span>

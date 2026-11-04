@@ -7,14 +7,16 @@ import remarkGfm from "remark-gfm";
 import hljs from "highlight.js";
 import { ChartCard } from "./ChartCard";
 import { MediaCard } from "./MediaCard";
-import { PhotosCard, ImageCard, KvCard, GeoCard } from "./RichCards";
+import { PhotosCard, ImageCard, KvCard, TableCard, JsonTreeCard, GeoCard } from "./RichCards";
 import { CameraCard } from "./CameraCard";
+import { CanvasCard } from "./CanvasCard";
+import { ShaderCard } from "./ShaderCard";
 import { WidgetPreviewCard } from "./WidgetPreviewCard";
 
 function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighlighterProps) {
   const [copied, setCopied] = useState(false);
   const kind = (language ?? "").toLowerCase();
-  const isChart = ["chart", "photos", "image", "kv", "geo", "audio", "video", "camera", "widget"].includes(kind);
+  const isChart = ["chart", "photos", "image", "kv", "table", "json-tree", "geo", "audio", "video", "camera", "widget", "canvas", "shader"].includes(kind);
 
   const html = useMemo(() => {
     if (isChart) return "";
@@ -33,6 +35,10 @@ function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighligh
   if (kind === "photos") return <PhotosCard code={code} />;
   if (kind === "image") return <ImageCard code={code} />;
   if (kind === "kv") return <KvCard code={code} />;
+  if (kind === "table") return <TableCard code={code} />;
+  if (kind === "json-tree") return <JsonTreeCard code={code} />;
+  if (kind === "canvas") return <CanvasCard code={code} />;
+  if (kind === "shader") return <ShaderCard code={code} />;
   if (kind === "geo") return <GeoCard code={code} />;
   if (kind === "camera") return <CameraCard code={code} />;
   if (kind === "widget") return <WidgetPreviewCard code={code} />;

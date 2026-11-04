@@ -44,6 +44,8 @@ sealed class ImageOp {
     data class Border(val widthPx: Int, val color: Int, val style: String) : ImageOp()
     data class Watermark(val text: String, val position: String, val alpha: Int) : ImageOp()
     data class ComposeOver(val source: String, val x: Int, val y: Int, val alpha: Int) : ImageOp()
+    /** R18: .cube 3D LUT (or a built-in preset) with strength blending. */
+    data class Lut(val preset: String?, val cube: String?, val strength: Float) : ImageOp()
 }
 
 object ImageEditEngine {
@@ -172,6 +174,105 @@ object ImageEditEngine {
             try { Bitmap.createBitmap(b).also { Canvas(it).drawBitmap(overlay, op.x.toFloat(), op.y.toFloat(), Paint(Paint.FILTER_BITMAP_FLAG).apply { alpha = op.alpha.coerceIn(0,255) }) } }
             finally { overlay.recycle() }
         }
+        is ImageOp.Lut -> lut(b, op)
+    }
+
+    private data class CubeLut(val size: Int, val data: FloatArray)
+
+    private fun parseCube(text: String): CubeLut {
+        require(text.length <= 2_000_000) { ".cube 文件过大" }
+        var size = 0
+        val values = ArrayList<Float>(4096 * 3)
+        for (rawLine in text.lineSequence()) {
+            val line = rawLine.substringBefore("#").trim()
+            if (line.isEmpty()) continue
+            val parts = line.split(Regex("\\s+"))
+            if (parts[0].equals("LUT_3D_SIZE", true)) {
+                size = parts.getOrNull(1)?.toIntOrNull() ?: error("LUT_3D_SIZE 无效")
+                require(size in 2..64) { "LUT_3D_SIZE 须在 2..64" }
+                continue
+            }
+            if (parts[0].startsWith("DOMAIN_") || parts[0].equals("TITLE", true)) continue
+            require(size > 0) { ".cube 缺少 LUT_3D_SIZE" }
+            val r = parts.getOrNull(0)?.toFloatOrNull() ?: continue
+            val g = parts.getOrNull(1)?.toFloatOrNull() ?: error(".cube 数据行缺少 G")
+            val bl = parts.getOrNull(2)?.toFloatOrNull() ?: error(".cube 数据行缺少 B")
+            values += r; values += g; values += bl
+        }
+        require(values.size == size * size * size * 3) { ".cube 数据量应为 ${size * size * size * 3}，实际 ${values.size}" }
+        return CubeLut(size, values.toFloatArray())
+    }
+
+    /** Built-in tone presets: identity grid passed through a simple tone curve. */
+    private fun presetCube(name: String): CubeLut {
+        val n = 16
+        val data = FloatArray(n * n * n * 3)
+        fun clamp(v: Float) = v.coerceIn(0f, 1f)
+        for (bi in 0 until n) for (gi in 0 until n) for (ri in 0 until n) {
+            val r = ri / (n - 1f); val g = gi / (n - 1f); val b = bi / (n - 1f)
+            val (nr, ng, nb) = when (name.lowercase()) {
+                "warm" -> Triple(clamp(r * 1.06f + .02f), clamp(g * 1.01f), clamp(b * .93f))
+                "cool" -> Triple(clamp(r * .93f), clamp(g * 1.01f), clamp(b * 1.07f + .02f))
+                "vintage" -> {
+                    val l = (r + g + b) / 3f
+                    Triple(clamp(r * .88f + l * .12f + .06f), clamp(g * .86f + l * .1f + .04f), clamp(b * .78f + l * .12f))
+                }
+                "cinematic" -> {
+                    fun s(v: Float) = clamp((v - .5f) * 1.14f + .5f)
+                    Triple(clamp(s(r) + .02f), s(g), clamp(s(b) - .02f + (1f - luma(r, g, b)) * .04f))
+                }
+                "bw" -> { val l = luma(r, g, b); Triple(l, l, l) }
+                else -> error("未知内置滤镜：$name（可用 warm/cool/vintage/cinematic/bw）")
+            }
+            val at = ((bi * n + gi) * n + ri) * 3
+            data[at] = nr; data[at + 1] = ng; data[at + 2] = nb
+        }
+        return CubeLut(n, data)
+    }
+
+    private fun luma(r: Float, g: Float, b: Float) = .2126f * r + .7152f * g + .0722f * b
+
+    private fun lut(b: Bitmap, op: ImageOp.Lut): Bitmap {
+        val text = op.cube
+        val table = when {
+            text != null && text.contains("LUT_3D_SIZE", true) -> parseCube(text)
+            text != null -> parseCube(File(text).readText(Charsets.UTF_8))
+            else -> presetCube(op.preset ?: "warm")
+        }
+        val strength = op.strength.coerceIn(0f, 1f)
+        if (strength <= 0f) return b
+        val n = table.size
+        val data = table.data
+        val w = b.width; val h = b.height
+        val pixels = IntArray(w * h)
+        b.getPixels(pixels, 0, w, 0, 0, w, h)
+        for (i in pixels.indices) {
+            val c = pixels[i]
+            val r = (c ushr 16 and 255) / 255f
+            val g = (c ushr 8 and 255) / 255f
+            val bl = (c and 255) / 255f
+            val a = c ushr 24 and 255
+            var sr = 0f; var sg = 0f; var sb = 0f
+            val x = r * (n - 1); val y = g * (n - 1); val z = bl * (n - 1)
+            val x0 = floor(x).toInt(); val y0 = floor(y).toInt(); val z0 = floor(z).toInt()
+            val x1 = min(x0 + 1, n - 1); val y1 = min(y0 + 1, n - 1); val z1 = min(z0 + 1, n - 1)
+            val fx = x - x0; val fy = y - y0; val fz = z - z0
+            for (dz in 0..1) for (dy in 0..1) for (dx in 0..1) {
+                val xi = if (dx == 0) x0 else x1
+                val yi = if (dy == 0) y0 else y1
+                val zi = if (dz == 0) z0 else z1
+                val weight = (if (dx == 0) 1f - fx else fx) *
+                    (if (dy == 0) 1f - fy else fy) *
+                    (if (dz == 0) 1f - fz else fz)
+                val at = ((zi * n + yi) * n + xi) * 3
+                sr += data[at] * weight; sg += data[at + 1] * weight; sb += data[at + 2] * weight
+            }
+            val nr = (r + (sr - r) * strength).coerceIn(0f, 1f)
+            val ng = (g + (sg - g) * strength).coerceIn(0f, 1f)
+            val nb = (bl + (sb - bl) * strength).coerceIn(0f, 1f)
+            pixels[i] = (a shl 24) or ((nr * 255).roundToInt() shl 16) or ((ng * 255).roundToInt() shl 8) or (nb * 255).roundToInt()
+        }
+        return Bitmap.createBitmap(pixels, w, h, Bitmap.Config.ARGB_8888)
     }
     private fun color(b: Bitmap, matrix: ColorMatrix): Bitmap {
         val out = Bitmap.createBitmap(b.width, b.height, Bitmap.Config.ARGB_8888)
@@ -283,6 +384,7 @@ private fun parseOps(json: String): List<ImageOp> {
             "border" -> ImageOp.Border(o.i("widthPx") ?: o.i("width") ?: 12, parseColor(o.s("color")), o.s("style") ?: "solid")
             "watermark" -> ImageOp.Watermark(o.s("text") ?: error("缺少水印文字"),o.s("position") ?: "bottom-right",o.i("alpha") ?: 180)
             "composeover", "compose_over" -> ImageOp.ComposeOver(o.s("source") ?: o.s("overlayId") ?: error("缺少贴图源"),o.i("x") ?: 0,o.i("y") ?: 0,o.i("alpha") ?: 255)
+            "lut" -> ImageOp.Lut(o.s("preset"),o.s("cube"),(o.f("strength") ?: 1f).coerceIn(0f,1f))
             else -> error("未知图片操作：${o.s("op")}")
         }
     }
@@ -290,10 +392,10 @@ private fun parseOps(json: String): List<ImageOp> {
 
 class ImageEditTool(private val context: Context, override val name: String) : Tool {
     override val description = when (name) {
-        "image_edit" -> "按顺序编辑图片并保存到 Pictures/AndAgent。结果必须以返回的 ```image 围栏展示给用户；savedPath 可作为下一轮 source。"
-        "image_preview" -> "预览图片编辑效果，不保存。把返回的 previewFence 原样放入回复的 ```image 围栏展示。"
+        "image_edit" -> "按顺序编辑图片并保存到 Pictures/AndAgent。缩略图由工具卡片展示，savedPath 可作为下一轮 source。"
+        "image_preview" -> "预览图片编辑效果，不保存；缩略图由工具卡片展示。"
         "image_info" -> "读取图片宽高、格式、字节数、EXIF 方向；编辑时自动转正。"
-        else -> "把 1..16 张图片拼成一张并保存，可选 grid2x2、hstack、vstack 或 free 布局。结果以 previewFence 展示。"
+        else -> "把 1..16 张图片拼成一张并保存，可选 grid2x2、hstack、vstack 或 free 布局；缩略图由工具卡片展示。"
     }
     override val parameters = when (name) {
         "image_info" -> schemaOf("source" to strParam("content:// URI、相册 id、本地路径或 base64"), required=listOf("source"))
@@ -323,15 +425,16 @@ class ImageEditTool(private val context: Context, override val name: String) : T
         finally { edited.recycle() }
     }.getOrElse { "ERROR: 图片处理失败：${it.message ?: it.javaClass.simpleName}" }
     private fun result(context: Context, bitmap: Bitmap, before: String?, save: Boolean, png: Boolean): String {
+        // Keep a single copy of the thumbnail: previewFence used to duplicate it
+        // (and the "before" image) inside a fenced JSON string, tripling the
+        // tool result. The UI renders thumbnailBase64 directly now.
         val thumbnail = ImageEditEngine.thumbnail(bitmap)
         val path = if (save) ImageEditEngine.save(context,bitmap,png) else null
-        val image = buildJsonObject { put("base64",thumbnail);put("caption",if (save) "编辑结果" else "预览效果") }.toString()
         return buildJsonObject {
             if (path != null) put("savedPath",path) else put("savedPath",JsonNull)
             put("thumbnailBase64",thumbnail);put("thumbnailMime","image/png")
             if (before != null) put("sourceThumbnailBase64",before)
             put("width",bitmap.width);put("height",bitmap.height)
-            put("previewFence","```image\n$image\n```")
         }.toString()
     }
 }

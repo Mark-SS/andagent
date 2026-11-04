@@ -45,7 +45,6 @@ export function Drawer({
       <div className="drawer-scrim" onClick={onClose} aria-hidden="true" />
       <nav className="drawer" aria-label="会话列表">
         <div className="drawer-head">
-          <div className="brand-mark">A</div>
           <div>
             <strong>AndAgent</strong>
             <div className="drawer-sub">会话 · v{version}</div>

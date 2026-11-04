@@ -17,6 +17,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.ViewGroup
+import android.webkit.PermissionRequest
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -94,7 +96,23 @@ import io.nous.andagent.tools.StepsTodayTool
 import io.nous.andagent.tools.StorageScanTool
 import io.nous.andagent.tools.TimerSetTool
 import io.nous.andagent.widget.data.WidgetToolRuntime
+import io.nous.andagent.widget.data.WidgetDataScheduler
+import io.nous.andagent.widget.data.WidgetStore
 import io.nous.andagent.tools.Tool
+import io.nous.andagent.tools.SystemApiTool
+import io.nous.andagent.tools.SYSTEM_API_TOOLS
+import io.nous.andagent.tools.AutomationTool
+import io.nous.andagent.tools.AUTOMATION_TOOLS
+import io.nous.andagent.tools.ExternalDataTool
+import io.nous.andagent.tools.EXTERNAL_DATA_TOOLS
+import io.nous.andagent.tools.FileOpsTool
+import io.nous.andagent.tools.FILE_OPS_TOOLS
+import io.nous.andagent.tools.ZipTool
+import io.nous.andagent.tools.ZIP_TOOLS
+import io.nous.andagent.tools.EmailTool
+import io.nous.andagent.tools.EMAIL_TOOLS
+import io.nous.andagent.tools.StoreTool
+import io.nous.andagent.tools.STORE_TOOLS
 import io.nous.andagent.tools.WifiInfoTool
 import io.nous.andagent.ui.SettingsStore
 import kotlinx.serialization.json.buildJsonObject
@@ -198,13 +216,15 @@ class MainActivity : ComponentActivity() {
             if (::bridge.isInitialized) bridge.emitNotice(message)
         }
         val tools: MutableMap<String, Tool> = mutableMapOf()
-        quickJsEngine = QuickJsEngine(tools, scriptToolExecutor)
+        quickJsEngine = QuickJsEngine(tools, scriptToolExecutor, appContext)
         tools.putAll(mapOf(
             "get_time" to GetTimeTool(),
             "nfc_status" to NfcTool(nfcSession, "nfc_status"),
             "nfc_read" to NfcTool(nfcSession, "nfc_read"),
             "nfc_write_text" to NfcTool(nfcSession, "nfc_write_text"),
             "nfc_write_uri" to NfcTool(nfcSession, "nfc_write_uri"),
+            "nfc_write_raw" to NfcTool(nfcSession, "nfc_write_raw"),
+            "nfc_hce_status" to NfcTool(nfcSession, "nfc_hce_status"),
             "web_embed" to WebEmbedTool(),
             "device_info" to DeviceInfoTool(appContext),
             "storage_scan" to StorageScanTool(appContext),
@@ -222,6 +242,7 @@ class MainActivity : ComponentActivity() {
             "termux_setup" to TermuxTool(termuxEnv, "termux_setup"),
             "shell_exec" to TermuxTool(termuxEnv, "shell_exec"),
             "pkg_install" to TermuxTool(termuxEnv, "pkg_install"),
+            "apt_status" to TermuxTool(termuxEnv, "apt_status"),
             "bt_scan" to BtScanTool(appContext, permissionBroker),
             "bt_paired_list" to BtPairedListTool(appContext, permissionBroker),
             "bt_connect" to btConnect,
@@ -292,6 +313,14 @@ class MainActivity : ComponentActivity() {
             "pptx_create" to DocumentCreateTool(appContext, permissionBroker, "pptx"),
             "xlsx_create" to DocumentCreateTool(appContext, permissionBroker, "xlsx"),
         ))
+        // R12/R13 system APIs + R14 automation.
+        tools.putAll(SYSTEM_API_TOOLS.associateWith { SystemApiTool(appContext, permissionBroker, shizuku, it) })
+        tools.putAll(AUTOMATION_TOOLS.associateWith { AutomationTool(appContext, permissionBroker, shizuku, it) })
+        tools.putAll(EXTERNAL_DATA_TOOLS.associateWith { ExternalDataTool(appContext, permissionBroker, it) })
+        tools.putAll(FILE_OPS_TOOLS.associateWith { FileOpsTool(appContext, it) })
+        tools.putAll(ZIP_TOOLS.associateWith { ZipTool(it) })
+        tools.putAll(EMAIL_TOOLS.associateWith { EmailTool(appContext, it) })
+        tools.putAll(STORE_TOOLS.associateWith { StoreTool(shizuku, it) })
 
         WidgetToolRuntime.attach(tools, quickJsEngine)
 
@@ -340,6 +369,30 @@ class MainActivity : ComponentActivity() {
             settings.builtInZoomControls = false
             settings.textZoom = 100
             addJavascriptInterface(bridge, "AndroidBridge")
+            // Without a WebChromeClient WebView denies every PermissionRequest,
+            // so JS getUserMedia() fails even with RECORD_AUDIO granted.
+            webChromeClient = object : WebChromeClient() {
+                override fun onPermissionRequest(request: PermissionRequest) {
+                    val audio = PermissionRequest.RESOURCE_AUDIO_CAPTURE
+                    val shellOrigin = request.origin?.host == "appassets.androidplatform.net"
+                    if (!shellOrigin || audio !in request.resources) {
+                        runCatching { request.deny() }
+                        return
+                    }
+                    // Chromium asks the host app before checking Android's own
+                    // grant: obtain it on demand, then answer the pending
+                    // getUserMedia() promise on the main thread.
+                    permissionBroker.request(listOf(Manifest.permission.RECORD_AUDIO)) { result ->
+                        runCatching {
+                            if (result[Manifest.permission.RECORD_AUDIO] == true && !isFinishing && !isDestroyed) {
+                                request.grant(arrayOf(audio))
+                            } else {
+                                request.deny()
+                            }
+                        }
+                    }
+                }
+            }
             webViewClient = object : WebViewClient() {
                 override fun shouldInterceptRequest(
                     view: WebView,
@@ -352,6 +405,10 @@ class MainActivity : ComponentActivity() {
                 ): Boolean {
                     val url: Uri = request.url
                     if (url.host == "appassets.androidplatform.net") return false
+                    // Embedded cards use sandboxed iframes: let their own HTTPS
+                    // navigations stay inside the iframe instead of escaping to
+                    // an external browser, and block non-HTTPS subframes.
+                    if (!request.isForMainFrame) return url.scheme != "https"
                     return runCatching {
                         startActivity(Intent(Intent.ACTION_VIEW, url))
                         true
@@ -374,13 +431,30 @@ class MainActivity : ComponentActivity() {
 
         webView.loadUrl("https://appassets.androidplatform.net/assets/web/index.html")
         requestMediaPermissions()
+        handleDeeplink(intent)
     }
 
     override fun onResume() { super.onResume(); if (::nfcSession.isInitialized) nfcSession.onResume() }
 
     override fun onPause() { if (::nfcSession.isInitialized) nfcSession.onPause(); super.onPause() }
 
-    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); if (::nfcSession.isInitialized) nfcSession.onNewIntent(intent) }
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (::nfcSession.isInitialized) nfcSession.onNewIntent(intent)
+        handleDeeplink(intent)
+    }
+
+    /** andagent://send?prompt=...&auto=1, plus widget refresh links (#14). */
+    private fun handleDeeplink(intent: Intent?) {
+        val data = intent?.data ?: return
+        if (!data.scheme.equals("andagent", true)) return
+        if (::bridge.isInitialized) bridge.queueDeeplink(data)
+        if (data.host == "refresh") {
+            val id = data.pathSegments.firstOrNull() ?: return
+            val record = runCatching { WidgetStore(this).read().records.find { it.id == id } }.getOrNull() ?: return
+            WidgetDataScheduler.requestNow(this, record.id, record.spec)
+        }
+    }
 
     private fun openEmbeddedWebview(raw: String): String {
         val uri = Uri.parse(raw)
@@ -487,11 +561,14 @@ class MainActivity : ComponentActivity() {
         }.toString()
     }
 
+    /** Startup grants: album reads plus mic (WebView voice input + mic_record). */
     private fun requestMediaPermissions() {
-        val needed = if (Build.VERSION.SDK_INT >= 33) {
-            arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
+        val needed = mutableListOf(Manifest.permission.RECORD_AUDIO)
+        if (Build.VERSION.SDK_INT >= 33) {
+            needed += Manifest.permission.READ_MEDIA_IMAGES
+            needed += Manifest.permission.READ_MEDIA_VIDEO
         } else {
-            arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+            needed += Manifest.permission.READ_EXTERNAL_STORAGE
         }
         val missing = needed.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED

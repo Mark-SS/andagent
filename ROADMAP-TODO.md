@@ -24,6 +24,20 @@
 | 10a | **对话流音频/视频播放**：```audio/```video 围栏 + MediaCard 组件 + 工具结果按扩展名内嵌播放器 + WebViewAssetLoader /local/ 媒体映射 | TODO | 已并入 R9 简报 |
 | 10b | **SQLite 数据库工具**（建库/建表/CRUD/查询 + andagent.db JS API） | TODO | R9 简报就绪 |
 | 10c | **外部数据访问**：ContentProvider（联系人/日历/短信 provider 统一读）、FileProvider（分享文件给其他 app）、SAF DocumentsTree 持久授权、MediaStore 全集合（音/视/文）查询 | TODO | R10 | |
+| 10d | **Android 存储底座 / 通用 KV 存储**：用平台存储能力为工具、QuickJS 脚本、前端提供统一的键值持久化（明细见下节） | TODO | `andagent_kv`（SharedPreferences / DataStore）+ `kv_*` 工具 + `andagent.kv` JS API + 前端桥三侧对齐；会话从 localStorage 迁移 |
+
+### 10d 存储底座明细（Android 存储技术 → KV 及配套能力）
+
+> 现状：`ui/SettingsStore.kt` 仅 4 个固定字段的 `andagent_settings` SharedPreferences；`SqliteTool` 落在 `databases/andagent_*.db`；`widget/data/` 用 AtomicFile + JSON；`ScriptFsTools` 只实现 `scripts/` 一根沙箱；前端会话存 `web/src/sessions.ts` 的 localStorage。全仓无 MMKV / DataStore / Room 依赖。
+
+| # | 子项 | 状态 | 技术口径 |
+|---|---|---|---|
+| 10d-1 | `KvStore` 内核 | TODO | `getSharedPreferences("andagent_kv", MODE_PRIVATE)` 作底座（或 Jetpack DataStore/Preferences）；`namespace/key` 两级命名，值支持 string/number/bool/JSON，含 TTL、批量读写、前缀 keys 与命名空间配额；key 正则 + 单值大小上限，`apply`/协程避免主线程 IO |
+| 10d-2 | `kv_*` 工具族 | TODO | `kv_get/kv_set/kv_delete/kv_keys/kv_namespaces/kv_clear`（约 +6）；写/清类 `destructive=true` + `confirm=true`，对齐 `db_exec` 口径；按 README「Adding a tool」四步同步 `MainActivity.kt` 注册表与 `web/src/agent.ts` JSON Schema |
+| 10d-3 | QuickJS JS API | TODO | `andagent.kv.get/set/keys/delete`，与 R10.7 `andagent.fs` 的 `data/` 根（当前仅 `scripts/` 已落地）联动；脚本自有状态不再靠文件拼字符串，沿用 `QuickJsEngine` 注入方式与 canonicalFile 防越界校验 |
+| 10d-4 | 前端统一持久化 | TODO | `AndroidBridge.kvGet/kvSet`（或复用 `toolExec`）+ `web/src/bridge.ts` 类型声明；`sessions.ts` 会话从 localStorage 迁到原生 KV（WebView DOM storage 被清会丢会话），浏览器预览模式保留 localStorage 回退；`getSettings/saveSettings` 固定字段通道不动，API key 不进 web assets |
+| 10d-5 | 迁移 / 安全 / 备份 | TODO | 一次性迁移旧 localStorage 会话与自定义 prefs 键；敏感键用 Keystore / EncryptedSharedPreferences 或独立命名空间；按命名空间导出/导入 JSON 备份，厘清 Android Auto Backup 与 `filesDir` / `databases/` 边界；`WidgetStore` / `DataCache` 的 AtomicFile 结构化数据保持原样 |
+| 10d-6 | 其他 Android 存储技术评估 | TODO | DataStore(Proto) 替代 SharedPreferences、MMKV（评估额外 .so 体积与 arm64 依赖）、Room（关系型场景已由 `db_*` 覆盖，暂不引入）；Scoped Storage / MediaStore / SAF / ContentProvider / FileProvider 归入 10c，共享路径与 KV 命名空间隔离 |
 
 ## 🟡 P2 — 增强/补全
 | # | 事项 | 状态 | 备注 |
@@ -61,4 +75,5 @@ web 化重构（pi+assistant-ui）/ 日历闹钟剪贴板通知 / ECharts / Shiz
 | R21 | Shader 实时渲染围栏（WebGL2，简报就绪） | 纯前端 |
 | R22 | 邮件发送（简报就绪） | +4 |
 | R23 | Canvas 围栏（简报就绪） | 纯前端 |
-|  | **R19 完成后累计约 90+ 工具** |  |
+| R24 | 存储底座：KV 工具族 + `andagent.kv` JS API + 前端会话迁移（见 10d；依赖 R10.7 `data/` 根与 R20 平台桥接） | +6 |
+|  | **R19 完成后累计约 90+ 工具（R24 再加约 6）** |  |

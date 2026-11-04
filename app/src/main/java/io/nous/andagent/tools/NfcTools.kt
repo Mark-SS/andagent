@@ -9,9 +9,11 @@ import android.nfc.NfcAdapter
 import android.nfc.Tag
 import android.nfc.tech.Ndef
 import android.nfc.tech.NdefFormatable
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import java.util.Base64
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -34,6 +36,9 @@ class NfcSession(private val activity: Activity, private val prompt: (String) ->
         adapter?.isEnabled != true -> "ERROR: NFC 未开启，请在系统设置中开启"
         else -> "NFC 已开启"
     }
+
+    fun hasHce(): Boolean = activity.packageManager.hasSystemFeature(PackageManager.FEATURE_NFC_HOST_CARD_EMULATION)
+    fun nfcEnabled(): Boolean = adapter?.isEnabled == true
 
     suspend fun awaitTag(): Tag? = suspendCancellableCoroutine { cont ->
         handler.post {
@@ -88,25 +93,71 @@ class NfcTool(private val session: NfcSession, override val name: String) : Tool
         "nfc_status" -> "查询设备 NFC 是否支持及是否开启。"
         "nfc_read" -> "等待贴卡最多 60 秒，读取 NFC UID、技术和 NDEF Text/URI/Smart Poster 记录。贴卡前先告诉用户。"
         "nfc_write_text" -> "等待贴卡并写入 NDEF 文本。会覆盖卡片原有 NDEF 内容，先告知用户。"
-        else -> "等待贴卡并写入 NDEF URI。会覆盖卡片原有 NDEF 内容，先告知用户。"
+        "nfc_write_uri" -> "等待贴卡并写入 NDEF URI。会覆盖卡片原有 NDEF 内容，先告知用户。"
+        "nfc_write_raw" -> "等待贴卡并写入自定义 NDEF 记录：MIME、external type 或原始 payload（base64/hex）。"
+        "nfc_hce_status" -> "查询设备是否支持 HCE 卡模拟，以及 AndAgent 注册的 AID。"
+        else -> "NFC 工具"
     }
     override val parameters = when (name) {
         "nfc_write_text" -> schemaOf("text" to strParam("要写入的文本"), required = listOf("text"))
         "nfc_write_uri" -> schemaOf("uri" to strParam("要写入的 URI"), required = listOf("uri"))
+        "nfc_write_raw" -> schemaOf(
+            "kind" to strParam("mime|external|raw，默认 raw"),
+            "payload" to strParam("payload：base64: 开头或 hex: 开头，纯文本可直接给字符串"),
+            "type" to strParam("mime 时为 MIME 类型；external 时为 domain:type"),
+            required = listOf("payload"),
+        )
         else -> schemaOf()
     }
     override val destructive get() = name.startsWith("nfc_write")
     override suspend fun execute(args: JsonObject): String {
+        if (name == "nfc_hce_status") return hceStatus()
         val state = session.status()
         if (name == "nfc_status" || state.startsWith("ERROR:")) return state
         val value = if (name == "nfc_write_text") args.strArg("text") else if (name == "nfc_write_uri") args.strArg("uri") else null
-        if (name.startsWith("nfc_write") && value == null) return "ERROR: 缺少要写入的内容"
+        if (name in setOf("nfc_write_text", "nfc_write_uri") && value == null) return "ERROR: 缺少要写入的内容"
+        if (name == "nfc_write_raw" && args.strArg("payload") == null) return "ERROR: 缺少 payload"
         if (name == "nfc_write_uri" && runCatching { android.net.Uri.parse(value).scheme }.getOrNull().isNullOrBlank()) return "ERROR: URI 缺少 scheme"
         val tag = session.awaitTag() ?: return "ERROR: 等待 NFC 贴卡超时或已有读写任务（60 秒）"
         return runCatching {
-            if (name == "nfc_read") read(tag)
-            else write(tag, if (name == "nfc_write_text") NdefRecord.createTextRecord("zh", value) else NdefRecord.createUri(value))
+            when (name) {
+                "nfc_read" -> read(tag)
+                "nfc_write_raw" -> write(tag, rawRecord(args))
+                "nfc_write_text" -> write(tag, NdefRecord.createTextRecord("zh", value!!))
+                else -> write(tag, NdefRecord.createUri(value!!))
+            }
         }.getOrElse { "ERROR: NFC ${if (name == "nfc_read") "读取" else "写入"}失败：${it.message ?: it.javaClass.simpleName}" }
+    }
+
+    private fun hceStatus(): String = buildJsonObject {
+        put("hceSupported", session.hasHce())
+        put("nfcEnabled", session.nfcEnabled())
+        put("aid", "F0010203040506")
+        put("service", "io.nous.andagent.tools.AndagentHceService")
+        put("note", "设备作卡片模拟：读卡器 SELECT 该 AID 后返回 AndAgent 标识；如不支持 HCE 请降级为普通 NDEF 读写")
+    }.toString()
+
+    private fun rawRecord(args: JsonObject): NdefRecord {
+        val raw = args.strArg("payload") ?: error("缺少 payload")
+        val bytes = when {
+            raw.startsWith("base64:") -> Base64.getDecoder().decode(raw.removePrefix("base64:").trim())
+            raw.startsWith("hex:") -> raw.removePrefix("hex:").filter { !it.isWhitespace() }
+                .chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            else -> raw.toByteArray(Charsets.UTF_8)
+        }
+        if (bytes.isEmpty()) error("payload 为空")
+        if (bytes.size > 512) error("payload 超过 512 字节，NDEF 写入可能失败")
+        val type = args.strArg("type")
+        return when (args.strArg("kind")?.lowercase() ?: "raw") {
+            "mime" -> NdefRecord.createMime(type ?: "application/octet-stream", bytes)
+            "external" -> {
+                val parts = (type ?: "").split(":", limit = 2)
+                if (parts.size != 2 || parts[0].isBlank() || parts[1].isBlank())
+                    error("external 需要 type 形如 domain:typename")
+                NdefRecord.createExternal(parts[0], parts[1], bytes)
+            }
+            else -> NdefRecord(NdefRecord.TNF_UNKNOWN, byteArrayOf(), byteArrayOf(), bytes)
+        }
     }
     private fun read(tag: Tag): String {
         val ndef = Ndef.get(tag)
@@ -118,7 +169,11 @@ class NfcTool(private val session: NfcSession, override val name: String) : Tool
             put("idSize", tag.id.size)
             putJsonArray("techList") { tag.techList.forEach { add(it) } }
             put("isNdef", ndef != null)
-            if (ndef != null) { put("maxSize", ndef.maxSize); put("writable", ndef.isWritable) }
+            if (ndef != null) {
+                put("maxSize", ndef.maxSize)
+                put("writable", ndef.isWritable)
+                put("canMakeReadOnly", runCatching { ndef.canMakeReadOnly() }.getOrDefault(false))
+            }
             if (message != null) {
                 put("size", message.toByteArray().size)
                 putJsonArray("records") { message.records.forEach { add(recordJson(it)) } }
@@ -144,6 +199,18 @@ class NfcTool(private val session: NfcSession, override val name: String) : Tool
                     putJsonArray("records") { nested.forEach { add(recordJson(it)) } }
                 }
             }
+        }
+        when (record.tnf) {
+            NdefRecord.TNF_MIME_MEDIA -> {
+                put("kind", "mime")
+                put("mimeType", String(record.type, Charsets.US_ASCII))
+                put("payloadText", runCatching { String(record.payload, Charsets.UTF_8) }.getOrDefault("").take(500))
+            }
+            NdefRecord.TNF_EXTERNAL_TYPE -> {
+                put("kind", "external")
+                put("externalType", String(record.type, Charsets.US_ASCII))
+            }
+            NdefRecord.TNF_UNKNOWN -> put("kind", "unknown")
         }
     }
     private fun write(tag: Tag, record: NdefRecord): String {

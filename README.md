@@ -90,22 +90,48 @@ Browser preview mode has no native bridge: tool execution and the LLM proxy are 
 
 ### First-run configuration
 
-Open the app → Settings and fill in:
+No endpoint, model ID or API key is compiled into the app. Put them in
+`config.json` in the phone's `Download` directory:
+
+```json
+{
+  "baseUrl": "https://your-openai-compatible-endpoint/v1",
+  "apiKey": "your-api-key",
+  "model": "your-model-id"
+}
+```
+
+```bash
+adb push config.json /sdcard/Download/config.json
+# Android 11+ can deny direct reads of the public Downloads dir. Keep an
+# identical copy in the app's private external files dir (no permission needed):
+adb push config.json /sdcard/Android/data/io.nous.andagent/files/config.json
+```
+
+`SettingsStore` looks for `config.json` on startup and whenever the WebView
+reads settings: public `Download/` (File API, then MediaStore), then the app's
+private external files dir. `systemPrompt` is optional and overrides the
+built-in prompt. Values from the file take precedence over
+`SharedPreferences`; reopening Settings re-imports them. On Android 13+ the
+public `Download/` copy is usually unreadable without "All files access", so
+after editing it, re-run the second `adb push` to sync the private copy (or
+grant all-files access, which makes the public file authoritative). Keep
+`config.json` out of version control — it holds a plaintext credential. If no
+config is present, fill the fields in through the Settings panel instead;
+values are stored only in local `SharedPreferences`, never in web assets.
 
 | Field | Notes |
 |---|---|
 | Base URL | OpenAI-compatible endpoint; **do not** append `/chat/completions` |
-| API Key | Stored only in local `SharedPreferences`, never written into web assets |
-| Model ID | e.g. `glm-4.5-flash` |
-| System Prompt | Defines the assistant's identity and behavior |
+| API Key | Read from `Download/config.json`, or entered in Settings |
+| Model ID | Model identifier from your provider |
+| System Prompt | Defines the assistant's identity and behavior; optional in the config file |
 
-Defaults target Zhipu's `https://open.bigmodel.cn/api/paas/v4` with `glm-4.5-flash`. `android:usesCleartextTraffic="true"` also allows self-hosted `http://` endpoints.
-
-> Note: `app/src/main/java/io/nous/andagent/ui/SettingsStore.kt` contains a built-in default API key for out-of-the-box use. Replace it with your own key, and remove the default before any public release — never commit private credentials.
+`android:usesCleartextTraffic="true"` also allows self-hosted `http://` endpoints.
 
 ## Optional capabilities and permissions
 
-The manifest declares 27 permissions, but **most are requested on demand via `PermissionBroker` when a tool is actually invoked**; only media-read permissions are requested at startup. The `destructive` marker denotes write operations the model should confirm with the user first, and the frontend highlights those tool cards with a "write" badge.
+The manifest declares many permissions, but **most are requested on demand via `PermissionBroker` when a tool is actually invoked**; only media-read and microphone (`RECORD_AUDIO`) permissions are requested at startup. The voice-input button uses `getUserMedia()` inside the WebView, so `WebChromeClient.onPermissionRequest` bridges the WebView's audio-capture request to the same runtime grant. The `destructive` marker denotes write operations the model should confirm with the user first, and the frontend highlights those tool cards with a "write" badge.
 
 | Capability | Prerequisite |
 |---|---|
@@ -166,10 +192,19 @@ by rewriting text file paths only: `/data/data/com.termux` →
 Current archive SHA-256: `62a92f2f6c9433f721232b24f11be2d09b76149608122694364a6957f2d69809`.
 Original official archive SHA-256: `5a1429b6c68ee3bdc17b5fd6e47ba42933ec924cd7283fe74992574e1d5badae`.
 
-Installation validates dash, bash and `pkg list-installed`; the ready marker is written
-only when all three succeed. ELF files still contain the official compile-time paths;
-whether package management and other commands work under the app-private path remains
-to be verified on a real device.
+Installation validates dash and bash as the ready gate; `pkg list-installed` is a
+soft probe reported in the backend status, so a broken apt/dpkg no longer disables
+the shell backend. `shell_exec` tries the persistent bash session, direct exec,
+memfd and Shizuku in order, then falls back to the Termux App bridge; each failure
+carries the underlying stderr. ELF files still contain the official compile-time
+paths, so `TermuxEnv` writes an `APT_CONFIG` file that redirects every apt
+directory to the embedded prefix (including `Acquire::https::CaInfo` → the bundled
+`cert.pem` and `DPkg::Options` `--instdir`/`--admindir`), sets `DPKG_ADMINDIR` and
+`SSL_CERT_FILE`/`CURL_CA_BUNDLE`, and creates the `apt/lists`, `apt/archives`,
+`sources.list.d` and solver directories the bootstrap archive omits. Because `.deb`
+archives hardcode `/data/data/com.termux/...` install paths, dpkg unpacks through a
+symlinked shadow dir (`files/data/data/com.termux/files/usr` → the embedded prefix).
+`apt update`, `pkg install` and `pkg files` have been verified end to end on a device.
 `./gradlew downloadBootstrap` verifies the official archive hash and runs
 `scripts/rewrite_termux_bootstrap.py`. After updating the upstream version, refresh both
 the official and derived hashes and re-check the residual-path list.

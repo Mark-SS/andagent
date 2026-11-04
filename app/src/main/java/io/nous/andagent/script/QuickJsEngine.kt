@@ -1,5 +1,6 @@
 package io.nous.andagent.script
 
+import android.content.Context
 import android.os.Handler
 import android.os.HandlerThread
 import android.util.Log
@@ -9,9 +10,12 @@ import com.whl.quickjs.wrapper.QuickJSContext
 import io.nous.andagent.tools.Tool
 import io.nous.andagent.tools.JsonFixer
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import java.io.File
 import java.util.concurrent.Callable
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.ExecutorService
@@ -19,7 +23,11 @@ import java.util.concurrent.FutureTask
 import java.util.concurrent.TimeUnit
 
 /** A fresh 64 MB runtime per script, serialized on one HandlerThread. */
-class QuickJsEngine(private val tools: Map<String, Tool>, private val toolExecutor: ExecutorService) {
+class QuickJsEngine(
+    private val tools: Map<String, Tool>,
+    private val toolExecutor: ExecutorService,
+    private val appContext: Context? = null,
+) {
     private val thread = HandlerThread("andagent-quickjs").apply { start() }
     private val handler = Handler(thread.looper)
 
@@ -124,8 +132,16 @@ class QuickJsEngine(private val tools: Map<String, Tool>, private val toolExecut
                     Log.i("QuickJsEngine", args.getOrNull(0)?.toString()?.take(1000) ?: "")
                     null
                 })
+                // R10.7: sandboxed script-owned storage under scripts/ and data/.
+                val fs = context.createNewJSObject()
+                fs.setProperty("read", JSCallFunction { args -> fsRead(args.getOrNull(0)?.toString()) })
+                fs.setProperty("write", JSCallFunction { args -> fsWrite(args.getOrNull(0)?.toString(), args.getOrNull(1)?.toString()) })
+                fs.setProperty("list", JSCallFunction { args -> fsList(args.getOrNull(0)?.toString()) })
+                fs.setProperty("_exists", JSCallFunction { args -> if (fsExists(args.getOrNull(0)?.toString())) "true" else "false" })
+                api.setProperty("fs", fs)
                 context.getGlobalObject().setProperty("andagent", api)
                 context.evaluate("""
+                    andagent.fs.exists = function(p) { return andagent.fs._exists(p) === 'true'; };
                     andagent.db = function(name) {
                       var call = function(tool, args) {
                         var result = andagent.tool(tool, JSON.stringify(args));
@@ -150,6 +166,55 @@ class QuickJsEngine(private val tools: Map<String, Tool>, private val toolExecut
         val detail = if (e is ExecutionException) e.cause?.message else e.message
         "ERROR: QuickJS 加载或执行失败：${detail ?: e.javaClass.simpleName}"
     }
+
+    /* ------------------------ R10.7 sandboxed fs ------------------------ */
+
+    private fun fsResolve(raw: String?): File {
+        val base = appContext?.getExternalFilesDir(null)?.canonicalFile ?: error("脚本文件系统不可用")
+        val parts = (raw ?: error("缺少路径")).trim().replace('\\', '/').split('/').filter { it.isNotEmpty() }
+        require(parts.isNotEmpty() && parts[0] in setOf("scripts", "data")) {
+            "路径必须以 scripts/ 或 data/ 开头"
+        }
+        require(parts.none { it == ".." || it == "." }) { "路径越界" }
+        val target = File(base, parts.joinToString("/")).canonicalFile
+        require(target.path.startsWith(base.path + File.separator)) { "路径越界" }
+        return target
+    }
+
+    private fun fsRead(raw: String?): String = runCatching {
+        val file = fsResolve(raw)
+        when {
+            !file.isFile -> "ERROR: 文件不存在"
+            file.length() > 100 * 1024 -> "ERROR: 文件超过 100KB"
+            else -> file.readText(Charsets.UTF_8)
+        }
+    }.getOrElse { "ERROR: ${it.message ?: it.javaClass.simpleName}" }
+
+    private fun fsWrite(raw: String?, content: String?): String = runCatching {
+        val file = fsResolve(raw)
+        val text = content ?: error("缺少写入内容")
+        require(text.length <= 100_000) { "内容超过 100KB" }
+        require(!file.isDirectory) { "目标路径是目录" }
+        file.parentFile?.let { if (!it.exists() && !it.mkdirs()) error("无法创建目录") }
+        file.writeText(text, Charsets.UTF_8)
+        "OK"
+    }.getOrElse { "ERROR: ${it.message ?: it.javaClass.simpleName}" }
+
+    private fun fsList(raw: String?): String = runCatching {
+        val dir = fsResolve(raw ?: "data")
+        if (!dir.exists()) return "[]"
+        require(dir.isDirectory) { "不是目录" }
+        val items = dir.listFiles().orEmpty().filter { it.isFile }.sortedBy { it.name }.map { file ->
+            buildJsonObject {
+                put("name", file.name)
+                put("size", file.length())
+                put("modified", file.lastModified())
+            }
+        }
+        JsonArray(items).toString()
+    }.getOrElse { "ERROR: ${it.message ?: it.javaClass.simpleName}" }
+
+    private fun fsExists(raw: String?): Boolean = runCatching { fsResolve(raw).exists() }.getOrDefault(false)
 
     fun shutdown() { thread.quitSafely() }
 }

@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#1A73E8</color>
+    <!-- Brand blue; the launcher background itself is a gradient drawable
+         generated from design/andagent-icon.svg. -->
+    <color name="ic_launcher_background">#3B5BFF</color>
 </resources>

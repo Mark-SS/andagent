@@ -23,7 +23,7 @@ import kotlin.math.max
 class AlbumPhotosTool(private val context: Context) : Tool {
     override val name = "album_photos"
     override val description =
-        "查询相册照片列表（返回 content:// uri + 缩略图 base64，可在对话里直接预览）。按相册文件夹/关键词/时间窗过滤，默认最新 8 张。"
+        "查询相册照片列表（返回 id、content:// uri 与缩略图，缩略图由工具卡片渲染，不需粘贴到回复）。按相册文件夹/关键词/时间窗过滤，默认最新 8 张。"
 
     override val parameters = schemaOf(
         "bucket" to strParam("相册文件夹名（如 Screenshots、Camera），省略则全部"),

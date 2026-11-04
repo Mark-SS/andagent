@@ -45,27 +45,36 @@ export const DEFAULT_SYSTEM_PROMPT = [
   "",
   "## 输出呈现",
   "- 工具返回的 JSON：提炼要点用文字或表格表达；用户要看对比/趋势/占比时用 chart 块。",
-  "- 屏幕截图（screen_capture）结果会以缩略图展示，结合画面继续推理。",
+  "- 屏幕截图（screen_capture）的缩略图会在工具卡片里展示给用户；你只能拿到路径等文字信息，不要假装看到了画面，也不要复制图片数据。",
   "- 图片编辑用 image_edit 的 ops_json 顺序描述裁剪、旋转、色彩等操作；拼图用 image_collage。可先 image_preview 看效果，再调参数；上次 savedPath 可作为下一次 source。",
-  "- image_edit、image_preview、image_collage 返回 previewFence 时，将其原样粘贴进回复，让用户在 ```image 围栏里直接看图。",
+  "- 图片/相册的缩略图都由工具卡片自动渲染；不要输出 ```image / ```photos 围栏，也不要粘贴 base64 或 previewFence，只用文字说明结果、数量、savedPath 或 uri。",
   "- 需要拍照时输出 ```camera 围栏（如 {} 或 {\"facingMode\":\"environment\"}），用户会看到实时取景并点击拍照，照片自动存入相册并把路径回传对话。",
   "- 生成小组件后，把 WidgetSpec JSON 放入 ```widget 围栏让用户在对话内预览效果，确认后再 widget_save_and_pin。",
-  "- 位置结果用 ```geo 块，内容为 {\"lat\":数字,\"lng\":数字,\"label\":字符串} 的 JSON。",
-  "- 照片列表用 ```photos 块，内容为 album_photos 返回的 JSON；键值状态用 ```kv 块，内容为 JSON 对象或每行 label: value。",
-  "- 长输出（shell_exec、file_read）给出摘要 + 关键行，不整段粘贴。",
+  "- 位置结果用 ```geo 块，内容为 {\"lat\":数字,\"lng\":数字,\"label\":字符串} 的 JSON；键值状态用 ```kv 块，内容为 JSON 对象或每行 label: value。",
+  "- 相册结果用文字或表格列出文件名；长输出（shell_exec、file_read）给出摘要 + 关键行，不整段粘贴。",
 ].join("\n");
 
+/** No endpoint, model ID or API key ships in the bundle: they come from
+ *  Download/config.json through the native bridge (or from Settings). */
 export const DEFAULT_SETTINGS: Settings = {
-  baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+  baseUrl: "",
   apiKey: "",
-  model: "glm-4.5-flash",
+  model: "",
   systemPrompt: DEFAULT_SYSTEM_PROMPT,
 };
 
 const DEV_SETTINGS_KEY = "andagent.settings.dev.v1";
 
+/** Payload of an `andagent://` deep link (from an external app or a widget). */
+export interface DeeplinkDetail {
+  uri: string;
+  prompt: string;
+  auto: boolean;
+}
+
 interface AndroidBridge {
   getSettings(): string;
+  consumeDeeplink(): string;
   openEmbeddedWebview(uri: string): string;
   dbGuiOpen(name: string): string;
   saveSettings(json: string): void;
@@ -451,6 +460,13 @@ function handleEvent(payload: string): void {
     return;
   }
 
+  if (type === "deeplink.flush") {
+    // Native side only signals "there is a queued link"; the payload is pulled
+    // via consumeDeeplink() so early events cannot be lost before mount.
+    window.dispatchEvent(new Event("andagent:deeplink-flush"));
+    return;
+  }
+
   if (type === "tool.result") {
     const id = event.id as string;
     const pending = toolPending.get(id);
@@ -683,6 +699,18 @@ export function widgetSave(specJson: string, id = ""): string { return bridge()?
 export function widgetPin(id: string): string { return bridge()?.widgetPin(id) ?? "ERROR: 设备桥不可用"; }
 export function widgetRefresh(id: string): string { return bridge()?.widgetRefresh(id) ?? "ERROR: 设备桥不可用"; }
 export function widgetDelete(id: string): string { return bridge()?.widgetDelete(id) ?? "ERROR: 设备桥不可用"; }
+
+/** Pull deep links queued natively (covers links arriving before mount). */
+export function consumeDeeplink(): DeeplinkDetail[] {
+  try {
+    const raw = bridge()?.consumeDeeplink?.() ?? "[]";
+    const parsed: unknown = JSON.parse(raw);
+    const list = Array.isArray(parsed) ? parsed : [parsed];
+    return (list as DeeplinkDetail[]).filter((d) => d && typeof d.prompt === "string" && d.prompt);
+  } catch {
+    return [];
+  }
+}
 
 export function openEmbeddedWebview(uri: string): string {
   try { const result = bridge()?.openEmbeddedWebview(uri) ?? "ERROR: 设备桥不可用"; return result.startsWith("ERROR:") ? result : ""; }

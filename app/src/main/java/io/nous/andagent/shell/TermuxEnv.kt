@@ -1,23 +1,22 @@
 package io.nous.andagent.shell
 
 import android.app.PendingIntent
-import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.os.IBinder
+import android.system.Os
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 /** Official Termux bootstrap is built for /data/data/com.termux/files/usr.
- * We validate executable behavior before advertising the embedded backend. */
+ * dash/bash are validated before advertising the embedded backend; apt/dpkg's
+ * compile-time PREFIX is redirected via APT_CONFIG / DPKG_ADMINDIR. */
 class TermuxEnv(private val context: Context, private val shizuku: ShizukuShell? = null) {
     private val paths = AndagentTermuxPaths(context)
     private val prefix = paths.prefix
@@ -27,23 +26,56 @@ class TermuxEnv(private val context: Context, private val shizuku: ShizukuShell?
     private var session: TermuxSession? = null
     @Volatile private var embeddedValidated = false
     @Volatile private var lastSetupError = "尚未安装"
+    @Volatile private var packageManagerStatus = "未探测"
+    private var runtimeConfigSignature: String? = null
+
+    init {
+        runCatching { ensureRuntimeConfig() }
+            .onFailure { Log.w("TermuxEnv", "apt config init failed", it) }
+    }
+
+    /** 让 apt 绕过 ELF 里编译期的 com.termux 目录；bootstrap 重装后也要重做。 */
+    private fun ensureRuntimeConfig() {
+        val signature = prefix.path
+        val config = paths.aptConfig
+        if (runtimeConfigSignature == signature && config.isFile &&
+            paths.aptRuntimeDirs.all { it.isDirectory }) return
+        val text = paths.aptConfigText
+        if (runCatching { config.readText() }.getOrNull() != text) {
+            config.parentFile?.mkdirs()
+            config.writeText(text)
+        }
+        if (dash.canExecute()) {
+            paths.aptRuntimeDirs.forEach { it.mkdirs() }
+            // dpkg 解包用的影子目录：包内 /data/data/com.termux/files/usr
+            // 通过符号链接落到内嵌 prefix，详见 apt.conf 的 DPkg::Options。
+            runCatching {
+                paths.pkgRoot.mkdirs()
+                if (!paths.pkgRootLink.exists()) {
+                    Os.symlink(paths.prefix.path, paths.pkgRootLink.path)
+                }
+            }.onFailure { Log.w("TermuxEnv", "dpkg instdir link failed", it) }
+        }
+        runtimeConfigSignature = signature
+    }
 
     fun backend(): String = when {
-        readyFile.exists() && dash.exists() && paths.bash.exists() && paths.pkg.exists() -> "embedded"
+        readyFile.exists() && dash.canExecute() && paths.bash.canExecute() -> "embedded"
         termuxInstalled() -> "termux_app"
         else -> "none"
     }
+
     fun status(): String {
         val permission = if (context.checkSelfPermission("com.termux.permission.RUN_COMMAND") == PackageManager.PERMISSION_GRANTED)
             "granted" else "denied"
-        return "${backend()}: $lastSetupError · PREFIX=${prefix.path} · PATH=${paths.path} · RUN_COMMAND=$permission"
+        return "${backend()}: $lastSetupError · 包管理=$packageManagerStatus · PREFIX=${prefix.path} · PATH=${paths.path} · RUN_COMMAND=$permission"
     }
 
     @Suppress("DEPRECATION")
     private fun termuxInstalled() = runCatching { context.packageManager.getPackageInfo("com.termux", 0); true }.getOrDefault(false)
 
     suspend fun setup(): String = withContext(Dispatchers.IO) {
-        if (embeddedValidated) return@withContext "embedded 已就绪"
+        if (embeddedValidated && backend() == "embedded") return@withContext "embedded 已就绪：$lastSetupError"
         if (android.os.Build.SUPPORTED_ABIS.none { it == "arm64-v8a" }) {
             lastSetupError = "当前仅提供 aarch64 bootstrap；设备架构不匹配"
             return@withContext "ERROR: $lastSetupError；后端 ${backend()}"
@@ -51,31 +83,62 @@ class TermuxEnv(private val context: Context, private val shizuku: ShizukuShell?
         try {
             session?.close()
             session = null
-            if (!readyFile.exists()) TermuxBootstrapInstaller(context, paths).install()
-            fun probe(label: String, vararg args: String) {
-                val proc = ProcessBuilder(*args).directory(home).apply {
-                    environment().putAll(paths.environment)
-                }.start()
-                if (!proc.waitFor(8, TimeUnit.SECONDS)) {
-                    proc.destroyForcibly()
-                    error("$label 实测超时")
-                }
-                if (proc.exitValue() != 0) {
-                    val stderr = proc.errorStream.bufferedReader().use { it.readText().take(200) }
-                    error("$label 实测失败(exit=${proc.exitValue()}): $stderr")
-                }
+            // 只有二进制缺失才重解压：探测失败不该每次重装 33MB，
+            // pkg/apt 的失败也不该让可用的 dash/bash 一起被判死。
+            if (!dash.canExecute() || !paths.bash.canExecute()) {
+                TermuxBootstrapInstaller(context, paths).install()
             }
+            ensureRuntimeConfig()
             probe("dash", dash.path, "-c", "exit 0")
             probe("bash", paths.bash.path, "--noprofile", "--norc", "-c", "exit 0")
-            probe("pkg", paths.pkg.path, "list-installed")
-            readyFile.writeText("dash bash pkg\n")
+            readyFile.writeText("dash bash\n")
             embeddedValidated = true
             lastSetupError = "已就绪"
-            "embedded 已安装：${prefix.path}（dash/bash/pkg list-installed 已通过；安装包待真机验证）"
+            // apt/dpkg 的 ELF 仍带官方编译期 PREFIX，属独立能力；这里只如实
+            // 记录，不再把整个 shell 后端一票否决。
+            packageManagerStatus = runCatching {
+                probe("pkg", paths.pkg.path, "list-installed")
+                "可用"
+            }.getOrElse { "不可用（${it.message}）" }
+            "embedded 已安装：${prefix.path}（dash/bash 实测通过；包管理 $packageManagerStatus）"
         } catch (e: Exception) {
             readyFile.delete()
             lastSetupError = "内嵌 bootstrap 安装失败：${e.message ?: e.javaClass.simpleName}"
             "ERROR: $lastSetupError；可用后端 ${backend()}。Termux App 需授权 RUN_COMMAND 并在 termux.properties 开启 allow-external-apps=true"
+        }
+    }
+
+    private fun probe(label: String, vararg args: String) {
+        val proc = ProcessBuilder(*args).directory(home).apply {
+            environment().putAll(paths.environment)
+        }.start()
+        val out = StringBuilder()
+        val err = StringBuilder()
+        val t1 = drain(proc.inputStream, out, 2000)
+        val t2 = drain(proc.errorStream, err, 2000)
+        if (!proc.waitFor(8, TimeUnit.SECONDS)) {
+            proc.destroyForcibly()
+            error("$label 实测超时；stdout=${out.toString().take(200)}；stderr=${err.toString().take(200)}")
+        }
+        t1.join(300); t2.join(300)
+        if (proc.exitValue() != 0) {
+            error("$label 实测失败(exit=${proc.exitValue()}): ${err.toString().take(300).ifBlank { out.toString().take(300) }}")
+        }
+    }
+
+    /** Drain both pipes concurrently; an unread stdout pipe can deadlock a probe. */
+    private fun drain(input: java.io.InputStream, sink: StringBuilder, cap: Int) = thread(isDaemon = true) {
+        runCatching {
+            input.bufferedReader().use { reader ->
+                val buf = CharArray(1024)
+                while (true) {
+                    val n = reader.read(buf)
+                    if (n < 0) break
+                    synchronized(sink) {
+                        if (sink.length < cap) sink.append(buf, 0, minOf(n, cap - sink.length))
+                    }
+                }
+            }
         }
     }
 
@@ -84,86 +147,111 @@ class TermuxEnv(private val context: Context, private val shizuku: ShizukuShell?
     suspend fun exec(command: String, timeoutSeconds: Int): String = withContext(Dispatchers.IO) {
         if (Regex("(?i)(rm\\s+-[a-z]*r[a-z]*f\\s+/($|\\s)|mkfs\\b|dd\\s+[^\\n]*of=/dev/|flash_image\\b)").containsMatchIn(command))
             return@withContext "ERROR: 命令被危险路径黑名单拦截"
-        when (backend()) {
-            "embedded" -> {
-                val current = try {
-                    session?.takeIf { it.alive() } ?: TermuxSession(paths.bash, home, environment()).also { session = it }
-                } catch (e: Exception) {
-                    Log.w("TermuxEnv", "session startup failed, using one-shot fallback", e)
-                    null
+        runCatching { ensureRuntimeConfig() }
+        val embeddedAvailable = dash.canExecute() && paths.bash.canExecute()
+        val hasTermuxApp = termuxInstalled()
+        if (!embeddedAvailable && !hasTermuxApp)
+            return@withContext "ERROR: 尚无可用脚本后端；请安装 Termux 或先运行 termux_setup"
+        // 已有就绪标记时优先内嵌；没标记但装了 Termux App 时直接用它，避免
+        // 在已知不可用的内嵌链路上白等一个完整超时。
+        val preferEmbedded = backend() == "embedded" || !hasTermuxApp
+        if (!preferEmbedded) {
+            return@withContext TermuxAppBackend(context).exec(command, timeoutSeconds)
+        }
+        val result = if (embeddedAvailable) {
+            execEmbedded(command, timeoutSeconds)
+        } else {
+            "ERROR: 内嵌 dash/bash 不可执行"
+        }
+        if (!result.startsWith("ERROR:") || !hasTermuxApp) return@withContext result
+        "$result\n[fallback] 内嵌后端失败，改用 Termux App：\n" +
+            TermuxAppBackend(context).exec(command, timeoutSeconds)
+    }
+
+    /** Every embedded path is best-effort; failures carry the underlying stderr
+     * so exec() can fall back instead of reporting a bare "shell exited". */
+    private suspend fun execEmbedded(command: String, timeoutSeconds: Int): String {
+        var sessionFailure: String? = null
+        val current = try {
+            session?.takeIf { it.alive() } ?: TermuxSession(paths.bash, home, environment()).also { session = it }
+        } catch (e: Exception) {
+            sessionFailure = "长驻 bash 启动失败：${e.message}"
+            Log.w("TermuxEnv", "session startup failed, using one-shot fallback", e)
+            null
+        }
+        if (current != null) {
+            try {
+                return current.execute(command, timeoutSeconds)
+            } catch (e: Exception) {
+                sessionFailure = "长驻 bash 执行失败：${e.message}"
+                Log.w("TermuxEnv", "session command failed; using one-shot fallback", e)
+                current.close()
+                session = null
+            }
+        }
+        // Path order under targetSdk 28:
+        //  1. DIRECT exec — data-dir execve is legal (W^X only for targetSdk>=29).
+        //  2. memfd — for ROMs that somehow still restrict direct exec.
+        //  3. Shizuku (shell uid) — for restricted ROMs.
+        //  4. Termux App bridge — handled by exec().
+        try {
+            val proc = ProcessBuilder(dash.path, "-c", command).directory(home)
+                .apply { environment().putAll(environment()) }.start()
+            val out = StringBuilder()
+            val err = StringBuilder()
+            val t1 = drain(proc.inputStream, out, 4000)
+            val t2 = drain(proc.errorStream, err, 2000)
+            if (!proc.waitFor(timeoutSeconds.toLong(), TimeUnit.SECONDS)) {
+                proc.destroyForcibly()
+                return "ERROR: 命令超过 ${timeoutSeconds}s"
+            }
+            t1.join(500); t2.join(500)
+            Log.i("TermuxEnv", "exec backend=direct exit=${proc.exitValue()}")
+            return formatResult(proc.exitValue(), out.toString(), err.toString(), "direct")
+        } catch (e: java.io.IOException) {
+            Log.w("TermuxEnv", "direct exec failed (${e.message}); trying memfd", e)
+            val directFailure = e.message ?: e.javaClass.simpleName
+            val memfdFailure = try {
+                val (code, output) = MemExec.exec(
+                    elfFile = dash,
+                    args = listOf(dash.path, "-c", command),
+                    env = environment().toMutableMap(),
+                    workDir = home.path,
+                    timeoutSeconds = timeoutSeconds.toLong(),
+                )
+                Log.i("TermuxEnv", "exec backend=memfd exit=$code")
+                if (code != 127 || !output.contains("errno=13")) {
+                    return formatResult(code, output, "", "memfd")
                 }
-                if (current != null) {
-                    try {
-                        return@withContext current.execute(command, timeoutSeconds)
-                    } catch (e: Exception) {
-                        Log.w("TermuxEnv", "session command failed; restarting on next call", e)
-                        current.close()
-                        session = null
-                        return@withContext "ERROR: ${e.message ?: "shell 会话意外退出"}"
-                    }
+                "errno=13 (EACCES)，ROM 也拦截 memfd"
+            } catch (e2: Exception) {
+                Log.w("TermuxEnv", "memfd failed; trying Shizuku", e2)
+                e2.message ?: e2.javaClass.simpleName
+            }
+            shizuku?.let { sh ->
+                val shizukuCmd = buildString {
+                    append("LD_LIBRARY_PATH=").append(prefix.path).append("/lib ")
+                    append("PREFIX=").append(prefix.path).append(" ")
+                    append("HOME=").append(home.path).append(" ")
+                    append("PATH=").append(prefix.path).append("/bin:/system/bin ")
+                    append("TMPDIR=").append(context.cacheDir.path).append(" ")
+                    append(dash.path).append(" -c '")
+                    append(command.replace("'", "'\\''"))
+                    append("'")
                 }
-                // Path order under targetSdk 28:
-                //  1. DIRECT exec — data-dir execve is legal (W^X only for
-                //     targetSdk>=29). Fastest, no Shizuku needed.
-                //  2. memfd — for ROMs that somehow still restrict direct exec.
-                //  3. Shizuku (shell uid) — for restricted ROMs.
-                //  4. Termux App bridge.
-                try {
-                    val proc = ProcessBuilder(dash.path, "-c", command).directory(home).apply { environment().putAll(environment()) }.start()
-                    val out = StringBuilder(); val err = StringBuilder()
-                    fun drain(input: java.io.InputStream, sink: StringBuilder, cap: Int) = thread(isDaemon = true) {
-                        input.bufferedReader().use { reader ->
-                            val buf = CharArray(1024); while (true) { val n = reader.read(buf); if (n < 0) break
-                                if (sink.length < cap) sink.append(buf, 0, minOf(n, cap - sink.length)) }
-                        }
-                    }
-                    val t1 = drain(proc.inputStream, out, 4000); val t2 = drain(proc.errorStream, err, 2000)
-                    if (!proc.waitFor(timeoutSeconds.toLong(), TimeUnit.SECONDS)) { proc.destroyForcibly(); "ERROR: 命令超过 ${timeoutSeconds}s" }
-                    else { t1.join(500); t2.join(500); Log.i("TermuxEnv", "exec backend=direct exit=${proc.exitValue()}"); formatResult(proc.exitValue(), out.toString(), err.toString(), "direct") }
-                } catch (e: java.io.IOException) {
-                    // execve denied (e.g. OEM policy despite targetSdk 28) →
-                    // fall through to memfd, then Shizuku.
-                    Log.w("TermuxEnv", "direct exec failed (${e.message}); trying memfd", e)
-                    val memExecEnv = environment().toMutableMap()
-                    runCatching {
-                        val (code, err) = MemExec.exec(
-                            elfFile = dash,
-                            args = listOf(dash.path, "-c", command),
-                            env = memExecEnv,
-                            workDir = home.path,
-                            timeoutSeconds = timeoutSeconds.toLong(),
-                        )
-                        Log.i("TermuxEnv", "exec backend=memfd exit=$code")
-                        if (code != 127 || !err.contains("errno=13"))
-                            return@withContext formatResult(code, err, "", "memfd")
-                        // errno=13 (EACCES) on the memfd itself → this ROM also
-                        // blocks memfd exec; fall through to Shizuku.
-                        "MEMFD_EACCES"
-                    }.getOrElse { e2 ->
-                        Log.w("TermuxEnv", "memfd failed; trying Shizuku", e2)
-                        "MEMFD_FAIL: ${e2.message}"
-                    }
-                    shizuku?.let { sh ->
-                        val shizukuCmd = buildString {
-                            append("LD_LIBRARY_PATH=").append(prefix.path).append("/lib ")
-                            append("PREFIX=").append(prefix.path).append(" ")
-                            append("HOME=").append(home.path).append(" ")
-                            append("PATH=").append(prefix.path).append("/bin:/system/bin ")
-                            append("TMPDIR=").append(context.cacheDir.path).append(" ")
-                            append(dash.path).append(" -c '")
-                            append(command.replace("'", "'\\''"))
-                            append("'")
-                        }
-                        val viaShizuku = sh.run(shizukuCmd, timeoutSeconds * 1000L)
-                        if (viaShizuku.exitCode != -1 || !viaShizuku.stderr.contains("Shizuku")) {
-                            return@withContext formatResult(viaShizuku.exitCode, viaShizuku.stdout, viaShizuku.stderr, "shizuku")
-                        }
-                    }
-                    "ERROR: 三条执行路径都失败（direct 被拦/memfd EACCES/Shizuku 未授权）。请激活 Shizuku（设置页），或安装 Termux App 作回退"
+                val viaShizuku = sh.run(shizukuCmd, timeoutSeconds * 1000L)
+                if (viaShizuku.exitCode != -1 || !viaShizuku.stderr.contains("Shizuku")) {
+                    return formatResult(viaShizuku.exitCode, viaShizuku.stdout, viaShizuku.stderr, "shizuku")
                 }
             }
-            "termux_app" -> TermuxAppBackend(context).exec(command, timeoutSeconds)
-            else -> "ERROR: 尚无可用脚本后端；请安装 Termux 或先运行 termux_setup"
+            return buildString {
+                append("ERROR: 内嵌后端所有执行路径都失败")
+                sessionFailure?.let { append("\n[session] ").append(it) }
+                append("\n[direct] ").append(directFailure)
+                append("\n[memfd] ").append(memfdFailure)
+                append("\n[shizuku] 未成功或 Shizuku 未授权")
+                append("。请激活 Shizuku（设置页），或安装 Termux App 作回退")
+            }
         }
     }
 

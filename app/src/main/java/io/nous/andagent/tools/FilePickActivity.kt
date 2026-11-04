@@ -35,6 +35,13 @@ class FilePickActivity : Activity() {
         if (requestCode != REQUEST_PICK) return
         val uris = mutableListOf<String>()
         if (resultCode == RESULT_OK && data != null) {
+            if (getIntent()?.getBooleanExtra("persistTree", false) == true) {
+                data.data?.let { tree ->
+                    val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    runCatching { contentResolver.takePersistableUriPermission(tree, flags) }
+                    SafTreeStore.add(this, tree.toString())
+                }
+            }
             data.data?.let { uris.add(it.toString()) }
             val clip = data.clipData
             if (clip != null) {

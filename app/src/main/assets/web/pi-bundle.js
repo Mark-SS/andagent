@@ -136302,21 +136302,18 @@ function IsIPv6(value) {
 }
 
 // node_modules/typebox/build/format/iri_reference.mjs
-var InvalidIriChars = /[\x00-\x20\x7F\\]|%(?![0-9a-fA-F]{2})/;
-var MalformedScheme = /^[a-zA-Z][a-zA-Z0-9+\-.]*\/\//;
+var InvalidIriReferenceChars = /[\x00-\x20\x7f"<>\^`{|}\\]|%(?![0-9a-fA-F]{2})/;
+var MalformedScheme = /^(?:[a-z][a-z\d+\-.]*\/\/|(?!(?:[a-z][a-z\d+\-.]*:))[^/?#]*:)/i;
+var MultipleAuthorityAtSigns = /^(?:[a-z][a-z\d+\-.]*:)?\/\/[^/?#@]*@[^/?#@]*@/i;
+var BracketedPath = /^(?:[a-z][a-z\d+\-.]*:\/\/[^/?#]*\/|\/\/[^/?#]*\/|[a-z][a-z\d+\-.]*:(?!\/\/)|(?![a-z][a-z\d+\-.]*:|\/\/))[^?#]*[\[\]]/i;
 function IsIriReference(value) {
-  return !InvalidIriChars.test(value) && !MalformedScheme.test(value) && URL.canParse(value, "http://example.com");
+  return !InvalidIriReferenceChars.test(value) && !MalformedScheme.test(value) && !MultipleAuthorityAtSigns.test(value) && !BracketedPath.test(value) && URL.canParse(value, "http://example.com");
 }
 
 // node_modules/typebox/build/format/iri.mjs
-var InvalidIriChars2 = /[\x00-\x20<>\^`{|}\\]/;
-var InvalidPercentEncoding = /%(?![0-9a-fA-F]{2})/;
+var AbsoluteIriScheme = /^[a-z][a-z\d+\-.]*:/i;
 function IsIri(value) {
-  if (InvalidIriChars2.test(value))
-    return false;
-  if (InvalidPercentEncoding.test(value))
-    return false;
-  return URL.canParse(value);
+  return AbsoluteIriScheme.test(value) && IsIriReference(value);
 }
 
 // node_modules/typebox/build/format/json_pointer_uri_fragment.mjs

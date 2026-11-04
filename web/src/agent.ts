@@ -11,6 +11,7 @@ import type {
 import type { ThreadMessageLike } from "@assistant-ui/react";
 import { execTool, type Settings } from "./bridge";
 import { PERMISSION_GUIDE } from "./permissionGuide";
+import { toModelMessages } from "./modelMessages";
 import { SessionStore, type SessionMeta } from "./sessions";
 
 type PiModule = typeof import("@mariozechner/pi-ai");
@@ -481,7 +482,7 @@ const TOOL_DEFS = [
   {
     name: "album_photos",
     description:
-      "查询相册照片（返回缩略图 base64 + content:// uri）。展示照片时将返回的 JSON 放入 ```photos 围栏，点击照片可在图库打开。按文件夹/关键词过滤，默认最新 8 张。",
+      "查询相册照片（返回 id、content:// uri、文件名等，缩略图由工具卡片自动展示）。回复里用文字或表格列出文件名，不要输出 ```photos 围栏或复制图片数据。按文件夹/关键词过滤，默认最新 8 张。",
     parameters: {
       type: "object",
       properties: {
@@ -506,9 +507,9 @@ const TOOL_DEFS = [
     },
   },
   { name: "image_info", description: "读取图片宽高、格式、大小和 EXIF 方向。source 可用 content:// URI、相册 id、本地路径或 base64。", parameters: { type: "object", properties: { source: { type: "string" } }, required: ["source"] } },
-  { name: "image_preview", description: "不保存，仅预览图片和 ops_json 编辑效果。将结果 previewFence 原样贴进回复的 image 围栏。", parameters: { type: "object", properties: { source: { type: "string" }, ops_json: { type: "string", description: "JSON 操作数组" } }, required: ["source"] } },
-  { name: "image_edit", description: "按顺序编辑图片并保存。结果必须以返回的 ```image 围栏展示给用户；savedPath 可作为下次 source。ops_json 例如 [{\"op\":\"crop\",\"aspect\":\"16:9\"},{\"op\":\"brightness\",\"value\":20}]。支持 crop/rotate/flip_h/flip_v/resize/brightness/contrast/saturation/sharpness/blur/grayscale/sepia/invert/border/watermark/compose_over。", parameters: { type: "object", properties: { source: { type: "string" }, ops_json: { type: "string" } }, required: ["source", "ops_json"] } },
-  { name: "image_collage", description: "拼图并保存；把 previewFence 原样贴进回复。ids_or_uris 是图片源 JSON 数组；free 模式用 slots_json 指定每张图的 x/y/w/h。", parameters: { type: "object", properties: { ids_or_uris: { type: "string" }, layout: { type: "string", enum: ["grid2x2", "hstack", "vstack", "free"] }, output: { type: "string", enum: ["jpeg", "png"] }, slots_json: { type: "string" }, spacing: { type: "integer" }, background: { type: "string" }, corners: { type: "integer" } }, required: ["ids_or_uris", "layout"] } },
+  { name: "image_preview", description: "不保存，仅预览图片和 ops_json 编辑效果；预览图由工具卡片自动展示，回复只需用文字说明效果。", parameters: { type: "object", properties: { source: { type: "string" }, ops_json: { type: "string", description: "JSON 操作数组" } }, required: ["source"] } },
+  { name: "image_edit", description: "按顺序编辑图片并保存。预览图由工具卡片自动展示，回复只需说明操作与 savedPath（可作为下次 source），不要输出 ```image 围栏或粘贴图片数据。ops_json 例如 [{\"op\":\"crop\",\"aspect\":\"16:9\"},{\"op\":\"brightness\",\"value\":20}]。支持 crop/rotate/flip_h/flip_v/resize/brightness/contrast/saturation/sharpness/blur/grayscale/sepia/invert/border/watermark/compose_over。", parameters: { type: "object", properties: { source: { type: "string" }, ops_json: { type: "string" } }, required: ["source", "ops_json"] } },
+  { name: "image_collage", description: "拼图并保存；预览图由工具卡片自动展示，回复只需说明布局与 savedPath。ids_or_uris 是图片源 JSON 数组；free 模式用 slots_json 指定每张图的 x/y/w/h。", parameters: { type: "object", properties: { ids_or_uris: { type: "string" }, layout: { type: "string", enum: ["grid2x2", "hstack", "vstack", "free"] }, output: { type: "string", enum: ["jpeg", "png"] }, slots_json: { type: "string" }, spacing: { type: "integer" }, background: { type: "string" }, corners: { type: "integer" } }, required: ["ids_or_uris", "layout"] } },
   { name: "db_create", description: "创建持久化 SQLite 数据库。", parameters: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
   { name: "db_list", description: "列出 SQLite 数据库。", parameters: { type: "object", properties: {}, required: [] } },
   { name: "db_gui", description: "在对话中打开指定数据库的只读图形浏览器。先用 db_list 查库名。", parameters: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
@@ -525,7 +526,7 @@ const TOOL_DEFS = [
  */
 const CHART_GUIDE = [
   "数据可视化约定：",
-  "位置结果用 ```geo JSON 块；照片列表用 ```photos JSON 块；设备、电池等键值状态用 ```kv 块。",
+  "位置结果用 ```geo JSON 块；设备、电池等键值状态用 ```kv 块。",
   "1. 当需要展示数据对比、趋势或占比时，在回复里插入 ```chart 围栏代码块，围栏内容必须是合法的 ECharts option JSON。",
   "2. 只能使用纯 JSON：禁止函数、注释、变量、单引号或 JS 表达式（例如 formatter 函数一律不要写）。",
   "3. 图表类型仅限 bar、line、pie，用 series[].type 指定；数据标签直接用字符串/数字数组。",
@@ -540,6 +541,14 @@ const STORAGE_MEDIA_GUIDE = [
   "结构化存储：用户要记账、清单或笔记库时，先用 db_create 建库，再用 db_exec 建表，后续用参数化 INSERT 和 db_query SELECT。",
   "记账表例：CREATE TABLE records(id INTEGER PRIMARY KEY, date TEXT, item TEXT, amount REAL)。",
   "输出呈现：给用户音频或视频文件时，用 ```audio 或 ```video 围栏，内容为 JSON，例如 {\"uri\":\"/本地路径/file.mp4\",\"title\":\"文件名\"}；uri 可为本地文件路径或 https。",
+].join("\n");
+
+/** Always appended, so prompts saved before this fix cannot re-enable base64 fences. */
+const MEDIA_CONTEXT_GUIDE = [
+  "图片与上下文约定：",
+  "- screen_capture、album_photos、image_edit、image_preview、image_collage 的缩略图由工具卡片自动渲染给用户；工具结果里的图片数据不会进入你的上下文，你也看不到像素。",
+  "- 不要输出 ```image / ```photos 围栏，不要复述或粘贴 base64、previewFence 等图片数据；用文字说明结果、文件数量、savedPath 或 content:// uri。",
+  "- 需要继续处理图片时，用返回的路径或 uri 作为下一次工具调用的 source。",
 ].join("\n");
 
 const ZERO_USAGE = {
@@ -833,10 +842,17 @@ export class AgentEngine {
         const stream = pi.stream(
           model,
           {
-            systemPrompt: [this.settings.systemPrompt.trim(), CHART_GUIDE, STORAGE_MEDIA_GUIDE, PERMISSION_GUIDE]
+            systemPrompt: [
+              this.settings.systemPrompt.trim(),
+              CHART_GUIDE,
+              STORAGE_MEDIA_GUIDE,
+              MEDIA_CONTEXT_GUIDE,
+              PERMISSION_GUIDE,
+            ]
               .filter(Boolean)
               .join("\n\n"),
-            messages: this.messages,
+            // Compact projection: base64 tool payloads never reach the prompt.
+            messages: toModelMessages(this.messages),
             tools: TOOL_DEFS,
           },
           {

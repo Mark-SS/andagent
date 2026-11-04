@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  AndAgent launcher icon (single source of truth).
+
+  Canvas 108x108 matches the Android adaptive-icon grid (66dp safe zone is
+  centred at 54,54; all artwork stays inside 27..81 so every OEM mask keeps it).
+
+  Background: a punchier version of the blue -> violet diagonal in the web UI.
+  Mark: a rounded hexagon (continuity with the old icon) wrapping a four-point
+  spark, i.e. an autonomous agent core. The mark is pure white and single
+  layer, so it also works as a notification small-icon alpha mask.
+  <g id="notification"> in <defs> is a 24x24 simplification of the spark for
+  the status bar; it is never rendered in the launcher artwork itself.
+
+  Run scripts/generate_launcher_icons.py to turn this file into Android
+  resources (vector drawables, adaptive icon XML and fallback PNGs).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 108 108">
+  <defs>
+    <linearGradient id="bg" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="108" y2="108">
+      <stop offset="0" stop-color="#3B5BFF"/>
+      <stop offset="1" stop-color="#A855F7"/>
+    </linearGradient>
+    <!-- 24x24 status-bar small icon: the spark on its own, never drawn here. -->
+    <g id="notification">
+      <path d="M12,1.5 C13,8.4 15.6,11 22.5,12 C15.6,13 13,15.6 12,22.5 C11,15.6 8.4,13 1.5,12 C8.4,11 11,8.4 12,1.5 Z" fill="#FFFFFF"/>
+    </g>
+  </defs>
+
+  <rect id="background" x="0" y="0" width="108" height="108" fill="url(#bg)"/>
+
+  <g id="mark">
+    <path id="hexagon"
+          d="M60.05,30.53 L71.95,37.47 Q78,41 78,48 L78,60 Q78,67 71.95,70.53 L60.05,77.47 Q54,81 47.95,77.47 L36.05,70.53 Q30,67 30,60 L30,48 Q30,41 36.05,37.47 L47.95,30.53 Q54,27 60.05,30.53 Z"
+          fill="none" stroke="#FFFFFF" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+    <path id="spark"
+          d="M54,39 C55.4,47.6 60.4,52.6 69,54 C60.4,55.4 55.4,60.4 54,69 C52.6,60.4 47.6,55.4 39,54 C47.6,52.6 52.6,47.6 54,39 Z"
+          fill="#FFFFFF"/>
+  </g>
+</svg>

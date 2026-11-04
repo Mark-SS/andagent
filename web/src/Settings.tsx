@@ -71,7 +71,7 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
     const next: Settings = {
       ...draft,
       baseUrl: draft.baseUrl.trim().replace(/\/+$/, ""),
-      model: draft.model.trim() || "glm-4.5-flash",
+      model: draft.model.trim(),
       systemPrompt: draft.systemPrompt.trim(),
     };
     persistSettings(next);
@@ -98,7 +98,7 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
             <input
               value={draft.baseUrl}
               onChange={(e) => setDraft({ ...draft, baseUrl: e.target.value })}
-              placeholder="https://open.bigmodel.cn/api/paas/v4"
+              placeholder="https://api.example.com/v1"
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
@@ -117,7 +117,7 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
               autoCorrect="off"
               spellCheck={false}
             />
-            <em>仅保存在本机 SharedPreferences，不会写入 web 资产</em>
+            <em>优先从本机 Download/config.json 读取，不会写入代码或 web 资产</em>
           </label>
 
           <label className="field">
@@ -125,7 +125,7 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
             <input
               value={draft.model}
               onChange={(e) => setDraft({ ...draft, model: e.target.value })}
-              placeholder="glm-4.5-flash"
+              placeholder="your-model-id"
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}

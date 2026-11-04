@@ -3,6 +3,9 @@ package io.nous.andagent.tools
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
+import android.net.Uri
+import io.nous.andagent.MainActivity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -227,10 +230,15 @@ class NotifySendTool(
     private val permissions: PermissionBroker,
 ) : Tool {
     override val name = "notify_send"
-    override val description = "发送一条本地通知（标题 + 内容）。Android 13+ 需要通知权限。"
+    override val description = "发送一条本地通知（大文本 / 进度条样式），可指定点击后跳回对话的 prompt 与通知 id（更新进度）。"
     override val parameters = schemaOf(
         "title" to strParam("通知标题"),
         "text" to strParam("通知内容"),
+        "progress" to intParam("进度值 0..progress_max；提供后显示进度条"),
+        "progress_max" to intParam("进度最大值，默认 100"),
+        "indeterminate" to boolParam("不确定进度（转圈），默认 false"),
+        "deeplink" to strParam("点击通知后送入对话的 prompt（生成 andagent:// 深链）"),
+        "id" to intParam("通知 id；同一 id 重复调用可更新进度条"),
         required = listOf("title", "text"),
     )
 
@@ -248,15 +256,31 @@ class NotifySendTool(
                 NotificationChannel(CHANNEL_ID, "AndAgent 通知", NotificationManager.IMPORTANCE_DEFAULT)
                     .apply { description = "来自 AndAgent 的本地提醒" },
             )
+            val id = args.intArg("id") ?: (System.currentTimeMillis() % Int.MAX_VALUE).toInt()
+            val progress = args.intArg("progress")
+            val max = (args.intArg("progress_max") ?: 100).coerceAtLeast(1)
+            val indeterminate = args.boolArg("indeterminate") == true
             val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setSmallIcon(R.drawable.ic_stat_andagent)
                 .setContentTitle(title)
                 .setContentText(text)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(text))
                 .setAutoCancel(true)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .apply {
+                    if (progress != null || indeterminate) {
+                        setProgress(max, (progress ?: 0).coerceIn(0, max), indeterminate)
+                    }
+                    args.strArg("deeplink")?.let { prompt ->
+                        val uri = Uri.parse("andagent://send?prompt=${Uri.encode(prompt)}&auto=1")
+                        val intent = Intent(Intent.ACTION_VIEW, uri, context, MainActivity::class.java)
+                            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                        val flags = PendingIntent.FLAG_UPDATE_CURRENT or
+                            (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
+                        setContentIntent(PendingIntent.getActivity(context, id, intent, flags))
+                    }
+                }
                 .build()
-            val id = (System.currentTimeMillis() % Int.MAX_VALUE).toInt()
             manager.notify(id, notification)
             "已发送通知「$title」（id=$id）"
         }.getOrElse { "ERROR: 发送通知失败：${it.message ?: it.javaClass.simpleName}" }

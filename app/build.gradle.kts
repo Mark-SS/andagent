@@ -53,6 +53,8 @@ val downloadBootstrap by tasks.registering(Exec::class) {
 android {
     namespace = "io.nous.andagent"
     compileSdk = 34
+    // AGP 8.7.3 默认的 27.0.12077973 在本机仅剩空壳安装目录，显式锁定可用版本。
+    ndkVersion = "26.1.10909125"
 
     defaultConfig {
         applicationId = "io.nous.andagent"

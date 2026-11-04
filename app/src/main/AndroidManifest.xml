@@ -3,6 +3,8 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.NFC" />
+    <!-- HCE card emulation is optional; devices without NFC simply skip it. -->
+    <uses-feature android:name="android.hardware.nfc.hce" android:required="false" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <!-- Sensors (accelerometer/gyro etc. need no runtime permission) -->
@@ -23,8 +25,9 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Silent alarm/timer writes via AlarmClock intents (SKIP_UI=true) -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
-    <!-- mic_record + voice input -->
+    <!-- mic_record + WebView voice input (getUserMedia) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- phone_call (direct dial) + sms_send -->
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <uses-permission android:name="android.permission.SEND_SMS" />
@@ -51,6 +54,19 @@
     <!-- Health Connect step data (runtime grant via Health Connect UI) -->
     <uses-permission android:name="android.permission.health.READ_STEPS" />
 
+    <!-- R12-R14 system APIs, #15 contacts, #16 SMS: requested on demand. -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <uses-permission android:name="android.permission.USE_FINGERPRINT" android:maxSdkVersion="27" />
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" />
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
+
     <queries>
         <package android:name="com.termux" />
         <!-- Shizuku manager visibility (status card / install check) -->
@@ -66,6 +82,7 @@
         android:name=".AndAgentApp"
         android:label="AndAgent"
         android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@style/Theme.AndAgent"
         android:allowBackup="false"
         android:usesCleartextTraffic="true">
@@ -94,6 +111,30 @@
             android:exported="true"
             android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
 
+        <!-- #10c: share app-private files with other apps via content:// URIs. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- #7: optional host card emulation (ISO-DEP SELECT by a test AID). -->
+        <service
+            android:name=".tools.AndagentHceService"
+            android:exported="true"
+            android:permission="android.permission.BIND_NFC_SERVICE">
+            <intent-filter>
+                <action android:name="android.nfc.cardemulation.action.HOST_APDU_SERVICE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.nfc.cardemulation.host_apdu_service"
+                android:resource="@xml/hce_aid_list" />
+        </service>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -109,6 +150,13 @@
             <!-- Health Connect rationale screen, Android 13 and below -->
             <intent-filter>
                 <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+            <!-- #14: andagent://send?prompt=...&auto=1 (external apps / widgets) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="andagent" />
             </intent-filter>
         </activity>
 

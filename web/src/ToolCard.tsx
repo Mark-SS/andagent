@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ToolCallMessagePartProps } from "@assistant-ui/react";
 import { WebViewCard } from "./WebViewCard";
 import { MediaCard, mediaFromResult } from "./MediaCard";
+import { PhotosCard } from "./RichCards";
 
 interface ToolMeta {
   label: string;
@@ -204,6 +205,7 @@ export function ToolCard(props: ToolCallMessagePartProps) {
   const parsed = useMemo(() => { try { return formatted.json ? JSON.parse(raw) : null; } catch { return null; } }, [raw, formatted.json]);
   const media = !running && !failed && ["file_download", "mic_record", "screen_record_h264", "screen_record", "screen_record_stop"].includes(props.toolName) ? mediaFromResult(raw) : null;
   const webUri = props.toolName === "web_embed" && parsed?.type === "webview" && typeof parsed.uri === "string" ? parsed.uri : null;
+  const photoGrid = !running && !failed && props.toolName === "album_photos" && Array.isArray(parsed?.photos) && parsed.photos.length > 0;
 
   return (
     <div
@@ -242,6 +244,7 @@ export function ToolCard(props: ToolCallMessagePartProps) {
       )}
 
       {webUri && <WebViewCard uri={webUri} />}
+      {photoGrid && <PhotosCard code={JSON.stringify(parsed?.photos ?? [])} />}
       {media && <MediaCard kind={media.kind} uri={media.uri} />}
       {captureImage && <div className="tool-image-comparison">{beforeImage && <figure><img src={beforeImage} alt="编辑前" /><figcaption>编辑前</figcaption></figure>}<figure><img src={captureImage} alt="编辑后" /><figcaption>{beforeImage ? "编辑后" : "图片预览"}</figcaption></figure></div>}
 
