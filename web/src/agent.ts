@@ -70,7 +70,141 @@ const TOOL_DEFS = [
     description: "相册快速统计：截图数量与体积、按年份的照片数量与体积。",
     parameters: { type: "object", properties: {}, required: [] },
   },
+  {
+    name: "calendar_list",
+    description: "列出设备上的日历账户（id、名称、所属账户、是否可写）。写入事件前可先用它选择 calendar_id。",
+    parameters: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "calendar_events",
+    description:
+      "查询日历事件：按时间窗 start/end 过滤，返回标题、开始/结束时间、地点、所属日历。最多 100 条。",
+    parameters: {
+      type: "object",
+      properties: {
+        start: { type: "string", description: "时间窗开始，例如 2026-11-01 或 2026-11-01 08:00；默认 30 天前" },
+        end: { type: "string", description: "时间窗结束，格式同上；默认 30 天后" },
+        calendar_id: { type: "integer", description: "可选：只看某个日历 id" },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "calendar_add",
+    description:
+      "创建日历事件（会修改设备数据）：title/begin/end 必填，location/description/remindMinutes 可选。",
+    parameters: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "事件标题" },
+        begin: { type: "string", description: "开始时间，例如 2026-11-05 14:00" },
+        end: { type: "string", description: "结束时间，格式同上" },
+        location: { type: "string", description: "可选：地点" },
+        description: { type: "string", description: "可选：备注" },
+        remindMinutes: { type: "integer", description: "可选：提前多少分钟提醒" },
+        calendar_id: { type: "integer", description: "可选：目标日历 id，默认第一个可写日历" },
+      },
+      required: ["title", "begin", "end"],
+    },
+  },
+  {
+    name: "calendar_delete",
+    description: "按事件 id 删除日历事件（会修改设备数据）。先用 calendar_events 查询 id。",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "integer", description: "要删除的事件 id" },
+      },
+      required: ["id"],
+    },
+  },
+  {
+    name: "alarm_set",
+    description: "唤起系统闹钟应用设置闹钟（小时/分钟/备注），由用户在系统界面确认。",
+    parameters: {
+      type: "object",
+      properties: {
+        hour: { type: "integer", description: "小时，0-23" },
+        minutes: { type: "integer", description: "分钟，0-59" },
+        message: { type: "string", description: "可选：闹钟备注" },
+      },
+      required: ["hour", "minutes"],
+    },
+  },
+  {
+    name: "timer_set",
+    description: "唤起系统时钟应用设置倒计时（秒），由用户在系统界面确认。",
+    parameters: {
+      type: "object",
+      properties: {
+        seconds: { type: "integer", description: "倒计时秒数" },
+        message: { type: "string", description: "可选：计时器备注" },
+      },
+      required: ["seconds"],
+    },
+  },
+  {
+    name: "battery_detail",
+    description: "读取电池详情：电量百分比、充电状态、供电方式、健康度、温度、电压。",
+    parameters: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "wifi_info",
+    description:
+      "读取 Wi-Fi 信息：SSID、信号强度、IP、链路速度。定位权限被拒时会降级为网络类型。",
+    parameters: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "clipboard_write",
+    description: "把文本写入系统剪贴板，方便用户粘贴到其他应用。",
+    parameters: {
+      type: "object",
+      properties: {
+        text: { type: "string", description: "要复制的文本" },
+        label: { type: "string", description: "可选：剪贴板标签，默认 AndAgent" },
+      },
+      required: ["text"],
+    },
+  },
+  {
+    name: "clipboard_read",
+    description: "读取系统剪贴板文本（Android 10+ 需要应用窗口有焦点，失败会给明确原因）。",
+    parameters: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "notify_send",
+    description: "发送一条本地通知（标题 + 内容）。Android 13+ 会申请通知权限。",
+    parameters: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "通知标题" },
+        text: { type: "string", description: "通知内容" },
+      },
+      required: ["title", "text"],
+    },
+  },
+  {
+    name: "app_list",
+    description: "列出已安装应用（包名、应用名、版本、是否系统应用），按安装时间倒序，最多 200 个。",
+    parameters: { type: "object", properties: {}, required: [] },
+  },
 ] satisfies PiTool[];
+
+/**
+ * Appended to whatever system prompt the user saved, so the chart protocol is
+ * always in effect (stored prompts predate this feature).
+ */
+const CHART_GUIDE = [
+  "数据可视化约定：",
+  "1. 当需要展示数据对比、趋势或占比时，在回复里插入 ```chart 围栏代码块，围栏内容必须是合法的 ECharts option JSON。",
+  "2. 只能使用纯 JSON：禁止函数、注释、变量、单引号或 JS 表达式（例如 formatter 函数一律不要写）。",
+  "3. 图表类型仅限 bar、line、pie，用 series[].type 指定；数据标签直接用字符串/数字数组。",
+  "4. 工具返回 JSON 时，先读懂数据，再把整理后的 option 放进 chart 块，不要直接粘贴大段原始 JSON。",
+  "5. 示例：",
+  "```chart",
+  '{"tooltip":{},"legend":{},"xAxis":{"type":"category","data":["一月","二月","三月"]},"yAxis":{"type":"value"},"series":[{"name":"照片数","type":"bar","data":[12,20,8]}]}',
+  "```",
+].join("\n");
 
 const ZERO_USAGE = {
   input: 0,
@@ -319,7 +453,9 @@ export class AgentEngine {
         const stream = pi.stream(
           model,
           {
-            systemPrompt: this.settings.systemPrompt,
+            systemPrompt: [this.settings.systemPrompt.trim(), CHART_GUIDE]
+              .filter(Boolean)
+              .join("\n\n"),
             messages: this.messages,
             tools: TOOL_DEFS,
           },

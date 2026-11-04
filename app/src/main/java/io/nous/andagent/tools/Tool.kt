@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
 
 /**
@@ -49,3 +50,13 @@ fun boolParam(description: String): JsonObject = buildJsonObject {
     put("type", "boolean")
     put("description", description)
 }
+
+/* ------------------------- argument accessors ------------------------- */
+
+/** String argument; null for missing/blank/json-null. */
+fun JsonObject.strArg(key: String): String? =
+    (this[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+
+fun JsonObject.intArg(key: String): Int? = strArg(key)?.toIntOrNull()
+
+fun JsonObject.longArg(key: String): Long? = strArg(key)?.toLongOrNull()

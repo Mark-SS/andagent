@@ -449,6 +449,18 @@ button:disabled {
   font-weight: 600;
 }
 
+.md tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.md tbody tr:hover {
+  background: rgba(127, 155, 255, 0.06);
+}
+
+.md td {
+  color: #cfd6e4;
+}
+
 .md img {
   max-width: 100%;
   border-radius: 10px;
@@ -520,6 +532,99 @@ button:disabled {
   padding: 0 !important;
 }
 
+/* ---------------- Chart cards ---------------- */
+
+.chart-card {
+  margin: 12px 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(12, 15, 21, 0.72);
+  overflow: hidden;
+}
+
+.chart-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.chart-badge {
+  flex: none;
+  font-size: 10px;
+  letter-spacing: 0.6px;
+  color: #b9c6ff;
+  border: 1px solid rgba(127, 155, 255, 0.25);
+  background: rgba(127, 155, 255, 0.1);
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+
+.chart-body {
+  width: 100%;
+  height: 320px;
+}
+
+.chart-card.chart-error {
+  border-color: rgba(255, 110, 110, 0.35);
+}
+
+.chart-error .chart-head {
+  border-bottom: 0;
+}
+
+.chart-error-text {
+  color: #ff9c9c;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+/* ---------------- Long-press copy menu ---------------- */
+
+.copy-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: transparent;
+}
+
+.copy-menu {
+  position: fixed;
+  z-index: 81;
+  min-width: 124px;
+  padding: 4px;
+  border-radius: 10px;
+  background: #1b202a;
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  animation: fade-up 0.12s ease both;
+}
+
+.copy-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+}
+
+.copy-menu-item:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.copy-menu-icon {
+  color: var(--muted);
+  font-size: 13px;
+}
+
 /* ---------------- Tool cards ---------------- */
 
 .tool-card {
@@ -541,6 +646,47 @@ button:disabled {
 
 .tool-card.tool-error {
   border-color: rgba(255, 110, 110, 0.35);
+}
+
+.tool-card.tool-destructive {
+  border-color: rgba(255, 180, 90, 0.24);
+}
+
+.tool-badge {
+  flex: none;
+  font-size: 10px;
+  color: #ffc98a;
+  border: 1px solid rgba(255, 180, 90, 0.3);
+  background: rgba(255, 180, 90, 0.1);
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+
+.tool-confirm {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 12px;
+  font-size: 11.5px;
+  color: #ffd7a3;
+  background: rgba(255, 180, 90, 0.08);
+  border-top: 1px solid rgba(255, 180, 90, 0.16);
+}
+
+.tool-expand {
+  margin-top: 6px;
+  align-self: flex-start;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 7px;
+}
+
+.tool-expand:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
 }
 
 .tool-summary {

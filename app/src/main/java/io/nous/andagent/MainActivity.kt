@@ -19,11 +19,24 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.webkit.WebViewAssetLoader
 import io.nous.andagent.bridge.AgentBridge
+import io.nous.andagent.bridge.PermissionBroker
+import io.nous.andagent.tools.AlarmSetTool
 import io.nous.andagent.tools.AlbumStatsTool
+import io.nous.andagent.tools.AppListTool
+import io.nous.andagent.tools.BatteryDetailTool
+import io.nous.andagent.tools.CalendarAddTool
+import io.nous.andagent.tools.CalendarDeleteTool
+import io.nous.andagent.tools.CalendarEventsTool
+import io.nous.andagent.tools.CalendarListTool
+import io.nous.andagent.tools.ClipboardReadTool
+import io.nous.andagent.tools.ClipboardWriteTool
 import io.nous.andagent.tools.DeviceInfoTool
 import io.nous.andagent.tools.GetTimeTool
+import io.nous.andagent.tools.NotifySendTool
 import io.nous.andagent.tools.StorageScanTool
+import io.nous.andagent.tools.TimerSetTool
 import io.nous.andagent.tools.Tool
+import io.nous.andagent.tools.WifiInfoTool
 import io.nous.andagent.ui.SettingsStore
 
 /**
@@ -34,10 +47,13 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var webView: WebView
     private lateinit var bridge: AgentBridge
+    private lateinit var permissionBroker: PermissionBroker
 
     private val permissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-            /* tools degrade gracefully when denied */
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+            // Tools/suspend callers observe the real grant state; a denial is
+            // surfaced as an error string by each tool, never as a crash.
+            if (::permissionBroker.isInitialized) permissionBroker.onResult(result)
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -45,17 +61,31 @@ class MainActivity : ComponentActivity() {
 
         val settingsStore = SettingsStore(this)
         val appContext = applicationContext
+        permissionBroker = PermissionBroker(this, permissionLauncher)
         val tools: Map<String, Tool> = mapOf(
             "get_time" to GetTimeTool(),
             "device_info" to DeviceInfoTool(appContext),
             "storage_scan" to StorageScanTool(appContext),
             "album_stats" to AlbumStatsTool(appContext),
+            "calendar_list" to CalendarListTool(appContext, permissionBroker),
+            "calendar_events" to CalendarEventsTool(appContext, permissionBroker),
+            "calendar_add" to CalendarAddTool(appContext, permissionBroker),
+            "calendar_delete" to CalendarDeleteTool(appContext, permissionBroker),
+            "alarm_set" to AlarmSetTool(appContext),
+            "timer_set" to TimerSetTool(appContext),
+            "battery_detail" to BatteryDetailTool(appContext),
+            "wifi_info" to WifiInfoTool(appContext, permissionBroker),
+            "clipboard_write" to ClipboardWriteTool(appContext),
+            "clipboard_read" to ClipboardReadTool(appContext),
+            "notify_send" to NotifySendTool(appContext, permissionBroker),
+            "app_list" to AppListTool(appContext),
         )
 
         bridge = AgentBridge(
             webViewProvider = { webView },
             settings = settingsStore,
             tools = tools,
+            permissions = permissionBroker,
         )
 
         val assetLoader = WebViewAssetLoader.Builder()
@@ -128,7 +158,8 @@ class MainActivity : ComponentActivity() {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
         if (missing.isNotEmpty()) {
-            permissionLauncher.launch(missing.toTypedArray())
+            // Queue through the broker so it never races an on-demand request.
+            permissionBroker.request(missing) { }
         }
     }
 }

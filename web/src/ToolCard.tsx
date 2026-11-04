@@ -1,19 +1,32 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ToolCallMessagePartProps } from "@assistant-ui/react";
 
-const LABELS: Record<string, string> = {
-  get_time: "获取时间",
-  device_info: "设备信息",
-  storage_scan: "存储扫描",
-  album_stats: "相册统计",
+interface ToolMeta {
+  label: string;
+  icon: string;
+  destructive?: boolean;
+}
+
+const META: Record<string, ToolMeta> = {
+  get_time: { label: "获取时间", icon: "🕐" },
+  device_info: { label: "设备信息", icon: "📱" },
+  storage_scan: { label: "存储扫描", icon: "💾" },
+  album_stats: { label: "相册统计", icon: "🖼️" },
+  calendar_list: { label: "日历账户", icon: "📅" },
+  calendar_events: { label: "日程查询", icon: "🗓️" },
+  calendar_add: { label: "创建日程", icon: "➕", destructive: true },
+  calendar_delete: { label: "删除日程", icon: "🗑️", destructive: true },
+  alarm_set: { label: "设置闹钟", icon: "⏰" },
+  timer_set: { label: "设置计时器", icon: "⏱️" },
+  battery_detail: { label: "电池详情", icon: "🔋" },
+  wifi_info: { label: "Wi-Fi 信息", icon: "📶" },
+  clipboard_write: { label: "写入剪贴板", icon: "📋" },
+  clipboard_read: { label: "读取剪贴板", icon: "📋" },
+  notify_send: { label: "发送通知", icon: "🔔" },
+  app_list: { label: "应用列表", icon: "📦" },
 };
 
-const ICONS: Record<string, string> = {
-  get_time: "◷",
-  device_info: "▤",
-  storage_scan: "◍",
-  album_stats: "▣",
-};
+const COLLAPSE_LINES = 15;
 
 function formatArgs(args: unknown): string {
   if (!args || (typeof args === "object" && Object.keys(args).length === 0)) {
@@ -26,31 +39,87 @@ function formatArgs(args: unknown): string {
   }
 }
 
+/** Pretty-print JSON tool results; everything else is shown verbatim. */
+function formatResult(raw: string): { text: string; json: boolean } {
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+    return { text: raw, json: false };
+  }
+  try {
+    return { text: JSON.stringify(JSON.parse(trimmed), null, 2), json: true };
+  } catch {
+    return { text: raw, json: false };
+  }
+}
+
+function summarize(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  try {
+    if (trimmed.startsWith("{")) {
+      const obj = JSON.parse(trimmed) as Record<string, unknown>;
+      const listKey = Object.keys(obj).find((key) => Array.isArray(obj[key]));
+      if (listKey) {
+        const count = (obj[listKey] as unknown[]).length;
+        const total = typeof obj.count === "number" ? obj.count : count;
+        return `${listKey}：${total} 条`;
+      }
+      const pairs = Object.keys(obj)
+        .slice(0, 3)
+        .map((key) => {
+          const value = obj[key];
+          return `${key}=${typeof value === "object" ? JSON.stringify(value) : String(value)}`;
+        })
+        .join(" · ");
+      return pairs.slice(0, 120);
+    }
+    if (trimmed.startsWith("[")) {
+      const arr = JSON.parse(trimmed) as unknown[];
+      return `数组：${arr.length} 条`;
+    }
+  } catch {
+    /* not JSON — fall through */
+  }
+  return trimmed
+    .split("\n")
+    .filter((line) => line.trim())
+    .slice(0, 2)
+    .join(" · ")
+    .slice(0, 120);
+}
+
 export function ToolCard(props: ToolCallMessagePartProps) {
   const running = props.result === undefined;
   const failed = !!props.isError;
   const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     setOpen(running);
   }, [running]);
 
-  const label = LABELS[props.toolName] ?? props.toolName;
-  const preview = running
-    ? "正在执行…"
-    : String(props.result ?? "")
-        .split("\n")
-        .slice(0, 2)
-        .join(" · ")
-        .slice(0, 120);
+  const meta = META[props.toolName] ?? { label: props.toolName, icon: "⚙️" };
+  const raw = String(props.result ?? "");
+  const formatted = useMemo(() => formatResult(raw), [raw]);
+  const lines = formatted.text.split("\n");
+  const canFold = lines.length > COLLAPSE_LINES;
+  const shown = canFold && !expanded ? lines.slice(0, COLLAPSE_LINES).join("\n") : formatted.text;
+  const written = /^(WRITTEN|DELETED)/.test(raw);
+
+  const preview = running ? "正在执行…" : summarize(raw);
 
   return (
     <div
-      className={`tool-card${failed ? " tool-error" : ""}${running ? " tool-running" : ""}`}
+      className={`tool-card${failed ? " tool-error" : ""}${running ? " tool-running" : ""}${
+        meta.destructive ? " tool-destructive" : ""
+      }`}
     >
       <button type="button" className="tool-summary" onClick={() => setOpen((v) => !v)}>
-        <span className="tool-icon">{ICONS[props.toolName] ?? "⚙"}</span>
-        <span className="tool-name">{label}</span>
+        <span className="tool-icon" aria-hidden="true">
+          {meta.icon}
+        </span>
+        <span className="tool-name">{meta.label}</span>
+        {meta.destructive && <span className="tool-badge">写入</span>}
         <span className="tool-preview">{preview}</span>
         <span className={`tool-state${failed ? " state-error" : ""}`}>
           {running ? (
@@ -65,6 +134,14 @@ export function ToolCard(props: ToolCallMessagePartProps) {
         </span>
         <span className={`tool-chevron${open ? " open" : ""}`}>⌄</span>
       </button>
+
+      {written && !failed && !running && (
+        <div className="tool-confirm">
+          <span aria-hidden="true">✓</span>
+          <span>已写入设备数据，请核对下方结果</span>
+        </div>
+      )}
+
       {open && (
         <div className="tool-body">
           <div className="tool-section">
@@ -73,8 +150,20 @@ export function ToolCard(props: ToolCallMessagePartProps) {
           </div>
           {!running && (
             <div className="tool-section">
-              <div className="tool-label">结果</div>
-              <pre className="tool-pre tool-result">{String(props.result ?? "")}</pre>
+              <div className="tool-label">
+                结果{formatted.json ? " · JSON" : ""}
+                {canFold ? ` · ${lines.length} 行` : ""}
+              </div>
+              <pre className="tool-pre tool-result">{shown}</pre>
+              {canFold && (
+                <button
+                  type="button"
+                  className="tool-expand"
+                  onClick={() => setExpanded((v) => !v)}
+                >
+                  {expanded ? "收起" : `展开（还有 ${lines.length - COLLAPSE_LINES} 行）`}
+                </button>
+              )}
             </div>
           )}
         </div>

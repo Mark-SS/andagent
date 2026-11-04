@@ -5,11 +5,14 @@ import {
 } from "@assistant-ui/react-markdown";
 import remarkGfm from "remark-gfm";
 import hljs from "highlight.js";
+import { ChartCard } from "./ChartCard";
 
 function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighlighterProps) {
   const [copied, setCopied] = useState(false);
+  const isChart = (language ?? "").toLowerCase() === "chart";
 
   const html = useMemo(() => {
+    if (isChart) return "";
     try {
       if (language && hljs.getLanguage(language)) {
         return hljs.highlight(code, { language }).value;
@@ -18,7 +21,10 @@ function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighligh
     } catch {
       return code.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]!);
     }
-  }, [code, language]);
+  }, [code, language, isChart]);
+
+  // ```chart fences carry ECharts option JSON, not source code.
+  if (isChart) return <ChartCard code={code} />;
 
   const copy = async () => {
     try {

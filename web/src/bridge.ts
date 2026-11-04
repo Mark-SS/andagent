@@ -19,7 +19,8 @@ export interface Settings {
 export const DEFAULT_SYSTEM_PROMPT = [
   "你是 AndAgent，一个运行在 Android 手机上的智能助手。",
   "回答使用简体中文，简洁、直接、可执行；需要数据时先调用工具，不要编造。",
-  "你可以使用 get_time、device_info、storage_scan、album_stats 四个工具了解设备状态。",
+  "可用工具覆盖：设备/存储/相册状态、日历（calendar_*）、闹钟与计时器、电池、Wi-Fi、剪贴板、本地通知、已安装应用。",
+  "写入类操作（日历新增/删除）执行前先向用户说明将要修改的内容。",
 ].join("\n");
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -37,6 +38,7 @@ interface AndroidBridge {
   llmFetchStart(id: string, url: string, headersJson: string, body: string): void;
   llmCancel(id: string): void;
   toolExec(id: string, name: string, argsJson: string): void;
+  requestPermissions(namesJson: string): void;
 }
 
 declare global {
@@ -124,6 +126,46 @@ export function execTool(name: string, args: unknown): Promise<{ ok: boolean; re
       window.clearTimeout(timer);
       toolPending.delete(id);
       resolve({ ok: false, result: `ERROR: 无法调用工具桥：${String(e)}` });
+    }
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Runtime permissions (on-demand from JS)                             */
+/* ------------------------------------------------------------------ */
+
+type PermissionPending = {
+  resolve: (granted: Record<string, boolean>) => void;
+  timer: number;
+};
+
+let permissionPending: PermissionPending | null = null;
+
+/**
+ * Ask Android for runtime permissions. Resolves with the per-permission grant
+ * state; tools still re-check the permission themselves, so a denial here is
+ * never fatal.
+ */
+export function requestPermissions(names: string[]): Promise<Record<string, boolean>> {
+  const b = bridge();
+  if (!b) return Promise.resolve({});
+  return new Promise((resolve) => {
+    if (permissionPending) {
+      window.clearTimeout(permissionPending.timer);
+      permissionPending.resolve({});
+      permissionPending = null;
+    }
+    const timer = window.setTimeout(() => {
+      permissionPending = null;
+      resolve({});
+    }, 60_000);
+    permissionPending = { resolve, timer };
+    try {
+      b.requestPermissions(JSON.stringify(names));
+    } catch {
+      window.clearTimeout(timer);
+      permissionPending = null;
+      resolve({});
     }
   });
 }
@@ -275,6 +317,15 @@ function handleEvent(payload: string): void {
       ok: !!event.ok,
       result: typeof event.result === "string" ? event.result : String(event.result ?? ""),
     });
+    return;
+  }
+
+  if (type === "permission.result") {
+    const pending = permissionPending;
+    if (!pending) return;
+    window.clearTimeout(pending.timer);
+    permissionPending = null;
+    pending.resolve((event.granted as Record<string, boolean> | undefined) ?? {});
     return;
   }
 

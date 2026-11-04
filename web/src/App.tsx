@@ -17,28 +17,48 @@ import {
   loadSettings,
   type Settings,
 } from "./bridge";
+import { CopyMenu, useLongPress } from "./CopyMenu";
 import { MarkdownText } from "./Markdown";
 import { SettingsPanel } from "./Settings";
 import { ToolCard } from "./ToolCard";
+
+function useMessageText(): string {
+  return useAuiState((state) =>
+    state.message.content
+      .map((part) => (part.type === "text" ? part.text : ""))
+      .filter(Boolean)
+      .join("\n")
+      .trim(),
+  );
+}
 
 function UserText({ text }: TextMessagePartProps) {
   return <div className="user-text">{text}</div>;
 }
 
 function UserMessage() {
+  const text = useMessageText();
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const longPress = useLongPress((x, y) => setMenu({ x, y }));
   return (
-    <MessagePrimitive.Root className="msg msg-user">
+    <MessagePrimitive.Root className="msg msg-user" {...longPress}>
       <div className="user-bubble">
         <MessagePrimitive.Parts components={{ Text: UserText }} />
       </div>
+      {menu && text && (
+        <CopyMenu text={text} x={menu.x} y={menu.y} onClose={() => setMenu(null)} />
+      )}
     </MessagePrimitive.Root>
   );
 }
 
 function AssistantMessage() {
   const running = useAuiState((state) => state.message.status?.type === "running");
+  const text = useMessageText();
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const longPress = useLongPress((x, y) => setMenu({ x, y }));
   return (
-    <MessagePrimitive.Root className="msg msg-assistant">
+    <MessagePrimitive.Root className="msg msg-assistant" {...longPress}>
       <div className="avatar" aria-hidden="true">
         <span>A</span>
       </div>
@@ -54,6 +74,9 @@ function AssistantMessage() {
           <div className="msg-error">这条消息渲染失败。</div>
         </MessagePrimitive.Error>
       </div>
+      {menu && text && (
+        <CopyMenu text={text} x={menu.x} y={menu.y} onClose={() => setMenu(null)} />
+      )}
     </MessagePrimitive.Root>
   );
 }

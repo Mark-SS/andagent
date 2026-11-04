@@ -42,6 +42,7 @@ class AgentBridge(
     private val webViewProvider: () -> WebView?,
     private val settings: SettingsStore,
     private val tools: Map<String, Tool>,
+    private val permissions: PermissionBroker,
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val toolExecutor = Executors.newFixedThreadPool(2)
@@ -76,6 +77,41 @@ class AgentBridge(
         obj["apiKey"]?.jsonPrimitive?.contentOrNull?.let { settings.apiKey = it }
         obj["model"]?.jsonPrimitive?.contentOrNull?.let { settings.model = it }
         obj["systemPrompt"]?.jsonPrimitive?.contentOrNull?.let { settings.systemPrompt = it }
+    }
+
+    /* --------------------------- permissions ---------------------------- */
+
+    /**
+     * Ask for runtime permissions on demand from JS (JSON array of manifest
+     * permission names, or a comma/space separated list). The Activity Result
+     * API is only touched on the main thread inside [PermissionBroker]; the
+     * outcome is pushed back as a `permission.result` event.
+     */
+    @JavascriptInterface
+    fun requestPermissions(names: String) {
+        val requested = runCatching {
+            val element = json.parseToJsonElement(names)
+            if (element is JsonArray) {
+                element.mapNotNull { it.jsonPrimitive.contentOrNull }
+            } else {
+                null
+            }
+        }.getOrNull() ?: names.split(',', ' ', '\n').filter { it.isNotBlank() }
+
+        if (requested.isEmpty()) {
+            emitPermissionResult(emptyMap())
+            return
+        }
+        permissions.request(requested) { granted -> emitPermissionResult(granted) }
+    }
+
+    private fun emitPermissionResult(granted: Map<String, Boolean>) {
+        emit(buildJsonObject {
+            put("type", "permission.result")
+            put("granted", buildJsonObject {
+                granted.forEach { (name, ok) -> put(name, ok) }
+            })
+        })
     }
 
     /* ------------------------------ tools ------------------------------- */

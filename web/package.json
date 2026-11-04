@@ -1,7 +1,7 @@
 {
   "name": "andagent-web",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,6 +13,7 @@
     "@assistant-ui/react-markdown": "^0.14.24",
     "@mariozechner/pi-ai": "^0.73.1",
     "@opentelemetry/api": "^1.10.0",
+    "echarts": "^5.6.0",
     "highlight.js": "^11.11.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

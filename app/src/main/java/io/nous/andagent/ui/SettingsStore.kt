@@ -22,7 +22,8 @@ class SettingsStore(context: Context) {
         const val DEFAULT_SYSTEM_PROMPT =
             "你是 AndAgent，一个运行在 Android 手机上的智能助手。\n" +
                 "回答使用简体中文，简洁、直接、可执行；需要数据时先调用工具，不要编造。\n" +
-                "你可以使用 get_time、device_info、storage_scan、album_stats 四个工具了解设备状态。"
+                "可用工具覆盖：设备/存储/相册状态、日历（calendar_*）、闹钟与计时器、电池、Wi-Fi、剪贴板、本地通知、已安装应用。\n" +
+                "写入类操作（日历新增/删除）执行前先向用户说明将要修改的内容。"
     }
 
     var baseUrl: String
