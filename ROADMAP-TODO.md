@@ -59,4 +59,5 @@ web 化重构（pi+assistant-ui）/ 日历闹钟剪贴板通知 / ECharts / Shiz
 | R19 | 视频剪辑：ffmpeg-kit 静态链接（LGPL min 变体），video_clip/concat/filter 三工具（简报就绪） | +3 |
 | R20 | 平台桥接大扩展（八域 20+ 方法，简报就绪） | +10~20 |
 | R21 | Shader 实时渲染围栏（WebGL2，简报就绪） | 纯前端 |
+| R22 | 邮件发送（简报就绪） | +4 |
 |  | **R19 完成后累计约 90+ 工具** |  |
