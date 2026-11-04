@@ -37,7 +37,13 @@ fun ChatScreen() {
     var messages by remember { mutableStateOf(listOf<ChatUiMessage>()) }
     var input by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
     var pendingConfirm by remember { mutableStateOf<Pair<(Boolean) -> Unit, String>?>(null) }
+
+    if (showSettings) {
+        SettingsScreen(settings) { showSettings = false }
+        return
+    }
 
     val history = remember(messages) {
         messages.filter { !it.isTool }.map { ChatMessage(role = it.role, content = it.text) }
@@ -50,10 +56,14 @@ fun ChatScreen() {
             model = settings.model,
         )
         val shell = io.nous.andagent.shell.ShellEngine(context.filesDir)
+        val appCtx = context.applicationContext
         val registry = ToolRegistry(
             listOf(
                 io.nous.andagent.tools.ShellTool(shell),
-                io.nous.andagent.tools.DeviceInfoTool(context.applicationContext),
+                io.nous.andagent.tools.DeviceInfoTool(appCtx),
+                io.nous.andagent.tools.AlbumScanTool(appCtx),
+                io.nous.andagent.tools.AlbumStatsTool(appCtx),
+                io.nous.andagent.tools.StorageScanTool(appCtx),
             )
         )
         val loop = AgentLoop(
@@ -109,6 +119,14 @@ fun ChatScreen() {
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("AndAgent", style = MaterialTheme.typography.titleLarge)
+            TextButton(onClick = { showSettings = true }) { Text("设置") }
+        }
         LazyColumn(
             state = listState,
             modifier = Modifier.weight(1f).fillMaxWidth(),
