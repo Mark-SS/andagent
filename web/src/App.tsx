@@ -54,6 +54,30 @@ function UserMessage() {
   );
 }
 
+function AssistantReasoning(props: {
+  text: string;
+  status?: { type: string } | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const running = props.status?.type === "running";
+  return (
+    <div className={`thinking ${open || running ? "open" : ""}`}>
+      <button
+        type="button"
+        className="thinking-toggle"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open || running}
+      >
+        <span className="thinking-caret" aria-hidden="true">
+          {open || running ? "▾" : "▸"}
+        </span>
+        {running ? "思考中…" : "思考过程"}
+      </button>
+      {(open || running) && <div className="thinking-body">{props.text}</div>}
+    </div>
+  );
+}
+
 function AssistantMessage() {
   const running = useAuiState((state) => state.message.status?.type === "running");
   const text = useMessageText();
@@ -68,6 +92,7 @@ function AssistantMessage() {
         <MessagePrimitive.Parts
           components={{
             Text: MarkdownText,
+            Reasoning: AssistantReasoning,
             tools: { Fallback: ToolCard },
           }}
         />

@@ -340,6 +340,23 @@ const TOOL_DEFS = [
       required: [],
     },
   },
+  {
+    name: "open_settings",
+    description:
+      "打开 Android 系统设置的具体页面（WiFi/蓝牙/显示/声音/电池/存储/应用/位置/安全/日期时间/开发者选项等），只跳转不修改。用户说「打开XX设置」时使用。",
+    parameters: {
+      type: "object",
+      properties: {
+        panel: {
+          type: "string",
+          description:
+            "wifi | bluetooth | display | sound | volume | battery | storage | apps | app_details | location | security | privacy | date_time | nfc | airplane | developer | accessibility | input | data_usage | notification | home | cast | vpn | print | main",
+        },
+        package: { type: "string", description: "可选：app_details 时指定应用包名" },
+      },
+      required: ["panel"],
+    },
+  },
 ] satisfies PiTool[];
 
 /**
@@ -375,7 +392,8 @@ function buildModel(settings: Settings): Model<"openai-completions"> {
     provider: "custom",
     baseUrl: settings.baseUrl.trim().replace(/\/+$/, ""),
     input: ["text"],
-    reasoning: false,
+    // GLM 流式回 reasoning_content，pi 自动转 thinking part → UI 折叠块
+    reasoning: true,
     contextWindow: 128_000,
     maxTokens: 8_192,
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -399,7 +417,7 @@ export interface ToolView {
   running?: boolean;
 }
 
-type Draft = { text: string; tools: ToolView[] };
+type Draft = { text: string; thinking: string; tools: ToolView[] };
 type UiPart = Exclude<NonNullable<ThreadMessageLike["content"]>, string>[number];
 
 export interface AgentSnapshot {
@@ -440,7 +458,9 @@ function toUiMessages(messages: PiMessage[], draft: Draft | null): ThreadMessage
 
     const parts: UiPart[] = [];
     for (const part of message.content) {
-      if (part.type === "text") {
+      if (part.type === "thinking") {
+        if (part.thinking) parts.push({ type: "reasoning", text: part.thinking } as UiPart);
+      } else if (part.type === "text") {
         if (part.text) parts.push({ type: "text", text: part.text });
       } else if (part.type === "toolCall") {
         const result = results.get(part.id);
@@ -473,6 +493,10 @@ function toUiMessages(messages: PiMessage[], draft: Draft | null): ThreadMessage
 
   if (draft) {
     const parts: UiPart[] = [];
+    if (draft.thinking) {
+      // Native reasoning part — assistant-ui renders it via ReasoningUI.
+      parts.push({ type: "reasoning", text: draft.thinking } as UiPart);
+    }
     if (draft.text) parts.push({ type: "text", text: draft.text });
     for (const tool of draft.tools) {
       parts.push({
@@ -657,12 +681,17 @@ export class AgentEngine {
         );
 
         let liveText = "";
+        let liveThinking = "";
         let liveTools: ToolView[] = [];
         for await (const event of stream as AsyncIterable<AssistantMessageEvent>) {
           if (event.type === "text_delta") {
             liveText += event.delta;
             pendingText = liveText;
-            this.draft = { text: liveText, tools: liveTools };
+            this.draft = { text: liveText, thinking: liveThinking, tools: liveTools };
+            this.emit();
+          } else if (event.type === "thinking_delta") {
+            liveThinking += event.delta;
+            this.draft = { text: liveText, thinking: liveThinking, tools: liveTools };
             this.emit();
           } else if (event.type === "toolcall_start") {
             const partial = event.partial.content[event.contentIndex];
@@ -671,7 +700,7 @@ export class AgentEngine {
                 ...liveTools,
                 { id: partial.id, name: partial.name, args: {}, running: true },
               ];
-              this.draft = { text: liveText, tools: liveTools };
+              this.draft = { text: liveText, thinking: liveThinking, tools: liveTools };
               this.emit();
             }
           } else if (event.type === "toolcall_end") {
@@ -683,7 +712,7 @@ export class AgentEngine {
               args: call.arguments ?? {},
               running: true,
             });
-            this.draft = { text: liveText, tools: liveTools };
+            this.draft = { text: liveText, thinking: liveThinking, tools: liveTools };
             this.emit();
           }
         }

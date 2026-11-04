@@ -59,6 +59,7 @@ import io.nous.andagent.tools.ScreenRecordTool
 import io.nous.andagent.tools.SensorListTool
 import io.nous.andagent.tools.SensorReadTool
 import io.nous.andagent.tools.StepsHistoryTool
+import io.nous.andagent.tools.OpenSettingsTool
 import io.nous.andagent.tools.StepsTodayTool
 import io.nous.andagent.tools.StorageScanTool
 import io.nous.andagent.tools.TimerSetTool
@@ -204,6 +205,7 @@ class MainActivity : ComponentActivity() {
             "sensor_list" to SensorListTool(appContext),
             "sensor_read" to SensorReadTool(appContext),
             "steps_today" to StepsTodayTool(appContext, healthPermissionRequester),
+            "open_settings" to OpenSettingsTool(appContext),
             "steps_history" to StepsHistoryTool(appContext, healthPermissionRequester),
         )
 

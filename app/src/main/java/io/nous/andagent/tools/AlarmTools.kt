@@ -30,15 +30,15 @@ class AlarmSetTool(private val context: Context) : Tool {
         val intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
             putExtra(AlarmClock.EXTRA_HOUR, hour)
             putExtra(AlarmClock.EXTRA_MINUTES, minutes)
-            putExtra(AlarmClock.EXTRA_SKIP_UI, false)
+            putExtra(AlarmClock.EXTRA_SKIP_UI, true)
             if (!message.isNullOrEmpty()) putExtra(AlarmClock.EXTRA_MESSAGE, message)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         return try {
             context.startActivity(intent)
-            "已唤起系统闹钟设置，小时 $hour 分 $minutes" +
+            "WRITTEN: 闹钟已直接写入系统闹钟应用，小时 $hour 分 $minutes" +
                 (if (message.isNullOrEmpty()) "" else "（备注：$message）") +
-                "。请在系统闹钟应用中确认。"
+                "。SKIP_UI=true 无需用户确认；如设备策略不允许静默写入会回落到确认界面。"
         } catch (e: Exception) {
             "ERROR: 无法打开系统闹钟应用（${e.message ?: e.javaClass.simpleName}）"
         }
@@ -62,7 +62,7 @@ class TimerSetTool(private val context: Context) : Tool {
 
         val intent = Intent(AlarmClock.ACTION_SET_TIMER).apply {
             putExtra(AlarmClock.EXTRA_LENGTH, seconds)
-            putExtra(AlarmClock.EXTRA_SKIP_UI, false)
+            putExtra(AlarmClock.EXTRA_SKIP_UI, true)
             if (!message.isNullOrEmpty()) putExtra(AlarmClock.EXTRA_MESSAGE, message)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
