@@ -49,7 +49,9 @@ web 化重构（pi+assistant-ui）/ 日历闹钟剪贴板通知 / ECharts / Shiz
 | R12 | 连接与媒体：telephony_info/data_usage/audio_state/audio_set_volume/media_library/ringtone_set/wallpaper_set/vibrate | +8 |
 | R13 | 设备管理：torch/screen_state/brightness_set/volume_dnd/installed_app_details/usage_stats/biometric_check | +7 |
 | R14 | 自动化效率：alarm_wait/countdown/calendar_reminder_check/hotspot/airplane/tts/screenshot_quick | +6 |
-（R9 SQLite+媒体播放 → R10 外部数据 → R11 Scriptable UI → R12-R14 系统API → R15 图片编辑）
+（R9 SQLite+媒体播放 → R10.5 脚本库 ✅ → R10.6 DB GUI → R10.7 QuickJS fs API → R10 外部数据 → R11 Scriptable UI → R12-R14 系统API → R15 图片编辑）
+| R10.6 | 数据库 GUI 浏览器（sql.js + Grid.js 开源方案，简报就绪，进行中） | +1 |
+| R10.7 | QuickJS 原生 fs API：andagent.fs.read/write/list/exists（沙箱限定 scripts/+data/ 两根）——Scriptable 脚本自有数据存储 | +5 |
 | R15 | 图片编辑套件（简报就绪） | +4 |
 | R16 | ZIP 套件（zip4j 业界标准库，含加密 zip 支持） | +5 |
 | R17 | 文件管理补全（简报就绪） | +7 |
