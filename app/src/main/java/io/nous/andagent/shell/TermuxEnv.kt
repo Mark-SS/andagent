@@ -27,7 +27,7 @@ class TermuxEnv(private val context: Context, private val shizuku: ShizukuShell?
     @Volatile private var lastSetupError = "尚未安装"
 
     fun backend(): String = when {
-        embeddedValidated && dash.canExecute() -> "embedded"
+        dash.exists() -> "embedded"        // bootstrap files present → always try embedded first (direct exec works on targetSdk 28)
         termuxInstalled() -> "termux_app"
         else -> "none"
     }
@@ -87,15 +87,18 @@ class TermuxEnv(private val context: Context, private val shizuku: ShizukuShell?
                     }
                 }
                 dash.setExecutable(true)
+                // targetSdk 28: direct exec of data-dir binaries is allowed
+                // (W^X only applies to targetSdk>=29). pkg may still fail if
+                // its shebang points at com.termux paths — that's reported
+                // honestly per-command, not as a setup failure.
                 val test = ProcessBuilder(dash.path, "-c", "exit 0").apply { environment().putAll(environment()) }.start()
                 embeddedValidated = test.waitFor(4, TimeUnit.SECONDS) && test.exitValue() == 0
-                if (embeddedValidated) {
-                    val pkgCheck = ProcessBuilder(File(prefix, "bin/pkg").path, "--version").apply { environment().putAll(environment()) }.start()
-                    embeddedValidated = pkgCheck.waitFor(4, TimeUnit.SECONDS) && pkgCheck.exitValue() == 0
+                if (!embeddedValidated) {
+                    val errText = test.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                    error("dash 实测失败：${errText.take(200) ?: "exit!=0"}")
                 }
-                if (!embeddedValidated) error("dash 无法执行；官方包使用 com.termux 固定 PREFIX")
                 lastSetupError = "已就绪"
-                return@withContext "embedded 已安装：${prefix.path}"
+                return@withContext "embedded 已安装：${prefix.path}（dash 直跑正常；pkg 可能因官方包 com.termux 硬编码路径受限，逐命令如实报告）"
         } catch (e: Exception) {
             lastSetupError = "内嵌 bootstrap 安装失败：${e.message ?: e.javaClass.simpleName}"
         } finally {
