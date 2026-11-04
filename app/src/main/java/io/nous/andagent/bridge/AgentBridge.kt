@@ -1,0 +1,264 @@
+package io.nous.andagent.bridge
+
+import android.os.Handler
+import android.os.Looper
+import android.webkit.JavascriptInterface
+import android.webkit.WebView
+import io.nous.andagent.tools.Tool
+import io.nous.andagent.ui.SettingsStore
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
+import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+
+/**
+ * JS <-> Kotlin bridge.
+ *
+ * All JS calls arrive on WebView's JavaBridge thread; all JS dispatches are
+ * posted to the main thread (evaluateJavascript is not thread-safe). Network
+ * I/O runs on OkHttp's dispatcher, tool execution on a small executor.
+ *
+ * Events are pushed as a single JSON string into
+ * `window.__andagent.receive(json)`.
+ */
+class AgentBridge(
+    private val webViewProvider: () -> WebView?,
+    private val settings: SettingsStore,
+    private val tools: Map<String, Tool>,
+) {
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val toolExecutor = Executors.newFixedThreadPool(2)
+    private val calls = ConcurrentHashMap<String, Call>()
+
+    @Volatile
+    private var released = false
+
+    private val http = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(0, TimeUnit.SECONDS) // SSE: keep the stream open
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(false)
+        .build()
+
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
+    /* ----------------------------- settings ----------------------------- */
+
+    @JavascriptInterface
+    fun getSettings(): String = buildJsonObject {
+        put("baseUrl", settings.baseUrl)
+        put("apiKey", settings.apiKey)
+        put("model", settings.model)
+        put("systemPrompt", settings.systemPrompt)
+    }.toString()
+
+    @JavascriptInterface
+    fun saveSettings(raw: String) {
+        val obj = runCatching { json.parseToJsonElement(raw).jsonObject }.getOrNull() ?: return
+        obj["baseUrl"]?.jsonPrimitive?.contentOrNull?.let { settings.baseUrl = it }
+        obj["apiKey"]?.jsonPrimitive?.contentOrNull?.let { settings.apiKey = it }
+        obj["model"]?.jsonPrimitive?.contentOrNull?.let { settings.model = it }
+        obj["systemPrompt"]?.jsonPrimitive?.contentOrNull?.let { settings.systemPrompt = it }
+    }
+
+    /* ------------------------------ tools ------------------------------- */
+
+    @JavascriptInterface
+    fun toolExec(reqId: String, name: String, argsJson: String) {
+        toolExecutor.execute {
+            val tool = tools[name]
+            if (tool == null) {
+                emitToolResult(reqId, false, "ERROR: unknown tool '$name'")
+                return@execute
+            }
+            val args = runCatching {
+                json.parseToJsonElement(argsJson.ifBlank { "{}" }).jsonObject
+            }.getOrElse {
+                emitToolResult(reqId, false, "ERROR: bad arguments JSON: ${it.message}")
+                return@execute
+            }
+            val result = runCatching { runBlocking { tool.execute(args) } }
+                .getOrElse { "ERROR: ${it.message ?: it.javaClass.simpleName}" }
+            emitToolResult(reqId, !result.startsWith("ERROR:"), result)
+        }
+    }
+
+    private fun emitToolResult(reqId: String, ok: Boolean, result: String) {
+        emit(buildJsonObject {
+            put("type", "tool.result")
+            put("id", reqId)
+            put("ok", ok)
+            put("result", result)
+        })
+    }
+
+    /* --------------------------- LLM transport -------------------------- */
+
+    @JavascriptInterface
+    fun llmFetchStart(reqId: String, url: String, headersJson: String, body: String) {
+        val headers = runCatching { json.parseToJsonElement(headersJson).jsonObject }.getOrNull()
+        val builder = Request.Builder().url(url)
+        headers?.forEach { (key, value) ->
+            if (key.lowercase() !in HOP_BY_HOP) {
+                value.jsonPrimitive.contentOrNull?.let { builder.header(key, it) }
+            }
+        }
+        builder.post(body.toRequestBody(JSON_MEDIA))
+
+        val call = http.newCall(builder.build())
+        calls[reqId] = call
+
+        call.enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                calls.remove(reqId)
+                if (call.isCanceled()) {
+                    emit(buildJsonObject { put("type", "llm.done"); put("id", reqId) })
+                } else {
+                    emitError(reqId, e.message ?: "network error")
+                }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                val pump = ChunkPump(mainHandler) { lines ->
+                    emit(buildJsonObject {
+                        put("type", "llm.chunks")
+                        put("id", reqId)
+                        put("lines", JsonArray(lines.map { JsonPrimitive(it) }))
+                    })
+                }
+                try {
+                    response.use { resp ->
+                        emit(buildJsonObject {
+                            put("type", "llm.headers")
+                            put("id", reqId)
+                            put("status", resp.code)
+                            put("statusText", resp.message)
+                            put("headers", buildJsonObject {
+                                resp.headers.names().forEach { name ->
+                                    put(name, resp.headers.values(name).joinToString(","))
+                                }
+                            })
+                        })
+
+                        val source = resp.body?.source()
+                        if (source != null) {
+                            while (true) {
+                                val line = source.readUtf8Line() ?: break
+                                if (!call.isCanceled()) pump.add(line)
+                            }
+                        }
+                    }
+                    pump.finish()
+                    emit(buildJsonObject { put("type", "llm.done"); put("id", reqId) })
+                } catch (e: IOException) {
+                    pump.finish()
+                    if (call.isCanceled()) {
+                        emit(buildJsonObject { put("type", "llm.done"); put("id", reqId) })
+                    } else {
+                        emitError(reqId, e.message ?: "stream error")
+                    }
+                } finally {
+                    calls.remove(reqId)
+                }
+            }
+        })
+    }
+
+    @JavascriptInterface
+    fun llmCancel(reqId: String) {
+        calls.remove(reqId)?.cancel()
+    }
+
+    private fun emitError(reqId: String, message: String) {
+        emit(buildJsonObject {
+            put("type", "llm.error")
+            put("id", reqId)
+            put("message", message)
+        })
+    }
+
+    /* ---------------------------- plumbing ----------------------------- */
+
+    private fun emit(event: JsonObject) {
+        if (released) return
+        val payload = event.toString()
+        // JsonPrimitive(payload).toString() is a correctly escaped JS string literal.
+        val script = "window.__andagent&&window.__andagent.receive(${JsonPrimitive(payload)})"
+        mainHandler.post {
+            if (!released) webViewProvider()?.evaluateJavascript(script, null)
+        }
+    }
+
+    fun shutdown() {
+        released = true
+        calls.values.forEach { it.cancel() }
+        calls.clear()
+        toolExecutor.shutdownNow()
+        http.dispatcher.executorService.shutdown()
+        http.connectionPool.evictAll()
+    }
+
+    /**
+     * Coalesces SSE lines for ~16ms so a fast token stream does not flood the
+     * main thread with one evaluateJavascript call per line.
+     */
+    private class ChunkPump(
+        private val handler: Handler,
+        private val sink: (List<String>) -> Unit,
+    ) {
+        private val lock = Any()
+        private val buffer = ArrayList<String>(64)
+        private var scheduled = false
+
+        fun add(line: String) {
+            val needSchedule: Boolean
+            synchronized(lock) {
+                buffer.add(line)
+                needSchedule = !scheduled
+                scheduled = true
+            }
+            if (needSchedule) handler.postDelayed({ flush() }, 16L)
+        }
+
+        fun flush() {
+            val batch: List<String>
+            synchronized(lock) {
+                if (buffer.isEmpty()) {
+                    scheduled = false
+                    return
+                }
+                batch = buffer.toList()
+                buffer.clear()
+                scheduled = false
+            }
+            sink(batch)
+        }
+
+        fun finish() = flush()
+    }
+
+    companion object {
+        private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
+        private val HOP_BY_HOP = setOf(
+            "host", "content-length", "connection", "transfer-encoding",
+            "accept-encoding", "keep-alive", "upgrade", "proxy-connection",
+        )
+    }
+}

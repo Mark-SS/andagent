@@ -7,3 +7,8 @@ app/build/
 captures/
 .externalNativeBuild/
 .cxx/
+
+# web
+web/node_modules/
+web/public/pi-bundle.js
+.kotlin/

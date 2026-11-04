@@ -4,8 +4,8 @@ import android.content.Context
 import android.content.SharedPreferences
 
 /**
- * Minimal settings store. Defaults are hardcoded to the Zhipu (智谱) GLM
- * endpoint; user can override any field in the settings screen.
+ * Settings persisted in SharedPreferences. The WebView reads/writes these
+ * through AgentBridge, so no credentials ever ship inside web assets.
  */
 class SettingsStore(context: Context) {
     private val prefs: SharedPreferences =
@@ -19,6 +19,10 @@ class SettingsStore(context: Context) {
         const val DEFAULT_BASE_URL = "https://open.bigmodel.cn/api/paas/v4"
         const val DEFAULT_API_KEY = "REDACTED"
         const val DEFAULT_MODEL = "glm-4.5-flash"
+        const val DEFAULT_SYSTEM_PROMPT =
+            "你是 AndAgent，一个运行在 Android 手机上的智能助手。\n" +
+                "回答使用简体中文，简洁、直接、可执行；需要数据时先调用工具，不要编造。\n" +
+                "你可以使用 get_time、device_info、storage_scan、album_stats 四个工具了解设备状态。"
     }
 
     var baseUrl: String
@@ -32,4 +36,8 @@ class SettingsStore(context: Context) {
     var model: String
         get() = prefs.getString("model", DEFAULT_MODEL)!!
         set(value) = prefs.edit().putString("model", value).apply()
+
+    var systemPrompt: String
+        get() = prefs.getString("system_prompt", DEFAULT_SYSTEM_PROMPT)!!
+        set(value) = prefs.edit().putString("system_prompt", value).apply()
 }
