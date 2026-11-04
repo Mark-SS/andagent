@@ -42,3 +42,11 @@ web 化重构（pi+assistant-ui）/ 日历闹钟剪贴板通知 / ECharts / Shiz
 ## 里程碑
 - v0.11.0（R7）：P0 全清 + NFC 读写 + 内嵌 WebView
 - v0.12.0（R8）：对话流富渲染 + 小组件后台全工具 + 应用商店
+
+## 🟢 R12+ 战役：Android 系统 API 全覆盖（简报就绪，串行派 Codex）
+| 刀 | 内容 | 工具数 |
+|---|---|---|
+| R12 | 连接与媒体：telephony_info/data_usage/audio_state/audio_set_volume/media_library/ringtone_set/wallpaper_set/vibrate | +8 |
+| R13 | 设备管理：torch/screen_state/brightness_set/volume_dnd/installed_app_details/usage_stats/biometric_check | +7 |
+| R14 | 自动化效率：alarm_wait/countdown/calendar_reminder_check/hotspot/airplane/tts/screenshot_quick | +6 |
+（R9 SQLite+媒体播放 → R10 外部数据 → R11 Scriptable UI 优先于本战役）
