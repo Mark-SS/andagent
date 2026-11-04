@@ -42,8 +42,8 @@ android {
         applicationId = "io.nous.andagent"
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
-        versionName = "0.4.0"
+        versionCode = 4
+        versionName = "0.5.0"
     }
 
     buildTypes {
@@ -69,4 +69,15 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+
+    // Shizuku: shell-uid process execution (screen recording). Apache-2.0.
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
+
+    // Health Connect step data.
+    // NOTE: 1.2.0-alpha06 (mentioned in the brief) declares minCompileSdk=37 and
+    // AGP 9.1.0; this project is compileSdk 34 / AGP 8.7.3. 1.1.0-alpha07 is the
+    // newest connect-client whose AAR metadata still allows compileSdk 34 and
+    // exposes the same StepsRecord/PermissionController APIs used here.
+    implementation("androidx.health.connect:connect-client:1.1.0-alpha07")
 }

@@ -25,6 +25,25 @@
     <!-- Pre-13 fallback -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
+    <!-- Pre-29 public Downloads/Documents writes (scoped storage starts at 29) -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+
+    <!-- Shizuku: the manager grants this signature permission to the app -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
+
+    <!-- Health Connect step data (runtime grant via Health Connect UI) -->
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+
+    <queries>
+        <!-- Shizuku manager visibility (status card / install check) -->
+        <package android:name="moe.shizuku.privileged.api" />
+        <!-- Health Connect provider app on Android 13 and below -->
+        <package android:name="com.google.android.apps.healthdata" />
+        <intent>
+            <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+        </intent>
+    </queries>
 
     <application
         android:name=".AndAgentApp"
@@ -33,6 +52,15 @@
         android:theme="@style/Theme.AndAgent"
         android:allowBackup="false"
         android:usesCleartextTraffic="true">
+
+        <!-- Shizuku API 13: runtime binder bridge (must be declared by the app) -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:multiprocess="false"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
 
         <activity
             android:name=".MainActivity"
@@ -43,6 +71,22 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Health Connect rationale screen, Android 13 and below -->
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
         </activity>
+
+        <!-- Health Connect rationale screen, Android 14+ -->
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:exported="true"
+            android:targetActivity=".MainActivity"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
     </application>
 </manifest>

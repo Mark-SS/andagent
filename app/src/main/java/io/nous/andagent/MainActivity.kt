@@ -17,9 +17,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
+import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.PermissionController
+import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.StepsRecord
 import androidx.webkit.WebViewAssetLoader
 import io.nous.andagent.bridge.AgentBridge
 import io.nous.andagent.bridge.PermissionBroker
+import io.nous.andagent.shell.ShizukuShell
 import io.nous.andagent.tools.AlarmSetTool
 import io.nous.andagent.tools.AlbumStatsTool
 import io.nous.andagent.tools.AppListTool
@@ -31,13 +36,28 @@ import io.nous.andagent.tools.CalendarListTool
 import io.nous.andagent.tools.ClipboardReadTool
 import io.nous.andagent.tools.ClipboardWriteTool
 import io.nous.andagent.tools.DeviceInfoTool
+import io.nous.andagent.tools.FileDownloadTool
+import io.nous.andagent.tools.FileListTool
+import io.nous.andagent.tools.FileReadTool
+import io.nous.andagent.tools.FileSearchTool
+import io.nous.andagent.tools.FileWriteTool
 import io.nous.andagent.tools.GetTimeTool
 import io.nous.andagent.tools.NotifySendTool
+import io.nous.andagent.tools.ScreenRecordListTool
+import io.nous.andagent.tools.ScreenRecordStopTool
+import io.nous.andagent.tools.ScreenRecordTool
+import io.nous.andagent.tools.SensorListTool
+import io.nous.andagent.tools.SensorReadTool
+import io.nous.andagent.tools.StepsHistoryTool
+import io.nous.andagent.tools.StepsTodayTool
 import io.nous.andagent.tools.StorageScanTool
 import io.nous.andagent.tools.TimerSetTool
 import io.nous.andagent.tools.Tool
 import io.nous.andagent.tools.WifiInfoTool
 import io.nous.andagent.ui.SettingsStore
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Thin shell: a full-screen WebView that hosts the pi agent + assistant-ui.
@@ -48,6 +68,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
     private lateinit var bridge: AgentBridge
     private lateinit var permissionBroker: PermissionBroker
+    private lateinit var shizuku: ShizukuShell
+
+    private val healthPermissionResult = AtomicReference<Set<String>>(emptySet())
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
@@ -56,12 +79,20 @@ class MainActivity : ComponentActivity() {
             if (::permissionBroker.isInitialized) permissionBroker.onResult(result)
         }
 
+    private val healthPermissionLauncher = registerForActivityResult(
+        PermissionController.createRequestPermissionResultContract(),
+    ) { granted: Set<String> ->
+        healthPermissionResult.set(granted)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val settingsStore = SettingsStore(this)
         val appContext = applicationContext
         permissionBroker = PermissionBroker(this, permissionLauncher)
+        shizuku = ShizukuShell(appContext).also { it.init() }
+
         val tools: Map<String, Tool> = mapOf(
             "get_time" to GetTimeTool(),
             "device_info" to DeviceInfoTool(appContext),
@@ -79,6 +110,21 @@ class MainActivity : ComponentActivity() {
             "clipboard_read" to ClipboardReadTool(appContext),
             "notify_send" to NotifySendTool(appContext, permissionBroker),
             "app_list" to AppListTool(appContext),
+            // R3a: Shizuku-backed screen recording
+            "screen_record" to ScreenRecordTool(appContext, shizuku),
+            "screen_record_stop" to ScreenRecordStopTool(appContext, shizuku),
+            "screen_record_list" to ScreenRecordListTool(appContext, shizuku, permissionBroker),
+            // R3a: files
+            "file_download" to FileDownloadTool(appContext, permissionBroker),
+            "file_search" to FileSearchTool(appContext, permissionBroker),
+            "file_write" to FileWriteTool(appContext, permissionBroker),
+            "file_read" to FileReadTool(appContext),
+            "file_list" to FileListTool(appContext, permissionBroker),
+            // R3a: sensors + health
+            "sensor_list" to SensorListTool(appContext),
+            "sensor_read" to SensorReadTool(appContext),
+            "steps_today" to StepsTodayTool(appContext),
+            "steps_history" to StepsHistoryTool(appContext),
         )
 
         bridge = AgentBridge(
@@ -86,6 +132,9 @@ class MainActivity : ComponentActivity() {
             settings = settingsStore,
             tools = tools,
             permissions = permissionBroker,
+            shizukuStatus = { shizuku.statusJson() },
+            shizukuRequest = { shizuku.requestPermission() },
+            healthPermissionRequest = { requestHealthPermission() },
         )
 
         val assetLoader = WebViewAssetLoader.Builder()
@@ -144,8 +193,35 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         bridge.shutdown()
+        if (::shizuku.isInitialized) shizuku.shutdown()
         webView.destroy()
         super.onDestroy()
+    }
+
+    /**
+     * Health Connect uses the Activity Result API; the bridge only posts here.
+     * Returns an immediate JSON ack / error for Settings.tsx.
+     */
+    private fun requestHealthPermission(): String {
+        val status = runCatching { HealthConnectClient.getSdkStatus(this) }.getOrElse { -1 }
+        when (status) {
+            HealthConnectClient.SDK_UNAVAILABLE -> return buildJsonObject {
+                put("requested", false)
+                put("message", "未安装 Health Connect。请先安装应用（market://details?id=com.google.android.apps.healthdata）")
+            }.toString()
+            HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED -> return buildJsonObject {
+                put("requested", false)
+                put("message", "Health Connect 需要更新，请先在应用商店更新")
+            }.toString()
+        }
+        val permissions = setOf(HealthPermission.getReadPermission(StepsRecord::class))
+        runOnUiThread {
+            runCatching { healthPermissionLauncher.launch(permissions) }
+        }
+        return buildJsonObject {
+            put("requested", true)
+            put("message", "已打开 Health Connect 授权页，请允许读取步数")
+        }.toString()
     }
 
     private fun requestMediaPermissions() {

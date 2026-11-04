@@ -43,6 +43,9 @@ class AgentBridge(
     private val settings: SettingsStore,
     private val tools: Map<String, Tool>,
     private val permissions: PermissionBroker,
+    private val shizukuStatus: () -> String = { "{\"status\":\"unavailable\"}" },
+    private val shizukuRequest: () -> String = { "{\"requested\":false}" },
+    private val healthPermissionRequest: () -> String = { "{\"requested\":false}" },
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val toolExecutor = Executors.newFixedThreadPool(2)
@@ -112,6 +115,35 @@ class AgentBridge(
                 granted.forEach { (name, ok) -> put(name, ok) }
             })
         })
+    }
+
+    /* ------------------------- privilege / health ----------------------- */
+
+    /** {"status":"granted"|"not_granted"|"unavailable", ...} for Settings.tsx. */
+    @JavascriptInterface
+    fun shizukuStatus(): String = runCatching { shizukuStatus() }.getOrElse {
+        buildJsonObject {
+            put("status", "unavailable")
+            put("note", it.message ?: "Shizuku 状态读取失败")
+        }.toString()
+    }
+
+    /** Main-thread posted by MainActivity; returns an immediate ack JSON. */
+    @JavascriptInterface
+    fun shizukuRequest(): String = runCatching { shizukuRequest() }.getOrElse {
+        buildJsonObject {
+            put("requested", false)
+            put("message", it.message ?: "Shizuku 授权请求失败")
+        }.toString()
+    }
+
+    /** Activity Result API is only touched on the main thread in MainActivity. */
+    @JavascriptInterface
+    fun healthPermissionRequest(): String = runCatching { healthPermissionRequest() }.getOrElse {
+        buildJsonObject {
+            put("requested", false)
+            put("message", it.message ?: "Health Connect 授权请求失败")
+        }.toString()
     }
 
     /* ------------------------------ tools ------------------------------- */

@@ -188,6 +188,139 @@ const TOOL_DEFS = [
     description: "列出已安装应用（包名、应用名、版本、是否系统应用），按安装时间倒序，最多 200 个。",
     parameters: { type: "object", properties: {}, required: [] },
   },
+  {
+    name: "screen_record",
+    description:
+      "开始录屏（Shizuku 提权，无系统录屏授权弹窗）。duration 秒，默认 30，最大 300；立即返回保存路径，可调用 screen_record_stop 提前停止。需要先激活 Shizuku。",
+    parameters: {
+      type: "object",
+      properties: {
+        duration: { type: "integer", description: "录制秒数，默认 30，最大 300" },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "screen_record_stop",
+    description: "停止正在进行的 screen_record 录屏，并让媒体库扫描已保存的视频。",
+    parameters: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "screen_record_list",
+    description:
+      "列出已录制的屏幕视频（/sdcard/Movies/andagent_*.mp4），返回文件名、路径、大小、时长与修改时间。",
+    parameters: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "file_download",
+    description:
+      "用 HTTP GET 下载文件到 Downloads/andagent/，支持大文件与重定向；返回保存路径与大小。",
+    parameters: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "下载地址（http/https）" },
+        filename: { type: "string", description: "可选：保存文件名，默认从 URL 推断" },
+      },
+      required: ["url"],
+    },
+  },
+  {
+    name: "file_search",
+    description:
+      "按文件名搜索用户文件，支持关键词或 *.pdf 这类通配符；返回路径、大小、类型、修改时间，最多 50 条。",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "文件名关键词或通配符，例如 报告、*.pdf、IMG_2026*",
+        },
+        dir: {
+          type: "string",
+          description: "可选：限定目录 downloads|documents|movies|music|pictures",
+        },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "file_write",
+    description:
+      "写入文本文件。dir 为 downloads（Download/andagent/）、documents（Documents/）或 app_private（应用私有目录）；返回完整路径与字节数。",
+    parameters: {
+      type: "object",
+      properties: {
+        dir: { type: "string", description: "downloads | documents | app_private，默认 downloads" },
+        name: { type: "string", description: "文件名，例如 notes.txt" },
+        content: { type: "string", description: "文件内容（UTF-8）" },
+      },
+      required: ["name"],
+    },
+  },
+  {
+    name: "file_read",
+    description:
+      "读取文本文件。可用 path（绝对路径或 content://），也可用 dir（downloads|documents|app_private）+ name。上限 100KB，二进制文件返回错误。",
+    parameters: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "文件绝对路径或 content:// URI" },
+        dir: { type: "string", description: "与 name 搭配：downloads | documents | app_private" },
+        name: { type: "string", description: "文件名（与 dir 搭配）" },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "file_list",
+    description:
+      "列出 Download/andagent/（默认）或指定公共目录下的文件，返回名称、大小、修改时间，最多 100 条。",
+    parameters: {
+      type: "object",
+      properties: {
+        dir: { type: "string", description: "downloads（默认）|documents|movies|music|pictures" },
+        subdir: { type: "string", description: "可选：子目录名；downloads 默认 andagent，其他默认根目录" },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "sensor_list",
+    description: "枚举设备全部传感器：名称、类型、厂商、分辨率、最大量程、功耗、最小采样间隔。",
+    parameters: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "sensor_read",
+    description:
+      "读取指定传感器当前值（采样 300ms 取平均）。支持 accelerometer|gyroscope|magnetometer|light|pressure|proximity|humidity|ambient_temp；返回数值、单位与物理含义。",
+    parameters: {
+      type: "object",
+      properties: {
+        sensor: {
+          type: "string",
+          description:
+            "accelerometer | gyroscope | magnetometer | light | pressure | proximity | humidity | ambient_temp",
+        },
+      },
+      required: ["sensor"],
+    },
+  },
+  {
+    name: "steps_today",
+    description: "读取今天的步数（Health Connect，需要用户授权步数读取权限）。",
+    parameters: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "steps_history",
+    description: "读取最近 N 天每日步数（Health Connect），默认 7 天，最多 30 天。",
+    parameters: {
+      type: "object",
+      properties: {
+        days: { type: "integer", description: "天数，默认 7，范围 1–30" },
+      },
+      required: [],
+    },
+  },
 ] satisfies PiTool[];
 
 /**
