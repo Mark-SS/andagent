@@ -49,4 +49,5 @@ web 化重构（pi+assistant-ui）/ 日历闹钟剪贴板通知 / ECharts / Shiz
 | R12 | 连接与媒体：telephony_info/data_usage/audio_state/audio_set_volume/media_library/ringtone_set/wallpaper_set/vibrate | +8 |
 | R13 | 设备管理：torch/screen_state/brightness_set/volume_dnd/installed_app_details/usage_stats/biometric_check | +7 |
 | R14 | 自动化效率：alarm_wait/countdown/calendar_reminder_check/hotspot/airplane/tts/screenshot_quick | +6 |
-（R9 SQLite+媒体播放 → R10 外部数据 → R11 Scriptable UI 优先于本战役）
+（R9 SQLite+媒体播放 → R10 外部数据 → R11 Scriptable UI → R12-R14 系统API → R15 图片编辑）
+| R15 | 图片编辑套件 | +4 |
