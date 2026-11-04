@@ -45,6 +45,8 @@ export const DEFAULT_SYSTEM_PROMPT = [
   "## 输出呈现",
   "- 工具返回的 JSON：提炼要点用文字或表格表达；用户要看对比/趋势/占比时用 chart 块。",
   "- 屏幕截图（screen_capture）结果会以缩略图展示，结合画面继续推理。",
+  "- 位置结果用 ```geo 块，内容为 {\"lat\":数字,\"lng\":数字,\"label\":字符串} 的 JSON。",
+  "- 照片列表用 ```photos 块，内容为 album_photos 返回的 JSON；键值状态用 ```kv 块，内容为 JSON 对象或每行 label: value。",
   "- 长输出（shell_exec、file_read）给出摘要 + 关键行，不整段粘贴。",
 ].join("\n");
 
@@ -59,6 +61,7 @@ const DEV_SETTINGS_KEY = "andagent.settings.dev.v1";
 
 interface AndroidBridge {
   getSettings(): string;
+  openEmbeddedWebview(uri: string): string;
   saveSettings(json: string): void;
   getAppVersion(): string;
   widgetList(): string;
@@ -162,7 +165,7 @@ export function execTool(name: string, args: unknown): Promise<{ ok: boolean; re
     const timer = window.setTimeout(() => {
       toolPending.delete(id);
       resolve({ ok: false, result: "ERROR: 工具执行超时（60s）" });
-    }, 60_000);
+    }, 65_000);
     toolPending.set(id, { resolve, timer });
     try {
       b.toolExec(id, name, JSON.stringify(args ?? {}));
@@ -437,6 +440,11 @@ function handleEvent(payload: string): void {
   }
   const type = event.type as string;
 
+  if (type === "notice") {
+    window.dispatchEvent(new CustomEvent("andagent:notice", { detail: String(event.message ?? "") }));
+    return;
+  }
+
   if (type === "tool.result") {
     const id = event.id as string;
     const pending = toolPending.get(id);
@@ -669,3 +677,8 @@ export function widgetSave(specJson: string, id = ""): string { return bridge()?
 export function widgetPin(id: string): string { return bridge()?.widgetPin(id) ?? "ERROR: 设备桥不可用"; }
 export function widgetRefresh(id: string): string { return bridge()?.widgetRefresh(id) ?? "ERROR: 设备桥不可用"; }
 export function widgetDelete(id: string): string { return bridge()?.widgetDelete(id) ?? "ERROR: 设备桥不可用"; }
+
+export function openEmbeddedWebview(uri: string): string {
+  try { const result = bridge()?.openEmbeddedWebview(uri) ?? "ERROR: 设备桥不可用"; return result.startsWith("ERROR:") ? result : ""; }
+  catch (e) { return `ERROR: ${String(e)}`; }
+}

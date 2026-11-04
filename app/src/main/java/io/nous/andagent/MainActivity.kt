@@ -1,6 +1,14 @@
 package io.nous.andagent
 
 import android.Manifest
+import android.app.Dialog
+import android.widget.LinearLayout
+import android.widget.TextView
+import android.widget.Button
+import android.nfc.NfcAdapter
+import io.nous.andagent.tools.NfcSession
+import io.nous.andagent.tools.NfcTool
+import io.nous.andagent.tools.WebEmbedTool
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
@@ -98,6 +106,9 @@ import java.util.concurrent.atomic.AtomicReference
 class MainActivity : ComponentActivity() {
 
     private lateinit var webView: WebView
+    private lateinit var nfcSession: NfcSession
+    private var embeddedDialog: Dialog? = null
+    private lateinit var assetLoader: WebViewAssetLoader
     private lateinit var bridge: AgentBridge
     private lateinit var permissionBroker: PermissionBroker
     private lateinit var shizuku: ShizukuShell
@@ -175,10 +186,18 @@ class MainActivity : ComponentActivity() {
 
         val termuxEnv = TermuxEnv(appContext, shizuku)
         val btConnect = BtConnectTool(appContext, permissionBroker)
+        nfcSession = NfcSession(this) { message ->
+            if (::bridge.isInitialized) bridge.emitNotice(message)
+        }
         val tools: MutableMap<String, Tool> = mutableMapOf()
         quickJsEngine = QuickJsEngine(tools, scriptToolExecutor)
         tools.putAll(mapOf(
             "get_time" to GetTimeTool(),
+            "nfc_status" to NfcTool(nfcSession, "nfc_status"),
+            "nfc_read" to NfcTool(nfcSession, "nfc_read"),
+            "nfc_write_text" to NfcTool(nfcSession, "nfc_write_text"),
+            "nfc_write_uri" to NfcTool(nfcSession, "nfc_write_uri"),
+            "web_embed" to WebEmbedTool(),
             "device_info" to DeviceInfoTool(appContext),
             "storage_scan" to StorageScanTool(appContext),
             "album_stats" to AlbumStatsTool(appContext),
@@ -257,6 +276,7 @@ class MainActivity : ComponentActivity() {
             shizukuRequest = { shizuku.requestPermission() },
             healthPermissionRequest = { requestHealthPermission() },
             termuxStatus = { termuxEnv.status() },
+            embeddedWebviewOpen = { uri -> openEmbeddedWebview(uri) },
             termuxGrant = {
                 if (!shizuku.isGranted()) "ERROR: 请先启动 Shizuku 并在设置页授权 AndAgent"
                 else {
@@ -269,7 +289,7 @@ class MainActivity : ComponentActivity() {
             },
         )
 
-        val assetLoader = WebViewAssetLoader.Builder()
+        assetLoader = WebViewAssetLoader.Builder()
             .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
             .build()
 
@@ -323,7 +343,46 @@ class MainActivity : ComponentActivity() {
         requestMediaPermissions()
     }
 
+    override fun onResume() { super.onResume(); if (::nfcSession.isInitialized) nfcSession.onResume() }
+
+    override fun onPause() { if (::nfcSession.isInitialized) nfcSession.onPause(); super.onPause() }
+
+    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); if (::nfcSession.isInitialized) nfcSession.onNewIntent(intent) }
+
+    private fun openEmbeddedWebview(raw: String): String {
+        val uri = Uri.parse(raw)
+        if (uri.scheme != "https" || uri.host.isNullOrBlank()) return "ERROR: 内嵌浏览器仅允许 HTTPS 网页"
+        runOnUiThread {
+            embeddedDialog?.dismiss()
+            val browser = WebView(this).apply {
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                settings.allowFileAccess = false
+                settings.allowContentAccess = false
+                webViewClient = object : WebViewClient() {
+                    override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? = assetLoader.shouldInterceptRequest(request.url)
+                    override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean = request.url.scheme != "https"
+                }
+            }
+            val dialog = Dialog(this)
+            val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(16, 12, 16, 12) }
+            header.addView(TextView(this).apply { text = uri.host; textSize = 16f; setSingleLine(true) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            header.addView(Button(this).apply { text = "关闭"; setOnClickListener { dialog.dismiss() } })
+            val container = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; addView(header); addView(browser, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)) }
+            dialog.setContentView(container)
+            dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            dialog.setOnDismissListener { browser.stopLoading(); browser.loadUrl("about:blank"); (browser.parent as? ViewGroup)?.removeView(browser); browser.destroy(); if (embeddedDialog === dialog) embeddedDialog = null }
+            embeddedDialog = dialog
+            dialog.show()
+            dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            browser.loadUrl(raw)
+        }
+        return "OPENED"
+    }
+
     override fun onDestroy() {
+        embeddedDialog?.dismiss()
+        if (::nfcSession.isInitialized) nfcSession.close()
         bridge.shutdown()
         if (::quickJsEngine.isInitialized) { WidgetToolRuntime.detach(quickJsEngine); quickJsEngine.shutdown() }
         scriptToolExecutor.shutdownNow()

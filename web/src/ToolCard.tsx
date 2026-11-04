@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ToolCallMessagePartProps } from "@assistant-ui/react";
+import { WebViewCard } from "./WebViewCard";
 
 interface ToolMeta {
   label: string;
@@ -9,6 +10,11 @@ interface ToolMeta {
 
 const META: Record<string, ToolMeta> = {
   get_time: { label: "获取时间", icon: "🕐" },
+  nfc_status: { label: "NFC 状态", icon: "📶" },
+  nfc_read: { label: "读取 NFC", icon: "📶" },
+  nfc_write_text: { label: "写入 NFC 文本", icon: "📶", destructive: true },
+  nfc_write_uri: { label: "写入 NFC 链接", icon: "📶", destructive: true },
+  web_embed: { label: "内嵌浏览器", icon: "🌐" },
   device_info: { label: "设备信息", icon: "📱" },
   storage_scan: { label: "存储扫描", icon: "💾" },
   album_stats: { label: "相册统计", icon: "🖼️" },
@@ -128,12 +134,31 @@ function summarize(raw: string): string {
     .slice(0, 120);
 }
 
+function JsonNode({ label, value, depth = 0 }: { label: string; value: unknown; depth?: number }) {
+  const [open, setOpen] = useState(depth < 1);
+  if (value !== null && typeof value === "object") {
+    const entries = Object.entries(value);
+    return <div className="json-node" style={{ marginLeft: depth ? 12 : 0 }}>
+      <button type="button" onClick={() => setOpen(!open)}>{open ? "▾" : "▸"} {label} <span>{Array.isArray(value) ? `[${entries.length}]` : `{${entries.length}}`}</span></button>
+      {open && entries.map(([key, child]) => <JsonNode key={key} label={key} value={child} depth={depth + 1} />)}
+    </div>;
+  }
+  return <div className="json-leaf" style={{ marginLeft: depth * 12 }}><span>{label}:</span> {JSON.stringify(value)}</div>;
+}
+
 export function ToolCard(props: ToolCallMessagePartProps) {
   const running = props.result === undefined;
   const failed = !!props.isError;
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [notice, setNotice] = useState("");
+  useEffect(() => {
+    if (!props.toolName.startsWith("nfc_")) return;
+    const listener = (event: Event) => setNotice((event as CustomEvent<string>).detail);
+    window.addEventListener("andagent:notice", listener);
+    return () => window.removeEventListener("andagent:notice", listener);
+  }, [props.toolName]);
 
   useEffect(() => {
     setOpen(running);
@@ -151,7 +176,9 @@ export function ToolCard(props: ToolCallMessagePartProps) {
     try { const result = JSON.parse(raw) as { thumbnailBase64?: string }; if (result.thumbnailBase64) captureImage = `data:image/jpeg;base64,${result.thumbnailBase64}`; } catch { /* no image */ }
   }
 
-  const preview = running ? "正在执行…" : summarize(raw);
+  const preview = running ? (props.toolName.startsWith("nfc_") && props.toolName !== "nfc_status" ? "请贴近 NFC 卡片，最多等待 60 秒…" : "正在执行…") : summarize(raw);
+  const parsed = useMemo(() => { try { return formatted.json ? JSON.parse(raw) : null; } catch { return null; } }, [raw, formatted.json]);
+  const webUri = props.toolName === "web_embed" && parsed?.type === "webview" && typeof parsed.uri === "string" ? parsed.uri : null;
 
   return (
     <div
@@ -180,6 +207,8 @@ export function ToolCard(props: ToolCallMessagePartProps) {
         <span className={`tool-chevron${open ? " open" : ""}`}>⌄</span>
       </button>
 
+      {running && notice && <div className="tool-confirm">{notice}</div>}
+
       {written && !failed && !running && (
         <div className="tool-confirm">
           <span aria-hidden="true">✓</span>
@@ -187,6 +216,7 @@ export function ToolCard(props: ToolCallMessagePartProps) {
         </div>
       )}
 
+      {webUri && <WebViewCard uri={webUri} />}
       {captureImage && <img src={captureImage} alt="屏幕截图缩略图" style={{ display: "block", maxWidth: "100%", borderRadius: 8, margin: "8px auto" }} />}
 
       {open && (
@@ -216,6 +246,7 @@ export function ToolCard(props: ToolCallMessagePartProps) {
                   {copied ? "已复制" : "复制"}
                 </button>
               </div>
+              {formatted.json && parsed !== null && <details className="json-tree"><summary>树形查看</summary><JsonNode label="result" value={parsed} /></details>}
               <pre className="tool-pre tool-result">{captureImage ? "截图已保存；缩略图见上方" : shown}</pre>
               {canFold && (
                 <button

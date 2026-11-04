@@ -171,6 +171,11 @@ const TOOL_DEFS = [
   { name: "widget_generate", description: "根据 spec_description 编写 WidgetSpec v2 JSON。schemaVersion=2，name，background=#RRGGBB，padding=0..32，root 为 COLUMN/ROW，children 节点为 COLUMN/ROW/TEXT/SPACER/PROGRESS；TEXT 可用 binding=DATA + source + field。data.sources 为名称到数据源的对象；类型 STATIC(value 对象)、HTTP(https url)、SYSTEM(system=BATTERY/CLOCK/NETWORK/LOCALE/STORAGE/DEVICE_INFO/BATTERY_DETAIL/STEPS_TODAY)、SCRIPT(script 字符串，定义 refresh(ctx) 返回扁平对象；可调用 andagent.tool('steps_today','{}') 并 JSON.parse)。支持 dependsOn、ttlSeconds、fallback、sample。最多 40 节点、6 层、8 数据源。调用后据此输出完整 spec，再调用 widget_save_and_pin。", parameters: { type: "object", properties: { spec_description: { type: "string", description: "用户希望的小组件内容与样式" } }, required: ["spec_description"] } },
   { name: "widget_save_and_pin", description: "验证并保存 WidgetSpec v2 JSON，然后请求添加到桌面。编辑时可在设置页改 JSON。", parameters: { type: "object", properties: { spec_json: { type: "string", description: "完整 WidgetSpec v2 JSON 字符串" } }, required: ["spec_json"] } },
   { name: "js_eval", description: "在 QuickJS 中执行脚本。脚本可用 andagent.tool(name, argsJson) 同步调用设备工具，andagent.log(msg) 记录日志；最后表达式作为 JSON 结果。", parameters: { type: "object", properties: { script: { type: "string", description: "JavaScript 脚本" }, timeout_s: { type: "integer", description: "超时秒数，默认 30，最大 30" } }, required: ["script"] } },
+  { name: "nfc_status", description: "查询设备是否支持 NFC 及开关状态。", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "nfc_read", description: "等待贴卡最多 60 秒，读取 UID、技术和 NDEF 记录。调用前提示用户贴卡。", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "nfc_write_text", description: "覆盖 NFC 卡片的 NDEF 内容为文本；调用前说明写入内容并提示贴卡。", parameters: { type: "object", properties: { text: { type: "string", description: "写入文本" } }, required: ["text"] } },
+  { name: "nfc_write_uri", description: "覆盖 NFC 卡片的 NDEF 内容为 URI；调用前说明写入 URI 并提示贴卡。", parameters: { type: "object", properties: { uri: { type: "string", description: "写入 URI" } }, required: ["uri"] } },
+  { name: "web_embed", description: "在对话中展示内嵌浏览器按钮，支持 HTTPS 网站。", parameters: { type: "object", properties: { uri: { type: "string", description: "HTTPS 网站地址" } }, required: ["uri"] } },
   { name: "screen_capture", description: "经 scrcpy-server 取一帧屏幕并返回 JPEG 缩略图。", parameters: { type: "object", properties: {}, required: [] } },
   { name: "screen_record_h264", description: "用 scrcpy H.264 录屏到 Movies，可设置时长、码率和最大边长。", parameters: { type: "object", properties: { duration_s: { type: "integer", description: "秒数，默认 30" }, bit_rate: { type: "integer", description: "码率 bps" }, max_size: { type: "integer", description: "最大边长" } }, required: [] } },
   { name: "input_tap", description: "经 Shizuku 模拟屏幕点击。", parameters: { type: "object", properties: { x: { type: "integer", description: "横坐标" }, y: { type: "integer", description: "纵坐标" } }, required: ["x", "y"] } },
@@ -466,7 +471,7 @@ const TOOL_DEFS = [
   {
     name: "album_photos",
     description:
-      "查询相册照片（返回缩略图 base64 + content:// uri，可在对话中直接预览；配合 album_open 可在图库打开）。按文件夹/关键词过滤，默认最新 8 张。",
+      "查询相册照片（返回缩略图 base64 + content:// uri）。展示照片时将返回的 JSON 放入 ```photos 围栏，点击照片可在图库打开。按文件夹/关键词过滤，默认最新 8 张。",
     parameters: {
       type: "object",
       properties: {
@@ -498,6 +503,7 @@ const TOOL_DEFS = [
  */
 const CHART_GUIDE = [
   "数据可视化约定：",
+  "位置结果用 ```geo JSON 块；照片列表用 ```photos JSON 块；设备、电池等键值状态用 ```kv 块。",
   "1. 当需要展示数据对比、趋势或占比时，在回复里插入 ```chart 围栏代码块，围栏内容必须是合法的 ECharts option JSON。",
   "2. 只能使用纯 JSON：禁止函数、注释、变量、单引号或 JS 表达式（例如 formatter 函数一律不要写）。",
   "3. 图表类型仅限 bar、line、pie，用 series[].type 指定；数据标签直接用字符串/数字数组。",

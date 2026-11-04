@@ -6,10 +6,12 @@ import {
 import remarkGfm from "remark-gfm";
 import hljs from "highlight.js";
 import { ChartCard } from "./ChartCard";
+import { PhotosCard, KvCard, GeoCard } from "./RichCards";
 
 function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighlighterProps) {
   const [copied, setCopied] = useState(false);
-  const isChart = (language ?? "").toLowerCase() === "chart";
+  const kind = (language ?? "").toLowerCase();
+  const isChart = ["chart", "photos", "kv", "geo"].includes(kind);
 
   const html = useMemo(() => {
     if (isChart) return "";
@@ -24,7 +26,10 @@ function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighligh
   }, [code, language, isChart]);
 
   // ```chart fences carry ECharts option JSON, not source code.
-  if (isChart) return <ChartCard code={code} />;
+  if (kind === "chart") return <ChartCard code={code} />;
+  if (kind === "photos") return <PhotosCard code={code} />;
+  if (kind === "kv") return <KvCard code={code} />;
+  if (kind === "geo") return <GeoCard code={code} />;
 
   const copy = async () => {
     try {

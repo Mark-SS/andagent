@@ -1576,3 +1576,20 @@ button:disabled {
 .tool-copy {
   margin-left: auto;
 }
+
+.webview-card, .geo-card, .kv-card { margin: 10px 0; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: rgba(24,28,37,.8); }
+.webview-uri { overflow-wrap: anywhere; margin-bottom: 8px; }
+.webview-card button, .geo-card button { color: var(--text); border: 1px solid var(--border-strong); border-radius: 7px; padding: 7px 11px; background: rgba(127,155,255,.15); }
+.webview-error, .rich-error { color: #ff9c9c; margin-top: 8px; }
+.photos-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; margin: 10px 0; }
+.photos-grid button { min-width: 0; padding: 0; overflow: hidden; color: var(--text); background: rgba(24,28,37,.8); border: 1px solid var(--border); border-radius: 8px; }
+.photos-grid img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+.photos-grid span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 4px; font-size: 11px; }
+.kv-card div { display: grid; grid-template-columns: minmax(90px,35%) 1fr; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.kv-card dt { color: var(--muted); } .kv-card dd { margin: 0; overflow-wrap: anywhere; }
+.geo-card iframe { display: block; width: 100%; height: 230px; border: 0; border-radius: 7px; margin: 8px 0; }
+.json-tree { font: 11px var(--mono); margin-bottom: 8px; color: var(--muted); }
+.json-tree button { border: 0; background: transparent; color: var(--text); font: inherit; padding: 3px 0; }
+.json-tree button span, .json-leaf span { color: var(--muted); }
+.json-leaf { overflow-wrap: anywhere; padding: 2px 0; }
+@media(max-width:360px) { .photos-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
