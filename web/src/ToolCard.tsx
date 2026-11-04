@@ -43,6 +43,8 @@ const META: Record<string, ToolMeta> = {
   input_swipe: { label: "滑动屏幕", icon: "👆", destructive: true },
   input_text: { label: "输入文本", icon: "⌨️", destructive: true },
   open_settings: { label: "打开系统设置", icon: "⚙️" },
+  phone_call: { label: "拨打电话", icon: "📞" },
+  sms_send: { label: "发送短信", icon: "💬" },
   mic_record: { label: "麦克风录音", icon: "🎤" },
   screen_record: { label: "录屏", icon: "🎥" },
   screen_record_stop: { label: "停止录屏", icon: "⏹️" },

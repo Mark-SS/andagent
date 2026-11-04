@@ -117,11 +117,26 @@ class TermuxEnv(private val context: Context, private val shizuku: ShizukuShell?
             return@withContext "ERROR: 命令被危险路径黑名单拦截"
         when (backend()) {
             "embedded" -> {
-                // Primary path: run through Shizuku (shell uid). Android 10+
-                // blocks execve() inside an app's own data dir for
-                // targetSdk>=29 (SELinux execute_no_trans), but the shell uid
-                // is exempt — and it can read our private files fine. This is
-                // the same trick scrcpy uses for its server binary.
+                // Primary path: memfd + fexecve — reads the ELF into an
+                // anonymous memory fd, so Android 10+ W^X (SELinux
+                // execute_no_trans on /data files) never fires. Same process
+                // tree, no Shizuku needed.
+                runCatching {
+                    val memExecEnv = environment().toMutableMap()
+                    val (code, err) = MemExec.exec(
+                        elfFile = dash,
+                        args = listOf(dash.path, "-c", command),
+                        env = memExecEnv,
+                        workDir = home.path,
+                        timeoutSeconds = timeoutSeconds.toLong(),
+                    )
+                    return@withContext formatResult(code, err, "", "memfd")  // waitFor mixes stdout+stderr into second field
+                }.getOrElse { e ->
+                    // Fall through to Shizuku if memfd itself failed to load.
+                    "MEMFD_FAIL: ${e.message}"
+                }
+                // Secondary: Shizuku (shell uid). -1 means Shizuku itself
+                // failed (not granted / dead); fall through to direct exec.
                 shizuku?.let { sh ->
                     val shizukuCmd = buildString {
                         append("LD_LIBRARY_PATH=").append(prefix.path).append("/lib ")

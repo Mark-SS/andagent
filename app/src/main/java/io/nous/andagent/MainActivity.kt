@@ -61,6 +61,8 @@ import io.nous.andagent.tools.SensorReadTool
 import io.nous.andagent.tools.StepsHistoryTool
 import io.nous.andagent.tools.MicRecordTool
 import io.nous.andagent.tools.OpenSettingsTool
+import io.nous.andagent.tools.PhoneCallTool
+import io.nous.andagent.tools.SmsSendTool
 import io.nous.andagent.tools.StepsTodayTool
 import io.nous.andagent.tools.StorageScanTool
 import io.nous.andagent.tools.TimerSetTool
@@ -208,6 +210,8 @@ class MainActivity : ComponentActivity() {
             "steps_today" to StepsTodayTool(appContext, healthPermissionRequester),
             "open_settings" to OpenSettingsTool(appContext),
             "mic_record" to MicRecordTool(appContext, permissionBroker),
+            "phone_call" to PhoneCallTool(appContext, permissionBroker),
+            "sms_send" to SmsSendTool(appContext, permissionBroker),
             "steps_history" to StepsHistoryTool(appContext, healthPermissionRequester),
         )
 

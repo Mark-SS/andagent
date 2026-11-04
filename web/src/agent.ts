@@ -369,6 +369,28 @@ const TOOL_DEFS = [
       required: [],
     },
   },
+  {
+    name: "phone_call",
+    description:
+      "拨打电话：直接拨打或打开拨号盘预填号码（无权限时由用户按通话键确认）。",
+    parameters: {
+      type: "object",
+      properties: { number: { type: "string", description: "电话号码" } },
+      required: ["number"],
+    },
+  },
+  {
+    name: "sms_send",
+    description: "发送短信到指定号码（需要 SEND_SMS 权限，首次调用会弹授权）。",
+    parameters: {
+      type: "object",
+      properties: {
+        number: { type: "string", description: "接收方号码" },
+        text: { type: "string", description: "短信内容" },
+      },
+      required: ["number", "text"],
+    },
+  },
 ] satisfies PiTool[];
 
 /**
