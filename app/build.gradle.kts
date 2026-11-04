@@ -46,7 +46,7 @@ val downloadBootstrap by tasks.registering(Exec::class) {
         trap 'rm -f "${'$'}tmp"' EXIT
         curl -fL --retry 3 --connect-timeout 20 -o "${'$'}tmp" 'https://ghfast.top/https://github.com/termux/termux-packages/releases/download/bootstrap-2026.11.01-r1%2Bapt.android-7/bootstrap-aarch64.zip'
         printf '%s  %s\n' '5a1429b6c68ee3bdc17b5fd6e47ba42933ec924cd7283fe74992574e1d5badae' "${'$'}tmp" | sha256sum -c -
-        mv "${'$'}tmp" "${'$'}target"
+        python3 scripts/rewrite_termux_bootstrap.py "${'$'}tmp" "${'$'}target"
     """.trimIndent())
 }
 
@@ -58,8 +58,8 @@ android {
         applicationId = "io.nous.andagent"
         minSdk = 26
         targetSdk = 28
-        versionCode = 9
-        versionName = "0.10.0"
+        versionCode = 10
+        versionName = "0.11.0"
     }
 
     buildFeatures {

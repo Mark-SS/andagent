@@ -14,27 +14,29 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
-import java.util.zip.ZipFile
 import kotlin.concurrent.thread
 
 /** Official Termux bootstrap is built for /data/data/com.termux/files/usr.
  * We validate executable behavior before advertising the embedded backend. */
 class TermuxEnv(private val context: Context, private val shizuku: ShizukuShell? = null) {
-    private val prefix = File(context.filesDir, "usr")
-    private val home = File(context.filesDir, "home").apply { mkdirs() }
-    private val dash = File(prefix, "bin/dash")
+    private val paths = AndagentTermuxPaths(context)
+    private val prefix = paths.prefix
+    private val home = paths.home.apply { mkdirs() }
+    private val dash = paths.dash
+    private val readyFile = File(prefix, ".andagent-ready")
+    private var session: TermuxSession? = null
     @Volatile private var embeddedValidated = false
     @Volatile private var lastSetupError = "尚未安装"
 
     fun backend(): String = when {
-        dash.exists() -> "embedded"        // bootstrap files present → always try embedded first (direct exec works on targetSdk 28)
+        readyFile.exists() && dash.exists() && paths.bash.exists() && paths.pkg.exists() -> "embedded"
         termuxInstalled() -> "termux_app"
         else -> "none"
     }
     fun status(): String {
         val permission = if (context.checkSelfPermission("com.termux.permission.RUN_COMMAND") == PackageManager.PERMISSION_GRANTED)
             "granted" else "denied"
-        return "${backend()}: $lastSetupError · RUN_COMMAND=$permission"
+        return "${backend()}: $lastSetupError · PREFIX=${prefix.path} · PATH=${paths.path} · RUN_COMMAND=$permission"
     }
 
     @Suppress("DEPRECATION")
@@ -46,78 +48,60 @@ class TermuxEnv(private val context: Context, private val shizuku: ShizukuShell?
             lastSetupError = "当前仅提供 aarch64 bootstrap；设备架构不匹配"
             return@withContext "ERROR: $lastSetupError；后端 ${backend()}"
         }
-        val zip = File(context.cacheDir, "termux-bootstrap.zip")
         try {
-                context.assets.open("bootstrap/bootstrap-aarch64.zip").use { input -> zip.outputStream().use { output ->
-                    val buffer = ByteArray(8192); var total = 0L
-                    while (true) {
-                        val n = input.read(buffer); if (n < 0) break
-                        total += n; if (total > 80_000_000) error("归档超过 80MB")
-                        output.write(buffer, 0, n)
-                    }
-                } }
-                ZipFile(zip).use { archive ->
-                    if (archive.getEntry("bin/dash") == null) error("bootstrap 缺少 bin/dash")
-                    var expanded = 0L
-                    val entries = archive.entries()
-                    while (entries.hasMoreElements()) {
-                        val entry = entries.nextElement()
-                        if (entry.name == "SYMLINKS.txt") continue
-                        expanded += entry.size.coerceAtLeast(0)
-                        if (expanded > 300_000_000) error("ZIP 解压体积超过 300MB")
-                        val dest = File(prefix, entry.name)
-                        if (!dest.canonicalPath.startsWith(prefix.canonicalPath + File.separator)) error("ZIP 路径越界")
-                        if (entry.isDirectory) dest.mkdirs() else {
-                            dest.parentFile?.mkdirs()
-                            archive.getInputStream(entry).use { source -> dest.outputStream().use { target -> source.copyTo(target) } }
-                            if (entry.name.startsWith("bin/")) dest.setExecutable(true)
-                        }
-                    }
-                    archive.getEntry("SYMLINKS.txt")?.let { linkEntry ->
-                        archive.getInputStream(linkEntry).bufferedReader().forEachLine { line ->
-                            val parts = line.split("←./", limit = 2)
-                            if (parts.size == 2) {
-                                val link = File(prefix, parts[1])
-                                if (link.canonicalPath.startsWith(prefix.canonicalPath + File.separator) && !link.exists()) {
-                                    link.parentFile?.mkdirs()
-                                    runCatching { android.system.Os.symlink(parts[0], link.path) }
-                                }
-                            }
-                        }
-                    }
+            session?.close()
+            session = null
+            if (!readyFile.exists()) TermuxBootstrapInstaller(context, paths).install()
+            fun probe(label: String, vararg args: String) {
+                val proc = ProcessBuilder(*args).directory(home).apply {
+                    environment().putAll(paths.environment)
+                }.start()
+                if (!proc.waitFor(8, TimeUnit.SECONDS)) {
+                    proc.destroyForcibly()
+                    error("$label 实测超时")
                 }
-                dash.setExecutable(true)
-                // targetSdk 28: direct exec of data-dir binaries is allowed
-                // (W^X only applies to targetSdk>=29). pkg may still fail if
-                // its shebang points at com.termux paths — that's reported
-                // honestly per-command, not as a setup failure.
-                val test = ProcessBuilder(dash.path, "-c", "exit 0").apply { environment().putAll(environment()) }.start()
-                embeddedValidated = test.waitFor(4, TimeUnit.SECONDS) && test.exitValue() == 0
-                if (!embeddedValidated) {
-                    val errText = test.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
-                    error("dash 实测失败：${errText.take(200) ?: "exit!=0"}")
+                if (proc.exitValue() != 0) {
+                    val stderr = proc.errorStream.bufferedReader().use { it.readText().take(200) }
+                    error("$label 实测失败(exit=${proc.exitValue()}): $stderr")
                 }
-                lastSetupError = "已就绪"
-                return@withContext "embedded 已安装：${prefix.path}（dash 直跑正常；pkg 可能因官方包 com.termux 硬编码路径受限，逐命令如实报告）"
+            }
+            probe("dash", dash.path, "-c", "exit 0")
+            probe("bash", paths.bash.path, "--noprofile", "--norc", "-c", "exit 0")
+            probe("pkg", paths.pkg.path, "list-installed")
+            readyFile.writeText("dash bash pkg\n")
+            embeddedValidated = true
+            lastSetupError = "已就绪"
+            "embedded 已安装：${prefix.path}（dash/bash/pkg list-installed 已通过；安装包待真机验证）"
         } catch (e: Exception) {
+            readyFile.delete()
             lastSetupError = "内嵌 bootstrap 安装失败：${e.message ?: e.javaClass.simpleName}"
-        } finally {
-            zip.delete()
+            "ERROR: $lastSetupError；可用后端 ${backend()}。Termux App 需授权 RUN_COMMAND 并在 termux.properties 开启 allow-external-apps=true"
         }
-        "ERROR: $lastSetupError；可用后端 ${backend()}。Termux App 需授权 RUN_COMMAND 并在 termux.properties 开启 allow-external-apps=true"
     }
 
-    private fun environment(): Map<String, String> = mapOf(
-        "PREFIX" to prefix.path, "HOME" to home.path,
-        "PATH" to "${prefix.path}/bin:/system/bin", "LD_LIBRARY_PATH" to "${prefix.path}/lib",
-        "TMPDIR" to context.cacheDir.path,
-    )
+    private fun environment(): Map<String, String> = paths.environment
 
     suspend fun exec(command: String, timeoutSeconds: Int): String = withContext(Dispatchers.IO) {
         if (Regex("(?i)(rm\\s+-[a-z]*r[a-z]*f\\s+/($|\\s)|mkfs\\b|dd\\s+[^\\n]*of=/dev/|flash_image\\b)").containsMatchIn(command))
             return@withContext "ERROR: 命令被危险路径黑名单拦截"
         when (backend()) {
             "embedded" -> {
+                val current = try {
+                    session?.takeIf { it.alive() } ?: TermuxSession(paths.bash, home, environment()).also { session = it }
+                } catch (e: Exception) {
+                    Log.w("TermuxEnv", "session startup failed, using one-shot fallback", e)
+                    null
+                }
+                if (current != null) {
+                    try {
+                        return@withContext current.execute(command, timeoutSeconds)
+                    } catch (e: Exception) {
+                        Log.w("TermuxEnv", "session command failed; restarting on next call", e)
+                        current.close()
+                        session = null
+                        return@withContext "ERROR: ${e.message ?: "shell 会话意外退出"}"
+                    }
+                }
                 // Path order under targetSdk 28:
                 //  1. DIRECT exec — data-dir execve is legal (W^X only for
                 //     targetSdk>=29). Fastest, no Shizuku needed.

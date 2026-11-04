@@ -6,7 +6,7 @@ import kotlinx.serialization.json.JsonObject
 class TermuxTool(private val env: TermuxEnv, override val name: String) : Tool {
     override val description = when (name) {
         "termux_setup" -> "安装并校验脚本用户空间；失败时检测 Termux App 回退。"
-        "shell_exec" -> "在 Termux 用户空间运行 shell 命令；stdout/stderr 分离且限长。"
+        "shell_exec" -> "在内嵌长驻 bash 会话运行 shell 命令；输出限长，会话状态可跨命令保留。"
         else -> "安装 Termux 软件包；白名单外需再次确认。"
     }
     override val destructive = name == "pkg_install"
