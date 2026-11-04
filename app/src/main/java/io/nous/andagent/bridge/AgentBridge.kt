@@ -62,6 +62,7 @@ class AgentBridge(
     private val termuxStatus: () -> String = { "none" },
     private val termuxGrant: suspend () -> String = { "ERROR: Shizuku 不可用" },
     private val embeddedWebviewOpen: (String) -> String = { "ERROR: 浏览器不可用" },
+    private val dbGuiOpen: (String) -> String = { "ERROR: 数据库浏览器不可用" },
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val toolExecutor = Executors.newFixedThreadPool(2)
@@ -89,6 +90,10 @@ class AgentBridge(
     @JavascriptInterface
     fun openEmbeddedWebview(uri: String): String = runCatching { embeddedWebviewOpen(uri) }
         .getOrElse { "ERROR: 打开内嵌浏览器失败：${it.message ?: it.javaClass.simpleName}" }
+
+    @JavascriptInterface
+    fun dbGuiOpen(name: String): String = runCatching { dbGuiOpen.invoke(name) }
+        .getOrElse { "ERROR: 打开数据库浏览器失败：${it.message ?: it.javaClass.simpleName}" }
 
     /* ----------------------------- settings ----------------------------- */
 

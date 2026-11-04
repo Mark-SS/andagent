@@ -63,6 +63,7 @@ const DEV_SETTINGS_KEY = "andagent.settings.dev.v1";
 interface AndroidBridge {
   getSettings(): string;
   openEmbeddedWebview(uri: string): string;
+  dbGuiOpen(name: string): string;
   saveSettings(json: string): void;
   getAppVersion(): string;
   widgetList(): string;

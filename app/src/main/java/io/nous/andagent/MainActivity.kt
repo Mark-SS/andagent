@@ -31,6 +31,7 @@ import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.StepsRecord
 import androidx.webkit.WebViewAssetLoader
 import io.nous.andagent.bridge.AgentBridge
+import io.nous.andagent.bridge.DbGuiBridge
 import io.nous.andagent.bridge.PermissionBroker
 import io.nous.andagent.shell.ShizukuShell
 import io.nous.andagent.shell.TermuxEnv
@@ -38,6 +39,7 @@ import io.nous.andagent.script.QuickJsEngine
 import io.nous.andagent.script.JsEvalTool
 import io.nous.andagent.tools.ScriptFsTool
 import io.nous.andagent.tools.SqliteTool
+import io.nous.andagent.tools.DbGuiTool
 import io.nous.andagent.tools.TermuxTool
 import io.nous.andagent.tools.ScreenCaptureTool
 import io.nous.andagent.tools.ScreenRecordH264Tool
@@ -111,6 +113,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
     private lateinit var nfcSession: NfcSession
     private var embeddedDialog: Dialog? = null
+    private var dbGuiDialog: Dialog? = null
     private lateinit var assetLoader: WebViewAssetLoader
     private lateinit var localMedia: LocalMediaHandler
     private lateinit var bridge: AgentBridge
@@ -279,6 +282,7 @@ class MainActivity : ComponentActivity() {
             "db_exec" to SqliteTool(appContext, "db_exec"),
             "db_query" to SqliteTool(appContext, "db_query"),
             "db_drop" to SqliteTool(appContext, "db_drop"),
+            "db_gui" to DbGuiTool { name -> dbGuiOpen(name) },
             "docx_create" to DocumentCreateTool(appContext, permissionBroker, "docx"),
             "pptx_create" to DocumentCreateTool(appContext, permissionBroker, "pptx"),
             "xlsx_create" to DocumentCreateTool(appContext, permissionBroker, "xlsx"),
@@ -298,6 +302,7 @@ class MainActivity : ComponentActivity() {
             healthPermissionRequest = { requestHealthPermission() },
             termuxStatus = { termuxEnv.status() },
             embeddedWebviewOpen = { uri -> openEmbeddedWebview(uri) },
+            dbGuiOpen = { name -> dbGuiOpen(name) },
             termuxGrant = {
                 if (!shizuku.isGranted()) "ERROR: 请先启动 Shizuku 并在设置页授权 AndAgent"
                 else {
@@ -403,7 +408,44 @@ class MainActivity : ComponentActivity() {
         return "OPENED"
     }
 
+    private fun dbGuiOpen(name: String): String {
+        if (!name.matches(Regex("[A-Za-z0-9_]{1,64}"))) return "ERROR: 数据库名只允许字母数字下划线，最长 64 字符"
+        if (!getDatabasePath("andagent_${name}.db").isFile) return "ERROR: 数据库不存在，请先调用 db_list"
+        runOnUiThread {
+            dbGuiDialog?.dismiss()
+            val dialog = Dialog(this)
+            val browser = WebView(this).apply {
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                settings.allowFileAccess = false
+                settings.allowContentAccess = false
+                addJavascriptInterface(DbGuiBridge(this@MainActivity, name) { runOnUiThread { dialog.dismiss() } }, "DbGuiBridge")
+                webViewClient = object : WebViewClient() {
+                    override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
+                        assetLoader.shouldInterceptRequest(request.url)
+                    override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
+                        request.url.host != "appassets.androidplatform.net"
+                }
+            }
+            dialog.setContentView(browser)
+            dialog.setOnDismissListener {
+                browser.stopLoading()
+                browser.loadUrl("about:blank")
+                browser.removeJavascriptInterface("DbGuiBridge")
+                (browser.parent as? ViewGroup)?.removeView(browser)
+                browser.destroy()
+                if (dbGuiDialog === dialog) dbGuiDialog = null
+            }
+            dbGuiDialog = dialog
+            dialog.show()
+            dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            browser.loadUrl("https://appassets.androidplatform.net/assets/dbgui/index.html")
+        }
+        return "已打开数据库浏览器：$name"
+    }
+
     override fun onDestroy() {
+        dbGuiDialog?.dismiss()
         embeddedDialog?.dismiss()
         if (::nfcSession.isInitialized) nfcSession.close()
         bridge.shutdown()

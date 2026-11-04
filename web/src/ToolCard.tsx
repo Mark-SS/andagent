@@ -13,6 +13,7 @@ const META: Record<string, ToolMeta> = {
   get_time: { label: "获取时间", icon: "🕐" },
   db_create: { label: "创建数据库", icon: "🗄️" },
   db_list: { label: "数据库列表", icon: "🗄️" },
+  db_gui: { label: "打开数据库", icon: "🗄️" },
   db_tables: { label: "数据表列表", icon: "🗄️" },
   db_schema: { label: "数据表结构", icon: "🗄️" },
   db_exec: { label: "执行 SQL", icon: "🗄️", destructive: true },

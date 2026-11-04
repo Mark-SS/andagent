@@ -507,6 +507,7 @@ const TOOL_DEFS = [
   },
   { name: "db_create", description: "创建持久化 SQLite 数据库。", parameters: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
   { name: "db_list", description: "列出 SQLite 数据库。", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "db_gui", description: "在对话中打开指定数据库的只读图形浏览器。先用 db_list 查库名。", parameters: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
   { name: "db_tables", description: "列出数据库的表、列数和行数。", parameters: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
   { name: "db_schema", description: "查看表结构。", parameters: { type: "object", properties: { name: { type: "string" }, table: { type: "string" } }, required: ["name", "table"] } },
   { name: "db_exec", description: "执行参数化 SQL。值使用 ? 占位符和 params_json JSON 数组。DROP TABLE、无 WHERE DELETE 需 confirm=true。", parameters: { type: "object", properties: { name: { type: "string" }, sql: { type: "string" }, params_json: { type: "string" }, confirm: { type: "boolean" } }, required: ["name", "sql"] } },
