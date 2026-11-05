@@ -7,6 +7,7 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import hljs from "highlight.js";
+import { useEffect } from "react";
 import { ChartCard } from "./ChartCard";
 import { MermaidCard } from "./MermaidCard";
 import { MediaCard } from "./MediaCard";
@@ -27,7 +28,7 @@ function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighligh
   // 闪烁。assistant-ui 不把「生成中」状态传进 markdown 组件，这里用
   // window.__andagentStreaming（App.tsx 在流开始/结束时置位）判断：流式中
   // 重围栏只渲染占位，流结束全量重渲染为真正卡片。
-  const [streaming, setStreaming] = useState(() => !!(window as AnyWindow).__andagentStreaming);
+  const [streaming, setStreaming] = useState(() => !!window.__andagentStreaming);
   useEffect(() => {
     const onFlag = (e: Event) => setStreaming((e as CustomEvent<boolean>).detail);
     window.addEventListener("andagent-streaming", onFlag as EventListener);
