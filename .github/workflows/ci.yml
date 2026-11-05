@@ -27,7 +27,7 @@ jobs:
       - name: Install dependencies
         working-directory: web
         # npm 10.8.2 "Exit handler never called" bug on this dep tree — pnpm only.
-        run: pnpm install --frozen-lockfile --no-audit --no-fund
+        run: pnpm install --frozen-lockfile
       - name: Unit tests
         working-directory: web
         run: pnpm test

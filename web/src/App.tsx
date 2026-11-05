@@ -148,6 +148,14 @@ function AssistantReasoning(props: {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const running = props.status?.type === "running";
+  // 流式思考内容自动滚底：仅当用户停在底部附近时跟随（手动上滚阅读历史不打断）。
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  const stickRef = useRef(true);
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el || !running) return;
+    if (stickRef.current) el.scrollTop = el.scrollHeight;
+  }, [props.text, running]);
   return (
     <div className={`thinking ${open || running ? "open" : ""}`}>
       <button
@@ -163,7 +171,14 @@ function AssistantReasoning(props: {
       </button>
       {(open || running) && (
         <div className="thinking-body-wrap">
-          <div className="thinking-body">{props.text}</div>
+          <div
+            className="thinking-body"
+            ref={bodyRef}
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+            }}
+          >{props.text}</div>
           <button
             type="button"
             className="thinking-copy"

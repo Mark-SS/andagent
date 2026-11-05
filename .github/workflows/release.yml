@@ -37,7 +37,7 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=4096
         working-directory: web
         run: |
-          pnpm install --frozen-lockfile --no-audit --no-fund
+          pnpm install --frozen-lockfile
           pnpm run build
 
       - name: Assemble release APK (debug-signed for installability)
