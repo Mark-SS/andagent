@@ -201,16 +201,16 @@ class ScreenRecordH264Tool(private val context: Context, private val shizuku: Sh
                 "ERROR: 屏幕捕获未授权：请在系统弹窗中点「立即开始」后重试（也可到 设置 → 屏幕捕获 手动授权）"
             CaptureChannel.SCRCPY -> {
                 if (Build.VERSION.SDK_INT < 29) return@withContext "ERROR: 此录制方式需要 Android 10+；可使用 screen_record"
-                scrcpyRecord(duration, bitRate)
+                scrcpyRecord(duration, bitRate, args.intArg("max_size") ?: 1280)
             }
         }
     }
 
-    private suspend fun scrcpyRecord(duration: Int, bitRate: Int): String = withContext(Dispatchers.IO) {
+    private suspend fun scrcpyRecord(duration: Int, bitRate: Int, maxSize: Int): String = withContext(Dispatchers.IO) {
         val session = ScrcpySession(context, shizuku)
         var uri: android.net.Uri? = null
         try {
-            session.open(args.intArg("max_size") ?: 1280, bitRate)?.let { return@withContext "ERROR: $it；可用 screen_record 兜底" }
+            session.open(maxSize, bitRate)?.let { return@withContext "ERROR: $it；可用 screen_record 兜底" }
             val values = ContentValues().apply {
                 put(MediaStore.Video.Media.DISPLAY_NAME, "andagent_h264_${System.currentTimeMillis()}.mp4")
                 put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")

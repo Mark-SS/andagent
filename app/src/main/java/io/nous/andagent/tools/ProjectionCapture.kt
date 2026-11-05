@@ -15,10 +15,11 @@ import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.Image
 import android.media.ImageReader
-import android.media.MediaProjection
-import android.media.MediaProjectionManager
+import android.media.projection.MediaProjection
+import android.media.projection.MediaProjectionManager
 import android.media.MediaRecorder
 import android.os.Build
+import android.os.Bundle
 import android.os.Environment
 import android.os.Handler
 import android.os.IBinder
@@ -640,8 +641,9 @@ fun projectionStopRecording(context: Context): String? {
             return "ERROR: 录屏停止失败（$error），已丢弃未完成的视频"
         }
         runCatching {
+            val uriNonNull = uri ?: return@runCatching
             context.contentResolver.update(
-                uri,
+                uriNonNull,
                 android.content.ContentValues().apply { put(MediaStore.Video.Media.IS_PENDING, 0) },
                 null, null,
             )

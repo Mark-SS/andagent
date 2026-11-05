@@ -57,7 +57,7 @@ val INTENT_ACTION_BLACKLIST = setOf(
 sealed class IntentExtra {
     abstract val key: String
     data class Str(override val key: String, val value: String) : IntentExtra()
-    data class Int(override val key: String, val value: Int) : IntentExtra()
+    data class Int(override val key: String, val value: kotlin.Int) : IntentExtra()
     data class Bool(override val key: String, val value: Boolean) : IntentExtra()
     data class Dbl(override val key: String, val value: Double) : IntentExtra()
     data class StrArray(override val key: String, val values: List<String>) : IntentExtra()
@@ -171,7 +171,7 @@ class IntentTool(private val context: Context, override val name: String) : Tool
     private fun send(args: JsonObject): String {
         val action = args.strArg("action")?.trim() ?: return "ERROR: 缺少 action"
         if (action.isEmpty()) return "ERROR: action 为空"
-        INTENT_ACTION_BLACKLIST[action]?.let {
+        if (action in INTENT_ACTION_BLACKLIST) {
             return "ERROR: action「$action」是系统敏感广播方向，禁止通过 intent_send 调用"
         }
 

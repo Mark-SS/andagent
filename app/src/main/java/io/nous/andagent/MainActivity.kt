@@ -41,6 +41,8 @@ import io.nous.andagent.shell.ShizukuShell
 import io.nous.andagent.shell.TermuxEnv
 import io.nous.andagent.script.QuickJsEngine
 import io.nous.andagent.script.JsEvalTool
+import io.nous.andagent.tools.IntentTool
+import io.nous.andagent.tools.INTENT_TOOLS
 import io.nous.andagent.tools.ScriptFsTool
 import io.nous.andagent.tools.SqliteTool
 import io.nous.andagent.tools.DbGuiTool
