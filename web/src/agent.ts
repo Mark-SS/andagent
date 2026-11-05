@@ -943,6 +943,12 @@ export class AgentEngine {
     this.emit();
 
     let pendingText = "";
+    // R39+: 流式标记——CodeBlock（Markdown.tsx）据此把重围栏渲染为占位防闪烁。
+    const setStreamingFlag = (on: boolean) => {
+      window.__andagentStreaming = on;
+      window.dispatchEvent(new CustomEvent("andagent-streaming", { detail: on }));
+    };
+    setStreamingFlag(true);
     try {
       const pi = await loadPi();
       let rounds = 0;
@@ -1069,6 +1075,7 @@ export class AgentEngine {
       this.running = false;
       this.draft = null;
       this.abort = null;
+      setStreamingFlag(false);
       this.persist();
       this.emit();
     }

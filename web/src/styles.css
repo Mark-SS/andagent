@@ -1996,3 +1996,32 @@ button:disabled {
 
 :root[data-theme="light"] .hljs-emphasis { font-style: italic; }
 :root[data-theme="light"] .hljs-strong { font-weight: 600; }
+
+/* 流式期间重围栏占位（防闪烁）：弱化边框 + 呼吸动画提示生成中 */
+.fence-placeholder {
+  border: 1px dashed var(--border-strong);
+  border-radius: 12px;
+  padding: 18px 16px;
+  margin: 10px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel);
+}
+.fence-placeholder-label {
+  color: var(--muted);
+  font-size: 13px;
+  animation: fence-pulse 1.2s ease-in-out infinite;
+}
+.fence-placeholder::before {
+  content: "";
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: fence-pulse 1.2s ease-in-out infinite;
+}
+@keyframes fence-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+:root[data-theme="light"] .fence-placeholder { background: #ffffff; }
