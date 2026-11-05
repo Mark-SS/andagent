@@ -90,6 +90,8 @@ export interface DeeplinkDetail {
 
 interface AndroidBridge {
   getSettings(): string;
+  memoryPrompt?(query: string): string;
+  memoryCall?(name: string, argsJson: string): string;
   consumeDeeplink(): string;
   openEmbeddedWebview(uri: string): string;
   dbGuiOpen(name: string): string;
@@ -909,4 +911,17 @@ export function consumeDeeplink(): DeeplinkDetail[] {
 export function openEmbeddedWebview(uri: string): string {
   try { const result = bridge()?.openEmbeddedWebview(uri) ?? "ERROR: 设备桥不可用"; return result.startsWith("ERROR:") ? result : ""; }
   catch (e) { return `ERROR: ${String(e)}`; }
+}
+
+export interface MemoryEntry {
+  id: string; content: string; category: string; core: boolean;
+  createdAt: number; updatedAt: number; lastAccessAt: number; hits: number;
+}
+export function memoryPrompt(query: string): string {
+  return bridge()?.memoryPrompt?.(query) ?? "";
+}
+export function memoryCall<T = unknown>(name: string, args: Record<string, unknown> = {}): T {
+  const raw = bridge()?.memoryCall?.(name, JSON.stringify(args)) ?? "ERROR: 记忆桥不可用";
+  if (raw.startsWith("ERROR:")) throw new Error(raw.slice(6).trim());
+  return JSON.parse(raw) as T;
 }

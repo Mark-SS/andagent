@@ -17,7 +17,7 @@ import {
   type ProjectionStatus,
   type ShizukuStatus,
   cronList, cronToggle, cronDelete, cronPauseAll, cronExactAllowed, cronOpenExactSettings,
-  type CronTask, skillManage,
+  type CronTask, skillManage, memoryCall, type MemoryEntry,
 } from "./bridge";
 import { loadThemeMode, setTheme, type ThemeMode } from "./theme";
 
@@ -58,6 +58,23 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
   const [skillMsg, setSkillMsg] = useState("");
   const refreshSkills = () => { try { setSkills(JSON.parse(skillManage("list"))); } catch { setSkills([]); } };
   useEffect(refreshSkills, []);
+  const [memories, setMemories] = useState<MemoryEntry[]>([]);
+  const [memoryEdits, setMemoryEdits] = useState<Record<string, string>>({});
+  const [memoryMsg, setMemoryMsg] = useState("");
+  const refreshMemories = () => {
+    try { setMemories(memoryCall<MemoryEntry[]>("memory_get_all")); }
+    catch (e) { setMemoryMsg(String(e)); }
+  };
+  useEffect(refreshMemories, []);
+  const saveMemory = (id: string) => {
+    try { memoryCall("memory_update", { id, content: memoryEdits[id] ?? memories.find(m => m.id === id)?.content ?? "" }); setMemoryMsg("已保存"); refreshMemories(); }
+    catch (e) { setMemoryMsg(String(e)); }
+  };
+  const deleteMemory = (id: string) => {
+    try { memoryCall("memory_delete", { id }); refreshMemories(); }
+    catch (e) { setMemoryMsg(String(e)); }
+  };
+
 
   useEffect(() => {
     if (!hasBridge()) return;
@@ -199,6 +216,34 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
               placeholder="定义助手的身份与行为"
             />
           </label>
+
+          <div className="settings-card">
+            <div className="settings-card-head"><span>记忆</span></div>
+            <p className="settings-card-note">核心记忆每次对话常驻；归档记忆按当前问题检索。</p>
+            <strong>核心记忆 ({memories.filter(m => m.core).length}/10)</strong>
+            {memories.filter(m => m.core).map(m => (
+              <div className="memory-entry" key={m.id}>
+                <small>{m.category}</small>
+                <textarea rows={2} maxLength={500} value={memoryEdits[m.id] ?? m.content}
+                  onChange={e => setMemoryEdits({ ...memoryEdits, [m.id]: e.target.value })} />
+                <button type="button" onClick={() => saveMemory(m.id)}>保存</button>
+                <button type="button" onClick={() => deleteMemory(m.id)}>删除</button>
+              </div>
+            ))}
+            <strong>归档记忆 ({memories.filter(m => !m.core).length}/200)</strong>
+            {memories.filter(m => !m.core).map(m => (
+              <div className="memory-entry" key={m.id}>
+                <span>{m.content}</span>
+                <button type="button" onClick={() => deleteMemory(m.id)}>删除</button>
+              </div>
+            ))}
+            <button type="button" onClick={() => {
+              if (!window.confirm("清空全部记忆？此操作无法撤销。")) return;
+              try { memoryCall("memory_delete_all", { confirm: true }); refreshMemories(); setMemoryMsg("已清空"); }
+              catch (e) { setMemoryMsg(String(e)); }
+            }}>清空全部记忆</button>
+            {memoryMsg && <p role="status">{memoryMsg}</p>}
+          </div>
 
           <div className="settings-card">
             <div className="settings-card-head"><span>语音（STT 转写 / TTS 合成）</span></div>

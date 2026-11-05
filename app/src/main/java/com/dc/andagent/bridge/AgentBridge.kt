@@ -56,6 +56,7 @@ class AgentBridge(
     private val webViewProvider: () -> WebView?,
     private val settings: SettingsStore,
     private val tools: Map<String, Tool>,
+    private val memoryStore: com.dc.andagent.memory.MemoryStore,
     private val skillRegistry: com.dc.andagent.tools.SkillRegistry? = null,
     private val permissions: PermissionBroker,
     private val appContext: Context? = null,
@@ -184,6 +185,17 @@ class AgentBridge(
         obj["ttsBaseUrl"]?.jsonPrimitive?.contentOrNull?.let { settings.ttsBaseUrl = it }
         obj["ttsModel"]?.jsonPrimitive?.contentOrNull?.let { settings.ttsModel = it }
         obj["ttsVoice"]?.jsonPrimitive?.contentOrNull?.let { settings.ttsVoice = it }
+    }
+
+    @JavascriptInterface
+    fun memoryPrompt(query: String): String = runCatching { memoryStore.prompt(query) }.getOrDefault("")
+
+    @JavascriptInterface
+    fun memoryCall(name: String, raw: String): String {
+        val tool = tools[name] ?: return "ERROR: 未知工具"
+        if (name !in com.dc.andagent.memory.MEMORY_TOOLS) return "ERROR: 仅支持记忆工具"
+        val args = runCatching { json.parseToJsonElement(raw).jsonObject }.getOrNull() ?: return "ERROR: 参数不是 JSON 对象"
+        return runCatching { runBlocking { tool.execute(args) } }.getOrElse { "ERROR: ${it.message}" }
     }
 
     /* --------------------------- permissions ---------------------------- */

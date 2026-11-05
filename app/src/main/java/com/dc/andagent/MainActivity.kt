@@ -288,6 +288,11 @@ class MainActivity : ComponentActivity() {
         nfcSession = NfcSession(this) { message ->
             if (::bridge.isInitialized) bridge.emitNotice(message)
         }
+        val memoryPrefs = appContext.getSharedPreferences("andagent_memory", android.content.Context.MODE_PRIVATE)
+        val memoryStore = com.dc.andagent.memory.MemoryStore(
+            { memoryPrefs.getString("entries", null) },
+            { value -> memoryPrefs.edit().putString("entries", value).commit() },
+        )
         val tools: MutableMap<String, Tool> = java.util.concurrent.ConcurrentHashMap()
         quickJsEngine = QuickJsEngine(tools, scriptToolExecutor, appContext)
         liveQuickJsEngine = QuickJsEngine(tools, scriptToolExecutor, appContext)
@@ -446,6 +451,7 @@ class MainActivity : ComponentActivity() {
         tools.putAll(R35_TOOLS.associateWith { R35Tool(appContext, permissionBroker, shizuku, it) })
         // R42: the ad-hoc bridge and declarations share one restricted executor.
         tools["android_reflect"] = AndroidReflectTool(RestrictedReflectExecutor(appContext))
+        tools.putAll(com.dc.andagent.memory.MEMORY_TOOLS.associateWith { com.dc.andagent.memory.MemoryTool(memoryStore, it) })
         ApiToolFactory.register(appContext, tools)
 
         val skillRegistry = com.dc.andagent.tools.SkillRegistry(appContext, tools, quickJsEngine)
@@ -460,6 +466,7 @@ class MainActivity : ComponentActivity() {
             appContext = appContext,
             settings = settingsStore,
             tools = tools,
+            memoryStore = memoryStore,
             skillRegistry = skillRegistry,
             permissions = permissionBroker,
             appVersion = BuildConfig.VERSION_NAME,

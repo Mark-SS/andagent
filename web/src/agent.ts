@@ -14,7 +14,7 @@ import { PERMISSION_GUIDE } from "./permissionGuide";
 import { toModelMessages } from "./modelMessages";
 import { SessionStore, type SessionMeta } from "./sessions";
 import { EXTRA_TOOL_DEFS } from "./extraTools";
-import { extensionTools, skillPrompt } from "./bridge";
+import { extensionTools, skillPrompt, memoryPrompt } from "./bridge";
 import apiTools from "../../app/src/main/assets/api_tools.json";
 import { addUsage, emptyUsage, sumMessageUsage, type UsageSum } from "./usage";
 
@@ -575,6 +575,14 @@ const TOOL_DEFS = [
   { name: "kv_keys", description: "列出命名空间下的键名及剩余 TTL 秒数，可选 prefix 前缀过滤。", parameters: { type: "object", properties: { namespace: { type: "string" }, prefix: { type: "string", description: "可选：键名前缀" } }, required: [] } },
   { name: "kv_namespaces", description: "列出所有 KV 命名空间及其键数量。", parameters: { type: "object", properties: {}, required: [] } },
   { name: "kv_clear", description: "清空整个命名空间的所有键，必须 confirm=true。", parameters: { type: "object", properties: { namespace: { type: "string", description: "要清空的命名空间" }, confirm: { type: "boolean" } }, required: ["namespace"] } },
+  { name: "memory_add", description: "保存长期用户记忆；core 是长期人格记忆，用户偏好/重要指令写这里；满了先删过期条目再写新的。instruction 默认进 core。", parameters: { type: "object", properties: { content: { type: "string" }, category: { type: "string", enum: ["preference", "fact", "instruction"] }, core: { type: "boolean" } }, required: ["content"] } },
+  { name: "memory_search", description: "按关键词搜索长期记忆。", parameters: { type: "object", properties: { query: { type: "string" }, limit: { type: "integer" } }, required: ["query"] } },
+  { name: "memory_update", description: "按 id 更新记忆，支持自编辑 core。", parameters: { type: "object", properties: { id: { type: "string" }, content: { type: "string" } }, required: ["id", "content"] } },
+  { name: "memory_delete", description: "按 id 删除记忆。", parameters: { type: "object", properties: { id: { type: "string" } }, required: ["id"] } },
+  { name: "memory_delete_all", description: "清空全部或指定分类记忆；需要 confirm=true。", parameters: { type: "object", properties: { category: { type: "string" }, confirm: { type: "boolean" } }, required: ["confirm"] } },
+  { name: "memory_get_all", description: "列出记忆。", parameters: { type: "object", properties: { core_only: { type: "boolean" } } } },
+  { name: "memory_history", description: "查看记忆增改删历史。", parameters: { type: "object", properties: { id: { type: "string" } } } },
+  { name: "memory_stats", description: "查看记忆数量和容量。", parameters: { type: "object", properties: {} } },
   ...EXTRA_TOOL_DEFS,
   {
     name: "android_reflect",
@@ -969,6 +977,7 @@ export class AgentEngine {
           {
             systemPrompt: [
               this.settings.systemPrompt.trim(),
+              memoryPrompt(content),
               skillPrompt(),
               "反射桥：android_reflect 仅能调用 AudioManager、MediaRouter、CameraManager/CameraCharacteristics、SensorManager、PowerManager、ActivityManager、ConnectivityManager、Build/SystemClock、Settings.System/Global/Secure、TelephonyManager、DisplayManager、PackageManager 的白名单方法。批量 api_* 工具见工具列表；优先用专门工具，反射用于长尾查询。",
               CHART_GUIDE,

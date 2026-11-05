@@ -2025,3 +2025,7 @@ button:disabled {
   50% { opacity: 1; }
 }
 :root[data-theme="light"] .fence-placeholder { background: #ffffff; }
+
+.memory-entry { display: flex; align-items: center; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
+.memory-entry textarea { flex: 1 1 220px; min-width: 0; }
+.memory-entry span { flex: 1 1 220px; overflow-wrap: anywhere; }

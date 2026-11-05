@@ -216,6 +216,19 @@ class QuickJsEngine(
                       };
                     })();
                 """.trimIndent(), "andagent-kv.js")
+                context.evaluate("""
+                    andagent.memory = (function() {
+                      var call = function(tool, args) {
+                        var result = andagent.tool(tool, JSON.stringify(args));
+                        try { return JSON.parse(result); } catch (_) { return result; }
+                      };
+                      return {
+                        add: function(content, category, core) { return call('memory_add', {content: content, category: category || 'fact', core: !!core}); },
+                        search: function(query, limit) { return call('memory_search', {query: query, limit: limit || 10}); },
+                        get_all: function(coreOnly) { return call('memory_get_all', {core_only: !!coreOnly}); }
+                      };
+                    })();
+                """.trimIndent(), "andagent-memory.js")
                 // No Java Class object or reflection bridge is exposed to JS.
                 val program = if (allow == null) {
                     "JSON.stringify((0,eval)(${JsonPrimitive(script)}))"
