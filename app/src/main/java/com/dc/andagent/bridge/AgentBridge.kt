@@ -198,6 +198,19 @@ class AgentBridge(
         return runCatching { runBlocking { tool.execute(args) } }.getOrElse { "ERROR: ${it.message}" }
     }
 
+    /**
+     * R53: 前端 KV 通道（会话持久化）。仅放行 KV 六工具，参数与返回值与
+     * 工具执行结果一致；写失败（如 64KB 上限）以 "ERROR:" 前缀返回，前端
+     * 据此回退 localStorage，绝不静默吞写失败。
+     */
+    @JavascriptInterface
+    fun kvCall(name: String, raw: String): String {
+        if (name !in com.dc.andagent.tools.KV_TOOLS) return "ERROR: 仅支持 KV 工具"
+        val tool = tools[name] ?: return "ERROR: 未知工具"
+        val args = runCatching { json.parseToJsonElement(raw).jsonObject }.getOrNull() ?: return "ERROR: 参数不是 JSON 对象"
+        return runCatching { runBlocking { tool.execute(args) } }.getOrElse { "ERROR: ${it.message}" }
+    }
+
     /* --------------------------- permissions ---------------------------- */
 
     /**

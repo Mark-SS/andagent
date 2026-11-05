@@ -1,6 +1,6 @@
 # andagent 推进事项清单（ROADMAP-TODO）
 
-> 发布状态：v0.25.2 的代码与文档已就绪，tag、远端推送及 GitHub Release 由主控发布后确认。历史 TODO 属后续版本，不代表 v0.25.2 发布门槛。
+> 发布状态：v0.26.0 的代码与文档已就绪，tag、远端推送及 GitHub Release 由主控发布后确认。历史 TODO 属后续版本，不代表 v0.26.0 发布门槛。
 
 > 单一事实源：每项完成打 ✅ 并附 commit；新需求追加到对应优先级区。
 > 状态：TODO / DOING / ✅ / BLOCKED(原因)
@@ -26,7 +26,7 @@
 | 10a | **对话流音频/视频播放**：```audio/```video 围栏 + MediaCard 组件 + 工具结果按扩展名内嵌播放器 + WebViewAssetLoader /local/ 媒体映射 | ✅ | 含 Range/206 与路径穿越防护 |
 | 10b | **SQLite 数据库工具**（建库/建表/CRUD/查询 + andagent.db JS API） | ✅ | db_* 七工具 + andagent.db() + db_gui |
 | 10c | **外部数据访问**：ContentProvider（联系人/日历/短信 provider 统一读）、FileProvider（分享文件给其他 app）、SAF DocumentsTree 持久授权、MediaStore 全集合（音/视/文）查询 | ✅ | contacts_search / sms_read / provider_query（只读） / file_share（FileProvider） / saf_tree_pick/list/read/write（持久授权） / media_library（audio/video/files） |
-| 10d | **Android 存储底座 / 通用 KV 存储**：用平台存储能力为工具、QuickJS 脚本、前端提供统一的键值持久化（明细见下节） | TODO | `andagent_kv`（SharedPreferences / DataStore）+ `kv_*` 工具 + `andagent.kv` JS API + 前端桥三侧对齐；会话从 localStorage 迁移 |
+| 10d | **Android 存储底座 / 通用 KV 存储**：用平台存储能力为工具、QuickJS 脚本、前端提供统一的键值持久化（明细见下节） | DOING | `andagent_kv`（SharedPreferences / DataStore）+ `kv_*` 工具 + `andagent.kv` JS API + 前端桥三侧对齐；会话从 localStorage 迁移 |
 
 ### 10d 存储底座明细（Android 存储技术 → KV 及配套能力）
 
@@ -34,11 +34,11 @@
 
 | # | 子项 | 状态 | 技术口径 |
 |---|---|---|---|
-| 10d-1 | `KvStore` 内核 | TODO | `getSharedPreferences("andagent_kv", MODE_PRIVATE)` 作底座（或 Jetpack DataStore/Preferences）；`namespace/key` 两级命名，值支持 string/number/bool/JSON，含 TTL、批量读写、前缀 keys 与命名空间配额；key 正则 + 单值大小上限，`apply`/协程避免主线程 IO |
-| 10d-2 | `kv_*` 工具族 | TODO | `kv_get/kv_set/kv_delete/kv_keys/kv_namespaces/kv_clear`（约 +6）；写/清类 `destructive=true` + `confirm=true`，对齐 `db_exec` 口径；按 README「Adding a tool」四步同步 `MainActivity.kt` 注册表与 `web/src/agent.ts` JSON Schema |
-| 10d-3 | QuickJS JS API | TODO | `andagent.kv.get/set/keys/delete`，与 R10.7 `andagent.fs` 的 `data/` 根（当前仅 `scripts/` 已落地）联动；脚本自有状态不再靠文件拼字符串，沿用 `QuickJsEngine` 注入方式与 canonicalFile 防越界校验 |
-| 10d-4 | 前端统一持久化 | TODO | `AndroidBridge.kvGet/kvSet`（或复用 `toolExec`）+ `web/src/bridge.ts` 类型声明；`sessions.ts` 会话从 localStorage 迁到原生 KV（WebView DOM storage 被清会丢会话），浏览器预览模式保留 localStorage 回退；`getSettings/saveSettings` 固定字段通道不动，API key 不进 web assets |
-| 10d-5 | 迁移 / 安全 / 备份 | TODO | 一次性迁移旧 localStorage 会话与自定义 prefs 键；敏感键用 Keystore / EncryptedSharedPreferences 或独立命名空间；按命名空间导出/导入 JSON 备份，厘清 Android Auto Backup 与 `filesDir` / `databases/` 边界；`WidgetStore` / `DataCache` 的 AtomicFile 结构化数据保持原样 |
+| 10d-1 | `KvStore` 内核 | ✅ | `getSharedPreferences("andagent_kv", MODE_PRIVATE)` 作底座（或 Jetpack DataStore/Preferences）；`namespace/key` 两级命名，值支持 string/number/bool/JSON，含 TTL、批量读写、前缀 keys 与命名空间配额；key 正则 + 单值大小上限，`apply`/协程避免主线程 IO。已落地 `tools/KvStore.kt`（SharedPreferences `andagent_kv`，TTL/批量/前缀/配额/64KB 上限），KvStoreTest 10 用例（R51） |
+| 10d-2 | `kv_*` 工具族 | ✅ | `kv_get/kv_set/kv_delete/kv_keys/kv_namespaces/kv_clear`（约 +6）；写/清类 `destructive=true` + `confirm=true`，对齐 `db_exec` 口径；按 README「Adding a tool」四步同步 `MainActivity.kt` 注册表与 `web/src/agent.ts` JSON Schema。已落地 `tools/KvTools.kt`，`MainActivity.kt:441` 注册，web Schema 对齐（R51） |
+| 10d-3 | QuickJS JS API | ✅ | `andagent.kv.get/set/keys/delete`，与 R10.7 `andagent.fs` 的 `data/` 根（当前仅 `scripts/` 已落地）联动；脚本自有状态不再靠文件拼字符串，沿用 `QuickJsEngine` 注入方式与 canonicalFile 防越界校验。已落地 QuickJsEngine 注入（R51） |
+| 10d-4 | 前端统一持久化 | ✅ | `AndroidBridge.kvGet/kvSet`（或复用 `toolExec`）+ `web/src/bridge.ts` 类型声明；`sessions.ts` 会话从 localStorage 迁到原生 KV（WebView DOM storage 被清会丢会话），浏览器预览模式保留 localStorage 回退；`getSettings/saveSettings` 固定字段通道不动，API key 不进 web assets。R53：`bridge/AgentBridge.kt` 增 `kvCall`（KV_TOOLS 白名单）+ `web/src/bridge.ts` `kvCall/hasKvBridge` + `sessions.ts` KV 适配（namespace=sessions，key=index/s_<id>）；浏览器预览回退 localStorage，单值超 64KB 时整组镜像 localStorage 并 warn |
+| 10d-5 | 迁移 / 安全 / 备份 | 部分 | 一次性迁移旧 localStorage 会话与自定义 prefs 键；敏感键用 Keystore / EncryptedSharedPreferences 或独立命名空间；按命名空间导出/导入 JSON 备份，厘清 Android Auto Backup 与 `filesDir` / `databases/` 边界；`WidgetStore` / `DataCache` 的 AtomicFile 结构化数据保持原样。进度：localStorage→KV 复制迁移已做（源键保留、删除双清），按命名空间备份导出/敏感键隔离待做 |
 | 10d-6 | 其他 Android 存储技术评估 | TODO | DataStore(Proto) 替代 SharedPreferences、MMKV（评估额外 .so 体积与 arm64 依赖）、Room（关系型场景已由 `db_*` 覆盖，暂不引入）；Scoped Storage / MediaStore / SAF / ContentProvider / FileProvider 归入 10c，共享路径与 KV 命名空间隔离 |
 
 ## 🟡 P2 — 增强/补全
@@ -78,7 +78,7 @@ web 化重构（pi+assistant-ui）/ 日历闹钟剪贴板通知 / ECharts / Shiz
 | R21 | Shader 实时渲染围栏（WebGL2，Shadertoy 风格 iTime/iResolution） | ✅ 纯前端 |
 | R22 | 邮件发送：email_send（SMTP SSL/STARTTLS+AUTH+HTML+附件）/email_verify/email_draft | ✅ +3 |
 | R23 | Canvas 围栏（沙箱 iframe 2D 绘制，静态+动画） | ✅ 纯前端 |
-| R24 | 存储底座：KV 工具族 + `andagent.kv` JS API + 前端会话迁移（见 10d；依赖 R10.7 `data/` 根与 R20 平台桥接） | TODO +6 |
+| R24 | 存储底座：KV 工具族 + `andagent.kv` JS API + 前端会话迁移（见 10d；依赖 R10.7 `data/` 根与 R20 平台桥接） | ✅ +6 | R51 内核/工具/JS API，R53 前端会话 KV 迁移（10d-5 备份导出仍待） |
 | R26 | 网络搜索：web_search（Bing HTML 主引擎 + DDG IA 摘要，零 key）+ web_read 网页正文；Bing fixture 单测 | ✅ +2 |
 | R28 | MediaProjection 截屏/录屏：consent trampoline + FGS(mediaProjection) + 路由投影→Shizuku→授权弹窗；screen_capture/screen_record/screen_record_stop 全接 `ensureCaptureChannel`；ProjectionRoutingTest 6 用例 | ✅ 16a00a5 + 收口提交 |
 | R29 | Mermaid+KaTeX 对话流渲染（MermaidCard 错误卡片 + remark-math/rehype-katex，vitest 2 用例）+ dbgui 移动端适配（@media≤719px 触控布局） | ✅ 16a00a5 + 收口提交 |

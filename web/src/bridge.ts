@@ -92,6 +92,8 @@ interface AndroidBridge {
   getSettings(): string;
   memoryPrompt?(query: string): string;
   memoryCall?(name: string, argsJson: string): string;
+  /** R53: 原生 KV 通道（kv_get/kv_set/... 六工具），同步返回工具结果 JSON。 */
+  kvCall?(name: string, argsJson: string): string;
   consumeDeeplink(): string;
   openEmbeddedWebview(uri: string): string;
   dbGuiOpen(name: string): string;
@@ -924,4 +926,35 @@ export function memoryCall<T = unknown>(name: string, args: Record<string, unkno
   const raw = bridge()?.memoryCall?.(name, JSON.stringify(args)) ?? "ERROR: 记忆桥不可用";
   if (raw.startsWith("ERROR:")) throw new Error(raw.slice(6).trim());
   return JSON.parse(raw) as T;
+}
+
+/** R53: 是否存在原生 KV 通道（浏览器预览为 false）。 */
+export function hasKvBridge(): boolean {
+  return typeof bridge()?.kvCall === "function";
+}
+
+/**
+ * R53: 调用 KV 工具。任何失败（桥不可用、TOOL 返回 ERROR、返回非 JSON）
+ * 都返回 undefined —— 调用方据此回退 localStorage，不抛异常打断会话读写。
+ */
+export function kvCall<T = unknown>(name: string, args: Record<string, unknown> = {}): T | undefined {
+  const fn = bridge()?.kvCall;
+  if (typeof fn !== "function") return undefined;
+  let raw: string;
+  try {
+    raw = fn(name, JSON.stringify(args));
+  } catch (e) {
+    console.warn("kvCall failed", e);
+    return undefined;
+  }
+  if (typeof raw !== "string" || !raw) return undefined;
+  if (raw.startsWith("ERROR:")) {
+    console.warn(`kvCall ${name} rejected: ${raw.slice(6).trim()}`);
+    return undefined;
+  }
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return undefined;
+  }
 }
