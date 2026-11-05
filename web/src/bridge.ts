@@ -57,6 +57,7 @@ export const DEFAULT_SYSTEM_PROMPT = [
   "- 需要拍照时输出 ```camera 围栏（如 {} 或 {\"facingMode\":\"environment\"}），用户会看到实时取景并点击拍照，照片自动存入相册并把路径回传对话。",
   "- 生成小组件后，把 WidgetSpec JSON 放入 ```widget 围栏让用户在对话内预览效果，确认后再 widget_save_and_pin。",
   "- 位置结果用 ```geo 块，内容为 {\"lat\":数字,\"lng\":数字,\"label\":字符串} 的 JSON；键值状态用 ```kv 块，内容为 JSON 对象或每行 label: value。",
+  "- 用户想自己动手执行命令时，输出 ```terminal 围栏（内容为 {} 或 {\"title\":标题}）打开交互终端：终端跑在与你相同的 Termux 会话里，cd/env 状态互通；用户在终端里的操作结果也会留在会话输出中，必要时可用 shell_exec 查看会话状态辅助判断。",
   "- 相册结果用文字或表格列出文件名；长输出（shell_exec、file_read）给出摘要 + 关键行，不整段粘贴。",
 ].join("\n");
 
@@ -100,6 +101,9 @@ interface AndroidBridge {
   openAppSettings(): void;
   termuxStatus(): string;
   termuxGrantViaShizuku(): string;
+  termuxTerminalExec(reqId: string, command: string): string;
+  termuxTerminalWrite(reqId: string, input: string): string;
+  termuxTerminalPoll(reqId: string): string;
   devtoolsStatus(): string;
   devtoolsSetEnabled(enabled: boolean): string;
   exportConversation(title: string, markdown: string): string;
@@ -693,6 +697,26 @@ export function getTermuxStatus(): string { try { return bridge()?.termuxStatus(
 export function grantTermuxViaShizuku(): string {
   try { return bridge()?.termuxGrantViaShizuku() ?? "ERROR: Android 桥不可用"; }
   catch (e) { return `ERROR: Shizuku 代授权失败：${String(e)}`; }
+}
+
+/* ------------------------------------------------------------------ */
+/* 对话流内嵌终端（R27：与 shell_exec 共享同一条长驻 bash 会话）         */
+/* ------------------------------------------------------------------ */
+
+export function termuxTerminalExec(command: string): string {
+  try { return bridge()?.termuxTerminalExec(`tty-${Date.now()}-${++seq}`, command) ?? "ERROR: 设备桥不可用"; }
+  catch (e) { return `ERROR: ${String(e)}`; }
+}
+
+export function termuxTerminalWrite(input: string): string {
+  try { return bridge()?.termuxTerminalWrite(`tty-${Date.now()}-${++seq}`, input) ?? "ERROR: 设备桥不可用"; }
+  catch (e) { return `ERROR: ${String(e)}`; }
+}
+
+/** 增量输出；空串 = 无新增（会话未启动也返回空，不算错误）。 */
+export function termuxTerminalPoll(): string {
+  try { return bridge()?.termuxTerminalPoll(`tty-${Date.now()}-${++seq}`) ?? ""; }
+  catch { return ""; }
 }
 
 /* ------------------------------------------------------------------ */

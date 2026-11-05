@@ -60,8 +60,8 @@ android {
         applicationId = "io.nous.andagent"
         minSdk = 26
         targetSdk = 28
-        versionCode = 16
-        versionName = "0.18.0"
+        versionCode = 17
+        versionName = "0.19.0"
     }
 
     buildFeatures {

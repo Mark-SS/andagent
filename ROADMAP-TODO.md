@@ -79,4 +79,5 @@ web 化重构（pi+assistant-ui）/ 日历闹钟剪贴板通知 / ECharts / Shiz
 | R24 | 存储底座：KV 工具族 + `andagent.kv` JS API + 前端会话迁移（见 10d；依赖 R10.7 `data/` 根与 R20 平台桥接） | TODO +6 |
 | R26 | 网络搜索：web_search（Bing HTML 主引擎 + DDG IA 摘要，零 key）+ web_read 网页正文；Bing fixture 单测 | ✅ +2 |
 | R28 | MediaProjection 截屏/录屏（进行中） | 路由改造 |
+| R29 | Mermaid+KaTeX+DB GUI 移动端适配（进行中） | 纯前端+dbgui |
 |  | **当前累计 139 工具（v0.17.0）** |  |

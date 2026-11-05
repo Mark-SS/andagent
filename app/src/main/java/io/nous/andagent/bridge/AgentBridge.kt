@@ -61,6 +61,10 @@ class AgentBridge(
     private val healthPermissionRequest: () -> String = { "{\"requested\":false}" },
     private val termuxStatus: () -> String = { "none" },
     private val termuxGrant: suspend () -> String = { "ERROR: Shizuku 不可用" },
+    // R27: 对话流内嵌终端——与 shell_exec 共享同一条长驻 bash 会话。
+    private val termuxTerminalExec: (String) -> String = { "ERROR: 终端通道不可用" },
+    private val termuxTerminalWrite: (String) -> String = { "ERROR: 终端通道不可用" },
+    private val termuxTerminalPoll: () -> String = { "" },
     // R25: 与同名 @JavascriptInterface 方法错开命名，避免调用点歧义。
     private val devtoolsStatusJson: () -> String = { "{\"enabled\":false,\"error\":\"devtools 桥不可用\"}" },
     private val devtoolsSetDebugging: (Boolean) -> String = { "ERROR: devtools 桥不可用" },
@@ -276,6 +280,23 @@ class AgentBridge(
     @JavascriptInterface
     fun termuxGrantViaShizuku(): String = runCatching { runBlocking { termuxGrant() } }
         .getOrElse { "ERROR: Termux 授权失败：${it.message ?: it.javaClass.simpleName}" }
+
+    /** R27: 终端执行一行命令（写入共享 bash stdin，带 tty 弱 marker）。同步返回状态。 */
+    @JavascriptInterface
+    fun termuxTerminalExec(reqId: String, command: String): String =
+        runCatching { termuxTerminalExec(command.take(4000)) }
+            .getOrElse { "ERROR: ${it.message ?: it.javaClass.simpleName}" }
+
+    /** R27: 终端裸写入 stdin（交互程序应答），不带换行时前端补 \n。 */
+    @JavascriptInterface
+    fun termuxTerminalWrite(reqId: String, input: String): String =
+        runCatching { termuxTerminalWrite(input.take(4000)) }
+            .getOrElse { "ERROR: ${it.message ?: it.javaClass.simpleName}" }
+
+    /** R27: 拉取自上次 poll 以来的终端增量输出（≤16KB），空串表示无新增。 */
+    @JavascriptInterface
+    fun termuxTerminalPoll(reqId: String): String =
+        runCatching { termuxTerminalPoll() }.getOrElse { "" }
 
     @JavascriptInterface
     fun exportConversation(title: String, markdown: String): String {

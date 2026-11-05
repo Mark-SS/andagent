@@ -9,6 +9,7 @@ import { ChartCard } from "./ChartCard";
 import { MediaCard } from "./MediaCard";
 import { PhotosCard, ImageCard, KvCard, TableCard, JsonTreeCard, GeoCard } from "./RichCards";
 import { CameraCard } from "./CameraCard";
+import { TerminalCard } from "./TerminalCard";
 import { CanvasCard } from "./CanvasCard";
 import { ShaderCard } from "./ShaderCard";
 import { WidgetPreviewCard } from "./WidgetPreviewCard";
@@ -16,7 +17,7 @@ import { WidgetPreviewCard } from "./WidgetPreviewCard";
 function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighlighterProps) {
   const [copied, setCopied] = useState(false);
   const kind = (language ?? "").toLowerCase();
-  const isChart = ["chart", "photos", "image", "kv", "table", "json-tree", "geo", "audio", "video", "camera", "widget", "canvas", "shader"].includes(kind);
+  const isChart = ["chart", "photos", "image", "kv", "table", "json-tree", "geo", "audio", "video", "camera", "widget", "canvas", "shader", "terminal"].includes(kind);
 
   const html = useMemo(() => {
     if (isChart) return "";
@@ -41,6 +42,7 @@ function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighligh
   if (kind === "shader") return <ShaderCard code={code} />;
   if (kind === "geo") return <GeoCard code={code} />;
   if (kind === "camera") return <CameraCard code={code} />;
+  if (kind === "terminal") return <TerminalCard code={code} />;
   if (kind === "widget") return <WidgetPreviewCard code={code} />;
   if (kind === "audio" || kind === "video") {
     try {
