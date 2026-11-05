@@ -14,6 +14,7 @@ import { PERMISSION_GUIDE } from "./permissionGuide";
 import { toModelMessages } from "./modelMessages";
 import { SessionStore, type SessionMeta } from "./sessions";
 import { EXTRA_TOOL_DEFS } from "./extraTools";
+import apiTools from "../../app/src/main/assets/api_tools.json";
 import { addUsage, emptyUsage, sumMessageUsage, type UsageSum } from "./usage";
 
 type PiModule = typeof import("@mariozechner/pi-ai");
@@ -568,6 +569,24 @@ const TOOL_DEFS = [
   { name: "db_query", description: "只读 SELECT，返回最多 limit 行。值使用 ? 和 params_json JSON 数组。", parameters: { type: "object", properties: { name: { type: "string" }, sql: { type: "string" }, params_json: { type: "string" }, limit: { type: "integer" } }, required: ["name", "sql"] } },
   { name: "db_drop", description: "删除整个数据库，必须 confirm=true。", parameters: { type: "object", properties: { name: { type: "string" }, confirm: { type: "boolean" } }, required: ["name"] } },
   ...EXTRA_TOOL_DEFS,
+  {
+    name: "android_reflect",
+    description: "受限反射桥：查询白名单 Android 系统 API；对象结果不可二次反射。",
+    parameters: { type: "object", properties: {
+      clazz: { type: "string", description: "白名单完整类名" },
+      method: { type: "string", description: "白名单方法名或 Build 常量名" },
+      args_json: { type: "string", description: "JSON 数组；基本类型、null、$context/$contentResolver 占位符" },
+      static: { type: "boolean", description: "是否为静态调用" },
+      confirm: { type: "boolean", description: "调用 setStreamVolume 时必须为 true" },
+    }, required: ["clazz", "method"] },
+  },
+  ...apiTools.map(({ name, description, params }) => ({
+    name, description,
+    parameters: { type: "object", properties: Object.fromEntries(params.map(p => [p.name, {
+      type: p.type === "int" || p.type === "long" ? "integer" : p.type === "float" || p.type === "double" ? "number" : p.type,
+      description: p.description,
+    }])), required: params.map(p => p.name) },
+  })),
 ] satisfies PiTool[];
 
 /**
@@ -936,6 +955,7 @@ export class AgentEngine {
           {
             systemPrompt: [
               this.settings.systemPrompt.trim(),
+              "反射桥：android_reflect 仅能调用 AudioManager、MediaRouter、CameraManager/CameraCharacteristics、SensorManager、PowerManager、ActivityManager、ConnectivityManager、Build/SystemClock、Settings.System/Global/Secure、TelephonyManager、DisplayManager、PackageManager 的白名单方法。批量 api_* 工具见工具列表；优先用专门工具，反射用于长尾查询。",
               CHART_GUIDE,
               STORAGE_MEDIA_GUIDE,
               MEDIA_CONTEXT_GUIDE,

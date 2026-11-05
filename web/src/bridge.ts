@@ -45,6 +45,7 @@ export const DEFAULT_SYSTEM_PROMPT = [
   "- 可复用脚本：script_save 保存 → script_run 随时执行（支持 args_json 传参）→ script_list 查看；修改前用 script_read。适合周期性任务、数据变换管道、自动化流程。脚本内可用 andagent.tool() 调设备工具。",
   "- 定时任务：cron_create（5 段 cron 或 daily 09:00 / weekly mon 09:00 / every 30m）创建；kind=script 跑已保存 JS 脚本，shell 跑命令，notify 发通知；cron_list / cron_toggle / cron_delete / cron_run_now 管理。设备重启后恢复，Android 12+ 需在设置授予『闹钟和提醒』。",
   "- 系统导航：open_settings（27 类设置页直达）/ app_list / get_time / device_info",
+  "- 反射桥：android_reflect 可查 AudioManager、MediaRouter、CameraManager/CameraCharacteristics、SensorManager、PowerManager、ActivityManager、ConnectivityManager、Build/SystemClock、Settings.System/Global/Secure、TelephonyManager、DisplayManager、PackageManager 白名单 API；批量声明的 api_* 工具见工具列表。优先用专门工具，反射做长尾查询。",
   "- 通用 Intent：intent_send 可发任意 action（拍照 IMAGE_CAPTURE / 分享 SEND / 选择器 PICK 等），不确定接收方先用 intent_resolve 探查；发给第三方 app 的标准 scheme 跳转优先 open_uri，特殊 action 才用 intent_send；自定义广播用 intent_broadcast（系统保护广播被拦截）。",
   "- 桌面小组件：widget_generate 先规划 WidgetSpec v2 JSON，widget_save_and_pin 保存并请求添加；数据可绑定系统或 QuickJS 工具",
   "- NFC：nfc_status / nfc_read（UID、tech 列表、NDEF）/ nfc_write_text / nfc_write_uri / nfc_write_raw（写 NDEF）/ nfc_hce_status；MIFARE 深度读写：nfc_mf_dump（Classic 逐扇区认证 + 全卡 hex/ASCII dump，存 .bin）/ nfc_mf_write_block（Classic 写块）/ nfc_ul_read / nfc_ul_write_page（Ultralight/NTAG 页读写）/ nfc_keys_manage（自定义 key 库，可导入 MCT/Proxmark3 字典）。贴卡类工具调用前先提示用户贴卡；写类必须先说明改动并让用户确认。合规：MIFARE Classic 的 Crypto-1 已被破解，上述 MIFARE 读写工具仅可用于你自己拥有的卡或获得授权的安全测试，禁止用于未授权的卡片。",

@@ -1,0 +1,307 @@
+[
+  {
+    "name": "api_audio_stream_volume",
+    "domain": "audio",
+    "description": "getStreamVolume",
+    "class": "android.media.AudioManager",
+    "method": "getStreamVolume",
+    "service": "audio",
+    "params": [
+      {
+        "name": "stream",
+        "type": "int",
+        "description": "音频流常量：STREAM_MUSIC=3"
+      }
+    ],
+    "permission": null,
+    "destructive": false,
+    "static": false
+  },
+  {
+    "name": "api_audio_stream_max",
+    "domain": "audio",
+    "description": "getStreamMaxVolume",
+    "class": "android.media.AudioManager",
+    "method": "getStreamMaxVolume",
+    "service": "audio",
+    "params": [
+      {
+        "name": "stream",
+        "type": "int",
+        "description": "音频流常量：STREAM_MUSIC=3"
+      }
+    ],
+    "permission": null,
+    "destructive": false,
+    "static": false
+  },
+  {
+    "name": "api_audio_stream_min",
+    "domain": "audio",
+    "description": "getStreamMinVolume",
+    "class": "android.media.AudioManager",
+    "method": "getStreamMinVolume",
+    "service": "audio",
+    "params": [
+      {
+        "name": "stream",
+        "type": "int",
+        "description": "音频流常量：STREAM_MUSIC=3"
+      }
+    ],
+    "permission": null,
+    "destructive": false,
+    "static": false
+  },
+  {
+    "name": "api_audio_music_active",
+    "domain": "audio",
+    "description": "isMusicActive",
+    "class": "android.media.AudioManager",
+    "method": "isMusicActive",
+    "service": "audio",
+    "params": [],
+    "permission": null,
+    "destructive": false,
+    "static": false
+  },
+  {
+    "name": "api_audio_ringer_mode",
+    "domain": "audio",
+    "description": "getRingerMode",
+    "class": "android.media.AudioManager",
+    "method": "getRingerMode",
+    "service": "audio",
+    "params": [],
+    "permission": null,
+    "destructive": false,
+    "static": false
+  },
+  {
+    "name": "api_camera_ids",
+    "domain": "camera",
+    "description": "列出相机 ID",
+    "class": "android.hardware.camera2.CameraManager",
+    "method": "getCameraIdList",
+    "service": "camera",
+    "params": [],
+    "permission": null,
+    "destructive": false,
+    "static": false
+  },
+  {
+    "name": "api_camera_characteristics",
+    "domain": "camera",
+    "description": "读取相机特征对象摘要",
+    "class": "android.hardware.camera2.CameraManager",
+    "method": "getCameraCharacteristics",
+    "service": "camera",
+    "params": [
+      {
+        "name": "id",
+        "type": "string",
+        "description": "相机 ID"
+      }
+    ],
+    "permission": null,
+    "destructive": false,
+    "static": false
+  },
+  {
+    "name": "api_torch_set",
+    "domain": "camera",
+    "description": "切换指定相机的手电筒",
+    "class": "android.hardware.camera2.CameraManager",
+    "method": "setTorchMode",
+    "service": "camera",
+    "params": [
+      {
+        "name": "id",
+        "type": "string",
+        "description": "相机 ID"
+      },
+      {
+        "name": "on",
+        "type": "boolean",
+        "description": "是否开启"
+      }
+    ],
+    "permission": null,
+    "destructive": false,
+    "static": false
+  },
+  {
+    "name": "api_power_interactive",
+    "domain": "power",
+    "description": "isInteractive",
+    "class": "android.os.PowerManager",
+    "method": "isInteractive",
+    "service": "power",
+    "params": [],
+    "permission": null,
+    "destructive": false,
+    "static": false
+  },
+  {
+    "name": "api_power_save",
+    "domain": "power",
+    "description": "isPowerSaveMode",
+    "class": "android.os.PowerManager",
+    "method": "isPowerSaveMode",
+    "service": "power",
+    "params": [],
+    "permission": null,
+    "destructive": false,
+    "static": false
+  },
+  {
+    "name": "api_power_idle",
+    "domain": "power",
+    "description": "isDeviceIdleMode",
+    "class": "android.os.PowerManager",
+    "method": "isDeviceIdleMode",
+    "service": "power",
+    "params": [],
+    "permission": null,
+    "destructive": false,
+    "static": false
+  },
+  {
+    "name": "api_display_list",
+    "domain": "display",
+    "description": "列出显示器摘要",
+    "class": "android.hardware.display.DisplayManager",
+    "method": "getDisplays",
+    "service": "display",
+    "params": [],
+    "permission": null,
+    "destructive": false,
+    "static": false
+  },
+  {
+    "name": "api_display_get",
+    "domain": "display",
+    "description": "按 ID 读取显示器摘要",
+    "class": "android.hardware.display.DisplayManager",
+    "method": "getDisplay",
+    "service": "display",
+    "params": [
+      {
+        "name": "id",
+        "type": "int",
+        "description": "显示器 ID"
+      }
+    ],
+    "permission": null,
+    "destructive": false,
+    "static": false
+  },
+  {
+    "name": "api_setting_screen_brightness",
+    "domain": "settings",
+    "description": "读取系统设置 screen_brightness",
+    "class": "android.provider.Settings$System",
+    "method": "getString",
+    "service": null,
+    "params": [
+      {
+        "name": "key",
+        "type": "string",
+        "description": "传入 screen_brightness；也可查询其他 Settings.System 键"
+      }
+    ],
+    "permission": null,
+    "destructive": false,
+    "static": true
+  },
+  {
+    "name": "api_setting_screen_off_timeout",
+    "domain": "settings",
+    "description": "读取系统设置 screen_off_timeout",
+    "class": "android.provider.Settings$System",
+    "method": "getString",
+    "service": null,
+    "params": [
+      {
+        "name": "key",
+        "type": "string",
+        "description": "传入 screen_off_timeout；也可查询其他 Settings.System 键"
+      }
+    ],
+    "permission": null,
+    "destructive": false,
+    "static": true
+  },
+  {
+    "name": "api_setting_accelerometer_rotation",
+    "domain": "settings",
+    "description": "读取系统设置 accelerometer_rotation",
+    "class": "android.provider.Settings$System",
+    "method": "getString",
+    "service": null,
+    "params": [
+      {
+        "name": "key",
+        "type": "string",
+        "description": "传入 accelerometer_rotation；也可查询其他 Settings.System 键"
+      }
+    ],
+    "permission": null,
+    "destructive": false,
+    "static": true
+  },
+  {
+    "name": "api_setting_sound_effects_enabled",
+    "domain": "settings",
+    "description": "读取系统设置 sound_effects_enabled",
+    "class": "android.provider.Settings$System",
+    "method": "getString",
+    "service": null,
+    "params": [
+      {
+        "name": "key",
+        "type": "string",
+        "description": "传入 sound_effects_enabled；也可查询其他 Settings.System 键"
+      }
+    ],
+    "permission": null,
+    "destructive": false,
+    "static": true
+  },
+  {
+    "name": "api_telephony_sim_state",
+    "domain": "telephony",
+    "description": "getSimState",
+    "class": "android.telephony.TelephonyManager",
+    "method": "getSimState",
+    "service": "phone",
+    "params": [],
+    "permission": null,
+    "destructive": false,
+    "static": false
+  },
+  {
+    "name": "api_telephony_network_type",
+    "domain": "telephony",
+    "description": "getNetworkType",
+    "class": "android.telephony.TelephonyManager",
+    "method": "getNetworkType",
+    "service": "phone",
+    "params": [],
+    "permission": null,
+    "destructive": false,
+    "static": false
+  },
+  {
+    "name": "api_telephony_operator_name",
+    "domain": "telephony",
+    "description": "getNetworkOperatorName",
+    "class": "android.telephony.TelephonyManager",
+    "method": "getNetworkOperatorName",
+    "service": "phone",
+    "params": [],
+    "permission": null,
+    "destructive": false,
+    "static": false
+  }
+]

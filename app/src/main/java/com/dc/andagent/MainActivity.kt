@@ -135,6 +135,9 @@ import com.dc.andagent.tools.DEVTOOLS_TOOLS
 import com.dc.andagent.tools.WifiInfoTool
 import com.dc.andagent.tools.R35Tool
 import com.dc.andagent.tools.R35_TOOLS
+import com.dc.andagent.tools.AndroidReflectTool
+import com.dc.andagent.tools.RestrictedReflectExecutor
+import com.dc.andagent.tools.ApiToolFactory
 import com.dc.andagent.ui.SettingsStore
 import java.io.File
 import kotlinx.serialization.json.buildJsonObject
@@ -369,6 +372,9 @@ class MainActivity : ComponentActivity() {
         tools.putAll(listOf("web_search", "web_read").associateWith { WebSearchTool(it) })
         // R35: 联系人新建/通话记录/应用卸载/APK 提取/二维码/传感器录制/文件加密。
         tools.putAll(R35_TOOLS.associateWith { R35Tool(appContext, permissionBroker, shizuku, it) })
+        // R42: the ad-hoc bridge and declarations share one restricted executor.
+        tools["android_reflect"] = AndroidReflectTool(RestrictedReflectExecutor(appContext))
+        ApiToolFactory.register(appContext, tools)
 
         WidgetToolRuntime.attach(tools, quickJsEngine)
 
