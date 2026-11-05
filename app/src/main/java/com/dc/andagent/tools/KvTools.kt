@@ -9,8 +9,11 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-/** Six KV tools backed by [KvStore]. */
-val KV_TOOLS = listOf("kv_get", "kv_set", "kv_delete", "kv_keys", "kv_namespaces", "kv_clear")
+/** Eight KV tools backed by [KvStore]. */
+val KV_TOOLS = listOf(
+    "kv_get", "kv_set", "kv_delete", "kv_keys", "kv_namespaces", "kv_clear",
+    "kv_export", "kv_import",
+)
 
 class KvTool(private val context: Context, override val name: String) : Tool {
     private val store = KvStore(context)
@@ -22,6 +25,8 @@ class KvTool(private val context: Context, override val name: String) : Tool {
         "kv_keys" -> "列出命名空间下的键名及剩余 TTL 秒数，可选 prefix 前缀过滤。"
         "kv_namespaces" -> "列出所有 KV 命名空间及其键数量。"
         "kv_clear" -> "清空整个命名空间的所有键，必须 confirm=true。"
+        "kv_export" -> "按命名空间导出 KV 备份 JSON（省略 namespace 或传 all 导出全部；全部导出上限 512KB）。只读操作。"
+        "kv_import" -> "导入 kv_export 输出的 JSON 备份。merge（默认）同名键覆盖、其余保留；replace 先清空目标命名空间，必须 confirm=true。"
         else -> "KV 存储工具"
     }
 
@@ -55,10 +60,23 @@ class KvTool(private val context: Context, override val name: String) : Tool {
             "confirm" to boolParam("必须设为 true 才会清空"),
             required = listOf("namespace"),
         )
+        "kv_export" -> schemaOf(
+            "namespace" to strParam("命名空间；省略或 all 导出全部"),
+            "include_expired" to boolParam("是否包含已过期键，默认 false"),
+            required = emptyList(),
+        )
+        "kv_import" -> schemaOf(
+            "data_json" to strParam("kv_export 输出的 JSON 字符串"),
+            "mode" to strParam("merge（默认，同名覆盖）或 replace（先清空目标命名空间）"),
+            "confirm" to boolParam("mode=replace 时必须为 true"),
+            required = listOf("data_json"),
+        )
         else -> schemaOf()
     }
 
-    override val destructive: Boolean = name == "kv_clear"
+    // kv_import 仅在 replace 时具破坏性，但 destructive 是静态标记，这里取保守口径：
+    // replace 需要 confirm=true（工具内校验），merge 也允许覆盖同名键。
+    override val destructive: Boolean = name == "kv_clear" || name == "kv_import"
 
     override suspend fun execute(args: JsonObject): String = runCatching {
         when (name) {
@@ -68,6 +86,8 @@ class KvTool(private val context: Context, override val name: String) : Tool {
             "kv_keys" -> keys(args)
             "kv_namespaces" -> namespaces()
             "kv_clear" -> clear(args)
+            "kv_export" -> export(args)
+            "kv_import" -> importBackup(args)
             else -> "ERROR: 未知 KV 工具 $name"
         }
     }.getOrElse { "ERROR: ${it.message ?: it.javaClass.simpleName}" }
@@ -177,6 +197,28 @@ class KvTool(private val context: Context, override val name: String) : Tool {
             put("cleared", true)
             put("namespace", namespace)
             put("removed", removed)
+        }.toString()
+    }
+
+    /** Read-only: returns the backup envelope built by [KvStore.export]. */
+    private fun export(args: JsonObject): String =
+        store.export(
+            namespace = args.strArg("namespace"),
+            includeExpired = args.boolArg("include_expired") == true,
+        )
+
+    private fun importBackup(args: JsonObject): String {
+        val data = args.strArg("data_json") ?: return "ERROR: 缺少 data_json"
+        val mode = KvStore.normalizeImportMode(args.strArg("mode"))
+        KvStore.importModeError(mode)?.let { return it }
+        KvStore.importConfirmError(mode, args.boolArg("confirm"))?.let { return it }
+        val result = store.importJson(data, mode, args.boolArg("confirm"))
+        return buildJsonObject {
+            put("ok", true)
+            put("mode", mode)
+            put("namespaces", result.namespaces)
+            put("imported", result.imported)
+            put("skipped", result.skipped)
         }.toString()
     }
 }

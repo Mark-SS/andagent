@@ -21,13 +21,22 @@ type CanvasSpec = {
 };
 
 const SANDBOX_DOC = `<!doctype html><html><head><meta charset="utf-8"><style>
-html,body{margin:0;background:#0b0d11;overflow:hidden}
+html,body{margin:0;background:transparent;overflow:hidden}
 canvas{display:block;width:100%;height:100%}
 </style></head><body><canvas id="c"></canvas><script>
 var canvas=document.getElementById('c'),ctx=canvas.getContext('2d');
 var spec=null,started=0,raf=0;
+// 显示区尺寸驱动内部缓冲：canvas 内部分辨率始终跟随 iframe 实际渲染尺寸，
+// 绘图坐标 w/h 即显示区大小——绘图内容自动铺满，不再有未绘制的黑色空区。
+function fit(){
+  var r=canvas.getBoundingClientRect();
+  var w=Math.max(64,Math.round(r.width)),h=Math.max(64,Math.round(r.height));
+  if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;return true;}
+  return false;
+}
 function frame(){
   if(!spec)return;
+  if(fit()){started=Date.now();cancelAnimationFrame(raf);}
   var t=(Date.now()-started)/1000;
   ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,canvas.width,canvas.height);
   try{ new Function('ctx','t','w','h','data',spec.code)(ctx,t,canvas.width,canvas.height,spec.data); }
@@ -40,10 +49,11 @@ addEventListener('message',function(ev){
   if(d.type!=='canvas')return;
   cancelAnimationFrame(raf);
   spec=d.spec;
-  canvas.width=spec.width;canvas.height=spec.height;
   started=Date.now();
   frame();
 });
+addEventListener('resize',function(){ if(spec)frame(); });
+frame();
 </script></body></html>`;
 
 function parseSpec(code: string): CanvasSpec | null {

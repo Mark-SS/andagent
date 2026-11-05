@@ -576,6 +576,8 @@ const TOOL_DEFS = [
   { name: "kv_keys", description: "列出命名空间下的键名及剩余 TTL 秒数，可选 prefix 前缀过滤。", parameters: { type: "object", properties: { namespace: { type: "string" }, prefix: { type: "string", description: "可选：键名前缀" } }, required: [] } },
   { name: "kv_namespaces", description: "列出所有 KV 命名空间及其键数量。", parameters: { type: "object", properties: {}, required: [] } },
   { name: "kv_clear", description: "清空整个命名空间的所有键，必须 confirm=true。", parameters: { type: "object", properties: { namespace: { type: "string", description: "要清空的命名空间" }, confirm: { type: "boolean" } }, required: ["namespace"] } },
+  { name: "kv_export", description: "按命名空间导出 KV 备份 JSON（省略 namespace 或传 all 导出全部；全部导出上限 512KB）。只读操作。", parameters: { type: "object", properties: { namespace: { type: "string", description: "命名空间；省略或 all 导出全部" }, include_expired: { type: "boolean", description: "是否包含已过期键，默认 false" } }, required: [] } },
+  { name: "kv_import", description: "导入 kv_export 输出的 JSON 备份。merge（默认）同名键覆盖、其余保留；replace 先清空目标命名空间，必须 confirm=true。", parameters: { type: "object", properties: { data_json: { type: "string", description: "kv_export 输出的 JSON 字符串" }, mode: { type: "string", description: "merge（默认，同名覆盖）或 replace（先清空目标命名空间）" }, confirm: { type: "boolean", description: "mode=replace 时必须为 true" } }, required: ["data_json"] } },
   { name: "memory_add", description: "保存长期用户记忆；core 是长期人格记忆，用户偏好/重要指令写这里；满了先删过期条目再写新的。instruction 默认进 core。", parameters: { type: "object", properties: { content: { type: "string" }, category: { type: "string", enum: ["preference", "fact", "instruction"] }, core: { type: "boolean" } }, required: ["content"] } },
   { name: "memory_search", description: "按关键词搜索长期记忆。", parameters: { type: "object", properties: { query: { type: "string" }, limit: { type: "integer" } }, required: ["query"] } },
   { name: "memory_update", description: "按 id 更新记忆，支持自编辑 core。", parameters: { type: "object", properties: { id: { type: "string" }, content: { type: "string" } }, required: ["id", "content"] } },
@@ -659,14 +661,14 @@ const LIVE_GUIDE_EN = [
 
 const STORAGE_MEDIA_GUIDE = [
   "结构化存储：用户要记账、清单或笔记库时，先用 db_create 建库，再用 db_exec 建表，后续用参数化 INSERT 和 db_query SELECT。",
-  "轻量键值：用户要记住偏好、计数器或小型状态时，用 kv_set 写入，kv_get/kv_keys 读取；临时数据加 ttl_ms；清空命名空间用 kv_clear 且 confirm=true（最多 64 个命名空间、每命名空间 512 键、单值 64KB）。",
+  "轻量键值：用户要记住偏好、计数器或小型状态时，用 kv_set 写入，kv_get/kv_keys 读取；临时数据加 ttl_ms；清空命名空间用 kv_clear 且 confirm=true；备份/恢复用 kv_export/kv_import（replace 需 confirm=true）（最多 64 个命名空间、每命名空间 512 键、单值 64KB）。",
   "记账表例：CREATE TABLE records(id INTEGER PRIMARY KEY, date TEXT, item TEXT, amount REAL)。",
   "输出呈现：给用户音频或视频文件时，用 ```audio 或 ```video 围栏，内容为 JSON，例如 {\"uri\":\"/本地路径/file.mp4\",\"title\":\"文件名\"}；uri 可为本地文件路径或 https。",
 ].join("\n");
 
 const STORAGE_MEDIA_GUIDE_EN = [
   "Structured storage: for expenses, lists, or notes, create a database with db_create, then a table with db_exec; use parameterized INSERT and db_query SELECT afterward.",
-  "Key-value storage: use kv_set for preferences, counters, or small state; kv_get/kv_keys to read. Use ttl_ms for temporary values. kv_clear requires confirm=true (up to 64 namespaces, 512 keys per namespace, 64KB per value).",
+  "Key-value storage: use kv_set for preferences, counters, or small state; kv_get/kv_keys to read. Use ttl_ms for temporary values. kv_clear requires confirm=true; kv_export/kv_import handle JSON backups (replace requires confirm=true) (up to 64 namespaces, 512 keys per namespace, 64KB per value).",
   "Example expense schema: CREATE TABLE records(id INTEGER PRIMARY KEY, date TEXT, item TEXT, amount REAL).",
   "For audio or video files, output a ```audio or ```video fence with JSON such as {\"uri\":\"/local/path/file.mp4\",\"title\":\"Filename\"}. uri may be a local path or HTTPS URL.",
 ].join("\n");

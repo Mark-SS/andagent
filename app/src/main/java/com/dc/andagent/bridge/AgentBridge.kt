@@ -199,9 +199,12 @@ class AgentBridge(
     }
 
     /**
-     * R53: 前端 KV 通道（会话持久化）。仅放行 KV 六工具，参数与返回值与
-     * 工具执行结果一致；写失败（如 64KB 上限）以 "ERROR:" 前缀返回，前端
-     * 据此回退 localStorage，绝不静默吞写失败。
+     * R53/R54: 前端 KV 通道（会话持久化 + 备份）。放行 KV_TOOLS 全量（含
+     * kv_export/kv_import）：前端已占用 sessions 命名空间，导入会话备份会覆盖
+     * 它，但 kv_import 的 replace 模式仍强制 confirm=true，merge 语义与
+     * kv_set 同级；导出只读。参数与返回值与工具执行结果一致；写失败（如
+     * 64KB 上限）以 "ERROR:" 前缀返回，前端据此回退 localStorage，绝不静默
+     * 吞写失败。
      */
     @JavascriptInterface
     fun kvCall(name: String, raw: String): String {
