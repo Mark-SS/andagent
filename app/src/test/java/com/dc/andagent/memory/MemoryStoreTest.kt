@@ -23,8 +23,8 @@ class MemoryStoreTest {
     }
     @Test fun fullArchivalEvictsOldestAccessedNotNewcomer() {
         val s = store()
-        repeat(200) { s.add("archive $it") }
-        s.search("archive 0") // warm up the oldest entry
+        repeat(200) { s.add(if (it == 0) "unique oldest archive" else "archive $it") }
+        s.search("unique oldest") // warm up only the oldest entry
         val kept = s.add("brand new memory")
         assertEquals(200, s.stats().second)
         assertTrue(s.getAll().any { it.id == kept.id })
