@@ -144,6 +144,48 @@ class TermuxEnv(private val context: Context, private val shizuku: ShizukuShell?
 
     private fun environment(): Map<String, String> = paths.environment
 
+    // ---------------- R27: 对话流内嵌终端（与 shell_exec 共享长驻会话） ----------------
+
+    private val ttyMarkerSeq = java.util.concurrent.atomic.AtomicInteger(0)
+
+    /** 检查+创建在同一把锁里，避免与 execEmbedded() 的懒创建竞态出双会话。 */
+    @Synchronized private fun currentSession(): TermuxSession {
+        session?.takeIf { it.alive() }?.let { return it }
+        return TermuxSession(paths.bash, home, environment()).also { session = it }
+    }
+
+    /** 终端执行一行命令：写入共享 bash 的 stdin，附加 tty 弱 marker 标记命令
+     * 边界（供前端识别命令结束；execute() 的 UUID marker 不受影响）。不等人，
+     * 输出由 terminalPoll() 增量拉取。用户手输命令不走危险命令黑名单。 */
+    fun terminalExec(command: String): String {
+        if (!paths.bash.canExecute()) return "ERROR: 内嵌 shell 未就绪，请先运行 termux_setup"
+        return try {
+            val marker = "__ANDAGENT_TTY_${ttyMarkerSeq.incrementAndGet()}"
+            currentSession().writeRaw("$command\nprintf '$marker:%s\\n' \"\$?\"\n")
+            "ok"
+        } catch (e: Exception) {
+            "ERROR: 终端执行失败：${e.message ?: e.javaClass.simpleName}"
+        }
+    }
+
+    /** 终端裸写入 stdin（交互程序应答等），不附加 marker。 */
+    fun terminalWrite(input: String): String {
+        if (!paths.bash.canExecute()) return "ERROR: 内嵌 shell 未就绪，请先运行 termux_setup"
+        return try {
+            currentSession().writeRaw(input)
+            "ok"
+        } catch (e: Exception) {
+            "ERROR: 终端写入失败：${e.message ?: e.javaClass.simpleName}"
+        }
+    }
+
+    /** 拉取终端增量输出；会话还没起来时返回空串（卡片空闲态，不算错误）。 */
+    fun terminalPoll(): String = try {
+        session?.takeIf { it.alive() }?.terminalPoll() ?: ""
+    } catch (_: Exception) {
+        ""
+    }
+
     suspend fun exec(command: String, timeoutSeconds: Int): String = withContext(Dispatchers.IO) {
         if (Regex("(?i)(rm\\s+-[a-z]*r[a-z]*f\\s+/($|\\s)|mkfs\\b|dd\\s+[^\\n]*of=/dev/|flash_image\\b)").containsMatchIn(command))
             return@withContext "ERROR: 命令被危险路径黑名单拦截"
@@ -173,7 +215,10 @@ class TermuxEnv(private val context: Context, private val shizuku: ShizukuShell?
     private suspend fun execEmbedded(command: String, timeoutSeconds: Int): String {
         var sessionFailure: String? = null
         val current = try {
-            session?.takeIf { it.alive() } ?: TermuxSession(paths.bash, home, environment()).also { session = it }
+            session?.takeIf { it.alive() } ?: synchronized(this) {
+                // 双检：终端线程（currentSession）可能刚建好会话。
+                session?.takeIf { it.alive() } ?: TermuxSession(paths.bash, home, environment()).also { session = it }
+            }
         } catch (e: Exception) {
             sessionFailure = "长驻 bash 启动失败：${e.message}"
             Log.w("TermuxEnv", "session startup failed, using one-shot fallback", e)
