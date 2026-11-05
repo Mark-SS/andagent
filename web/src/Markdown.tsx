@@ -1,5 +1,5 @@
 import { useI18n } from "./i18n";
-import { memo, useMemo, useState } from "react";
+import { memo, useMemo, useState, useSyncExternalStore } from "react";
 import {
   MarkdownTextPrimitive,
   type SyntaxHighlighterProps,
@@ -8,7 +8,6 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import hljs from "highlight.js";
-import { useEffect } from "react";
 import { ChartCard } from "./ChartCard";
 import { MermaidCard } from "./MermaidCard";
 import { MediaCard } from "./MediaCard";
@@ -21,6 +20,13 @@ import { LiveCard } from "./LiveCard";
 import { ShaderCard } from "./ShaderCard";
 import { WidgetPreviewCard } from "./WidgetPreviewCard";
 
+/** 流式标记的外部 store 订阅（挂载即读快照 + 持续订阅，无事件错过窗口）。 */
+const subscribeStreaming = (listener: () => void) => {
+  window.addEventListener("andagent-streaming", listener);
+  return () => window.removeEventListener("andagent-streaming", listener);
+};
+const getStreaming = () => !!window.__andagentStreaming;
+
 function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighlighterProps) {
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
@@ -28,16 +34,13 @@ function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighligh
   const isChart = ["chart", "photos", "image", "kv", "table", "json-tree", "geo", "audio", "video", "camera", "widget", "canvas", "live", "shader", "terminal", "mermaid", "svg"].includes(kind);
 
   // 流式防护：围栏渲染组件（chart/mermaid/...）在代码流式到达时反复重挂载会
-  // 闪烁。assistant-ui 不把「生成中」状态传进 markdown 组件，这里用
-  // window.__andagentStreaming（App.tsx 在流开始/结束时置位）判断：流式中
+  // 闪烁。assistant-ui 不把「生成中」状态传进 markdown 组件，这里订阅
+  // window.__andagentStreaming（agent.ts 在流开始/结束时置位）判断：流式中
   // 重围栏只渲染占位，流结束全量重渲染为真正卡片。
-  const [streaming, setStreaming] = useState(() => !!window.__andagentStreaming);
-  useEffect(() => {
-    const onFlag = (e: Event) => setStreaming((e as CustomEvent<boolean>).detail);
-    window.addEventListener("andagent-streaming", onFlag as EventListener);
-    return () => window.removeEventListener("andagent-streaming", onFlag as EventListener);
-  }, []);
-  // 未闭合的围栏（代码里仍含流式残片特征）也视作生成中。
+  // 用 useSyncExternalStore：挂载即读当前值 + 订阅后续变化——不会错过事件
+  // （旧版手写 addEventListener 有「重挂载晚于 dispatch」的错过窗口，导致
+  // live 围栏永远卡在「生成中」）。
+  const streaming = useSyncExternalStore(subscribeStreaming, getStreaming, getStreaming);
   const liveFence = streaming && isChart;
 
   const html = useMemo(() => {
