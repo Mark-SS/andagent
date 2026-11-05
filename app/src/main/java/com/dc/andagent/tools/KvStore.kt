@@ -33,6 +33,23 @@ class KvStore(private val context: Context) {
 
     data class ImportResult(val namespaces: Int, val imported: Int, val skipped: Int)
 
+    /** One exported/imported key with its absolute expiry (null = never). */
+    data class BackupRecord(
+        val namespace: String,
+        val key: String,
+        val value: JsonElement,
+        val expiresAt: Long?,
+    )
+
+    /** Validated import plan; built entirely before any SharedPreferences write. */
+    data class ImportPlan(
+        val writes: Map<String, Map<String, BackupRecord>>,
+        val clearedNamespaces: Set<String>,
+        val namespaces: Int,
+        val imported: Int,
+        val skipped: Int,
+    )
+
     /** Reads an entry, lazily deleting it when its TTL has elapsed. */
     @Synchronized
     fun read(namespace: String?, key: String, now: Long = System.currentTimeMillis()): Entry? {
@@ -267,23 +284,6 @@ class KvStore(private val context: Context) {
         const val ALL_SCOPE = "all"
         const val IMPORT_MODE_MERGE = "merge"
         const val IMPORT_MODE_REPLACE = "replace"
-
-        /** One exported/imported key with its absolute expiry (null = never). */
-        data class BackupRecord(
-            val namespace: String,
-            val key: String,
-            val value: JsonElement,
-            val expiresAt: Long?,
-        )
-
-        /** Validated import plan; built entirely before any SharedPreferences write. */
-        data class ImportPlan(
-            val writes: Map<String, Map<String, BackupRecord>>,
-            val clearedNamespaces: Set<String>,
-            val namespaces: Int,
-            val imported: Int,
-            val skipped: Int,
-        )
 
         private val NAME = Regex("[a-zA-Z0-9_.-]{1,64}")
 

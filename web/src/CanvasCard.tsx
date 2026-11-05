@@ -21,7 +21,7 @@ type CanvasSpec = {
 };
 
 const SANDBOX_DOC = `<!doctype html><html><head><meta charset="utf-8"><style>
-html,body{margin:0;background:transparent;overflow:hidden}
+html,body{margin:0;height:100%;background:#0b0d11;overflow:hidden}
 canvas{display:block;width:100%;height:100%}
 </style></head><body><canvas id="c"></canvas><script>
 var canvas=document.getElementById('c'),ctx=canvas.getContext('2d');
