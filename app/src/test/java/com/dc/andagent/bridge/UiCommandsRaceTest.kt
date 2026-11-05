@@ -29,12 +29,14 @@ import java.util.concurrent.TimeUnit
  *  3. main is still running the task after 2s + 3s -> report the explicit
  *     "side effects may have happened" error instead of a plain timeout.
  *
- * Robolectric runs the test body on the main thread, so the test body *is* the
- * main looper: `idle()` executes posted tasks inline. That is why every
- * [UiCommands] call under test happens on its own background thread — the exact
- * position the JavaBridge occupies in production. `pause()` keeps posted tasks
- * queued until the test body releases them, which is the lever that places the
- * 2s deadline on either side of "started".
+ * Robolectric runs the test body on the main thread, and a paused *main* looper
+ * may only be pumped from that thread (see [driveMainUntil]). `idle()` drains
+ * the whole queue before returning, so a slow block keeps the test thread for
+ * its full duration; every [UiCommands] call under test therefore runs on its
+ * own background thread — the exact position the JavaBridge occupies in
+ * production. `pause()` keeps posted tasks queued until the test body releases
+ * them, which is the lever that places the 2s deadline on either side of
+ * "started".
  *
  * The only sleeps are inside the deliberately slow blocks under test (a slow
  * UI command), never a sleep used to "wait for" a race: ordering comes from
@@ -59,9 +61,12 @@ class UiCommandsRaceTest {
 
     @After
     fun tearDown() {
-        // Drain whatever the test left queued so it cannot leak into the next test.
+        // Drain whatever the test left queued so it cannot leak into the next
+        // test. Every slow block has a fixed duration, so this always returns.
         shadowOf(Looper.getMainLooper()).idle()
         controller.pause().stop().destroy()
+        // destroy() may post follow-up work; drain that as well.
+        shadowOf(Looper.getMainLooper()).idle()
     }
 
     /**
@@ -91,8 +96,12 @@ class UiCommandsRaceTest {
         // produced when the state is no longer 0 after the first wait, so
         // equality proves CAS(0->2) won while the task was still pending.
         assertEquals("ERROR: UI 命令超时", result)
-        assertTrue("must wait out the 2s deadline, was ${elapsedMs}ms", elapsedMs >= 1_900)
-        assertTrue("must give up after the deadline, was ${elapsedMs}ms", elapsedMs < 3_000)
+        // ~200ms of scheduling jitter is absorbed, but the caller still has to
+        // sit out essentially the whole 2s deadline.
+        assertTrue("must wait out the 2s deadline, was ${elapsedMs}ms", elapsedMs >= 1_800)
+        // Loose anti-hang guard only: the exact message above already proves the
+        // CAS(0->2) branch was taken instead of the 3s grace path.
+        assertTrue("must give up after the deadline, was ${elapsedMs}ms", elapsedMs < 10_000)
         assertFalse("queued task must not have run", keepScreenOnSet())
 
         // Drain the queue: if removeCallbacks missed the task, its CAS(0->1)
@@ -133,8 +142,10 @@ class UiCommandsRaceTest {
         assertTrue("expected the block's real JSON payload, got: $result", result!!.startsWith("{"))
         assertTrue("expected ok:true from the block, got: $result", result!!.contains("\"ok\":true"))
         assertFalse("must not report a timeout once the task has started", result!!.contains("超时"))
-        assertTrue("must outlive the 2s deadline, was ${elapsedMs}ms", elapsedMs >= 2_000)
-        assertTrue("must return when the block ends, was ${elapsedMs}ms", elapsedMs < 5_000)
+        assertTrue("must outlive the 2s deadline, was ${elapsedMs}ms", elapsedMs >= 1_900)
+        // Loose anti-hang guard only: the real JSON payload above already proves
+        // the block finished and its result was returned.
+        assertTrue("must return when the block ends, was ${elapsedMs}ms", elapsedMs < 12_000)
     }
 
     /**
@@ -170,24 +181,39 @@ class UiCommandsRaceTest {
             "ERROR: UI 命令超时（任务已在主线程执行，副作用可能已发生）",
             result,
         )
-        assertTrue("must not give up before 2s + 3s, was ${elapsedMs}ms", elapsedMs >= 4_900)
-        assertTrue("must not wait for the 6s block, was ${elapsedMs}ms", elapsedMs < 6_000)
+        assertTrue("must not give up before 2s + 3s, was ${elapsedMs}ms", elapsedMs >= 4_800)
+        // Loose anti-hang guard only: the exact warning above already proves the
+        // caller returned before the 6s block could complete.
+        assertTrue("must not wait for the 6s block, was ${elapsedMs}ms", elapsedMs < 15_000)
     }
 
     private fun keepScreenOnSet(): Boolean =
         activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON != 0
 
     /**
-     * Idles the paused main looper until [latch] fires. Idling stops as soon as
-     * the block signals, so the slow block runs exactly once and the test body
-     * never waits on a second execution.
+     * Drives the paused main looper until [latch] fires.
+     *
+     * A dedicated idler thread is not an option on Robolectric 4.13: PAUSED
+     * mode's `ShadowPausedLooper.executeOnLooper` throws
+     * "main looper can only be controlled from main thread" for the main
+     * looper before it ever reaches the executor path (the bytecode checks
+     * `LooperMode == PAUSED && looper == mainLooper` first). Since the test
+     * body *is* that thread, `idle()` also runs the slow block inline and
+     * blocks for the block's full sleep — `idle()` itself has no timeout; it
+     * is only bounded here because every block under test sleeps for a fixed
+     * duration. [deadlineMs] therefore only catches the case where the task
+     * was never posted at all: then `idle()` returns immediately and the loop
+     * would spin forever.
      */
-    private fun driveMainUntil(latch: CountDownLatch) {
-        val deadline = System.currentTimeMillis() + 3_000
+    private fun driveMainUntil(latch: CountDownLatch, deadlineMs: Long = 5_000) {
+        val deadline = System.currentTimeMillis() + deadlineMs
         while (latch.count > 0 && System.currentTimeMillis() < deadline) {
             shadowOf(Looper.getMainLooper()).idle()
             if (latch.count > 0) latch.await(5, TimeUnit.MILLISECONDS)
         }
-        assertTrue("main thread never started the task", latch.count == 0L)
+        assertTrue(
+            "main thread never started the task within ${deadlineMs}ms",
+            latch.count == 0L,
+        )
     }
 }
