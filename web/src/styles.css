@@ -1557,8 +1557,9 @@ button:disabled {
 
 .drawer-item {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
   padding: 10px 8px 10px 12px;
   border-radius: 10px;
   cursor: pointer;
@@ -1573,12 +1574,19 @@ button:disabled {
 }
 
 .drawer-item-title {
-  flex: 1;
+  /* 独占一行，不被 token 统计挤压截断。 */
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 13px;
+}
+
+.drawer-item-sub {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .drawer-item.active .drawer-item-title {
@@ -2029,3 +2037,6 @@ button:disabled {
 .memory-entry { display: flex; align-items: center; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
 .memory-entry textarea { flex: 1 1 220px; min-width: 0; }
 .memory-entry span { flex: 1 1 220px; overflow-wrap: anywhere; }
+
+.settings-notices { max-height: 45vh; overflow: auto; margin-top: 12px; border: 1px solid var(--border, #555); border-radius: 8px; padding: 12px; }
+.settings-notices pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.5 ui-monospace, monospace; margin: 0; }

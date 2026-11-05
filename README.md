@@ -1,5 +1,7 @@
 # andagent
 
+[简体中文](README.zh-CN.md) · English
+
 [![CI](https://github.com/congduan/andagent/actions/workflows/ci.yml/badge.svg)](https://github.com/congduan/andagent/actions/workflows/ci.yml) [![Release](https://github.com/congduan/andagent/actions/workflows/release.yml/badge.svg)](https://github.com/congduan/andagent/actions/workflows/release.yml) [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 An on-device AI assistant for Android. It calls device capabilities directly from the conversation — files, media store, calendar, Bluetooth/Wi-Fi, sensors, NFC, screen, shell, databases — and renders the results inline as rich cards: charts, images, maps, audio/video, tables, and widget previews.
@@ -7,7 +9,7 @@ An on-device AI assistant for Android. It calls device capabilities directly fro
 - **Frontend**: `web/` — React 19 + `@assistant-ui/react` + `@mariozechner/pi-ai`, bundled with Vite and shipped inside the APK for offline use.
 - **Native layer**: `app/` — a Kotlin full-screen WebView shell, the tool registry, and permission / system-API bridging.
 - **Model**: any OpenAI-compatible endpoint. Requests are proxied through native OkHttp (to bypass WebView CORS) and streamed back over SSE; a single turn allows up to 200 tool rounds.
-- **Version**: `0.24.4` (versionCode 26), `applicationId = com.dc.andagent`. `app/build.gradle.kts` is authoritative.
+- **Version**: `0.25.2` (versionCode 34), `applicationId = com.dc.andagent`. `app/build.gradle.kts` is authoritative.
 
 ## How it works
 
@@ -22,7 +24,7 @@ The WebView loads `https://appassets.androidplatform.net/assets/web/index.html` 
 
 ## Capabilities
 
-`MainActivity.kt` registers 162 tools (v0.24.2). Each implements the `Tool` interface in `tools/Tool.kt` (JSON Schema parameters plus a `destructive` marker):
+`MainActivity.kt` registers the native tool catalog. Each implements the `Tool` interface in `tools/Tool.kt` (JSON Schema parameters plus a `destructive` marker):
 
 | Domain | Count | Representative tools |
 |---|---|---|
@@ -46,6 +48,8 @@ The WebView loads `https://appassets.androidplatform.net/assets/web/index.html` 
 | Web search / read | 2 | `web_search`, `web_read` |
 | Intents | 3 | `intent_send`, `intent_resolve`, `intent_broadcast` |
 | WebView DevTools | 5 | `devtools_status/debugging/eval/console/screenshot` |
+| Layered memory / LiveLoop | — | Core and archived memory, continuous background work |
+| Camera overlay / scheduled work | — | Floating preview, chat camera card, cron management |
 
 Other features:
 
@@ -54,6 +58,10 @@ Other features:
 - **Home-screen widgets**: declarative `WidgetSpec v2` with STATIC / HTTP / SYSTEM / SCRIPT data sources and WorkManager-scheduled refreshes.
 - **Database browser**: `dbgui/` provides a read-only SQL UI built on sql.js + Grid.js.
 - **Document generation**: hand-written OOXML in pure Kotlin for docx/pptx/xlsx.
+- **Layered memory**: core memories stay in context; relevant archived memories are retrieved as needed.
+- **LiveLoop**: agent work can continue across scheduled wakeups and resume with stored context.
+- **Scheduled tasks**: cron tasks can be created, paused, enabled, and inspected in Settings.
+- **Camera overlay**: camera preview can float over the conversation for multimodal tasks.
 - **Multi-session drawer, reasoning display, voice input, conversation export, dynamic permissions**: implemented in the frontend and bridge layers.
 
 ## Quick start
@@ -150,7 +158,7 @@ The manifest declares many permissions, but **most are requested on demand via `
 | External Termux `RUN_COMMAND` | Termux installed and authorized; may also be granted via Shizuku `pm grant` |
 | Embedded Termux userland | `arm64-v8a` device; see below |
 
-Caveats: `targetSdk = 28` retains the legacy storage/permission model and is not suitable for Play Store distribution; `release` has no signing config and no minification; there is no CI, and the only static check is `tsc --noEmit` in the build chain.
+Caveats: `targetSdk = 28` retains the legacy storage/permission model and is not suitable for Play Store distribution. The Release workflow produces an installable debug-signed APK; it has no production signing key or minification. CI runs web and Android builds and tests.
 
 ## Project layout
 
@@ -158,7 +166,7 @@ Caveats: `targetSdk = 28` retains the legacy storage/permission model and is not
 app/
   build.gradle.kts                 # Android config, buildWeb / downloadBootstrap tasks
   src/main/java/com/dc/andagent/
-    MainActivity.kt                # WebView shell; the single registry of 159 tools
+    MainActivity.kt                # WebView shell and native tool registry
     bridge/                        # AgentBridge / DbGuiBridge / PermissionBroker
     tools/                         # Tool implementations (30+ files)
     script/                        # QuickJS engine, JS API, js_eval
@@ -222,11 +230,24 @@ The full porting record and residual path list are in `/tmp/andagent-r5-run.md`.
 
 ## Third-party components and licenses
 
-There is no `LICENSE` at the repository root. Third-party attribution:
+AndAgent is licensed under [Apache-2.0](LICENSE). Third-party attribution:
 
+- `THIRD-PARTY-NOTICES.md` — consolidated component versions, licenses, sources, and copyright notices
 - `ATTRIBUTION.md` — Termux code adaptation (MIT / Apache-2.0 / GPLv3 notes) and the derived bootstrap
 - `app/libs/README.md` — QuickJS Android wrapper 3.2.0 (Apache-2.0) and per-ABI SHA-256 hashes
 - `app/src/main/assets/dbgui/THIRD_PARTY_LICENSES.txt` — sql.js, Grid.js
 - `app/src/main/assets/vendor/scrcpy-LICENSE.txt` — scrcpy server 2.7
 
 Progress, backlog, and milestones are tracked in `ROADMAP-TODO.md`.
+
+## Screenshots
+
+Screenshots will be added after final device capture.
+
+## Star history
+
+Star history chart will be added after the public release.
+
+## Contributors
+
+[GitHub automatically lists contributors](https://github.com/congduan/andagent/graphs/contributors). Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).

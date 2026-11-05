@@ -17,19 +17,23 @@ class MemoryStore(
     private val entries = mutableListOf<Entry>()
     private val changes = mutableListOf<JsonObject>()
     init {
+        // Parse into locals first: a corrupt entry anywhere must leave state untouched,
+        // never a half-loaded list that the next persist() would write back over good data.
         runCatching {
             val root = Json.parseToJsonElement(read() ?: "[]")
             val array = if (root is JsonArray) root else root.jsonObject.getValue("entries").jsonArray
-            if (root is JsonObject) changes += root["history"]?.jsonArray?.map { it.jsonObject }.orEmpty()
-            array.forEach { item ->
+            val loadedChanges = if (root is JsonObject) root["history"]?.jsonArray?.map { it.jsonObject }.orEmpty().takeLast(500) else emptyList()
+            val loadedEntries = array.map { item ->
                 val o = item.jsonObject
-                entries += Entry(
+                Entry(
                     o.getValue("id").jsonPrimitive.content, o.getValue("content").jsonPrimitive.content,
                     o.getValue("category").jsonPrimitive.content, o.getValue("core").jsonPrimitive.boolean,
                     o.getValue("createdAt").jsonPrimitive.long, o.getValue("updatedAt").jsonPrimitive.long,
                     o.getValue("lastAccessAt").jsonPrimitive.long, o.getValue("hits").jsonPrimitive.int,
                 )
             }
+            entries += loadedEntries
+            changes += loadedChanges
         }
     }
 
@@ -53,11 +57,12 @@ class MemoryStore(
         if (targetCore) require(corePromptSize(clean, category) <= PROMPT_LIMIT) { "core 总内容超过 3000 字符注入上限" }
         val time = now()
         val entry = Entry(UUID.randomUUID().toString(), clean, category, targetCore, time, time, time, 0)
-        entries += entry
-        if (!targetCore && entries.count { !it.core } > ARCHIVAL_LIMIT) {
-            val victim = entries.filter { !it.core }.minWith(compareBy<Entry> { it.hits }.thenBy { it.lastAccessAt }.thenBy { it.createdAt })
+        // Eviction candidates exclude the incoming entry: adding must never evict what it just added.
+        if (!targetCore && entries.count { !it.core } >= ARCHIVAL_LIMIT) {
+            val victim = entries.filter { !it.core }.minWith(compareBy<Entry> { it.lastAccessAt }.thenBy { it.createdAt })
             entries.remove(victim)
         }
+        entries += entry
         record("add", entry)
         persist()
         return entry

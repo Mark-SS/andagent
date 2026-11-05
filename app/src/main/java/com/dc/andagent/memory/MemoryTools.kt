@@ -26,7 +26,7 @@ class MemoryTool(private val store: MemoryStore, override val name: String) : To
         "memory_history" -> schemaOf("id" to strParam("可选记忆 id"))
         else -> schemaOf()
     }
-    override val destructive: Boolean = false
+    override val destructive: Boolean = name == "memory_delete_all"
     override suspend fun execute(args: JsonObject): String = runCatching {
         when (name) {
             "memory_add" -> entryJson(store.add(args.strArg("content") ?: error("缺少 content"), args.strArg("category") ?: "fact", args.boolArg("core") == true)).toString()

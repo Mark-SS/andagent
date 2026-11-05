@@ -18,7 +18,10 @@ import {
   type ShizukuStatus,
   cronList, cronToggle, cronDelete, cronPauseAll, cronExactAllowed, cronOpenExactSettings,
   type CronTask, skillManage, memoryCall, type MemoryEntry,
+  getAppVersion,
 } from "./bridge";
+import noticesText from "../../THIRD-PARTY-NOTICES.md?raw";
+import { setLanguageMode, useI18n, type LanguageMode } from "./i18n";
 import { loadThemeMode, setTheme, type ThemeMode } from "./theme";
 
 const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
@@ -34,6 +37,8 @@ interface Props {
 }
 
 export function SettingsPanel({ settings, onClose, onSave }: Props) {
+  const { t, mode } = useI18n();
+  const [showNotices, setShowNotices] = useState(false);
   const [draft, setDraft] = useState<Settings>(settings);
   const [error, setError] = useState<string | null>(null);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => loadThemeMode());
@@ -67,7 +72,7 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
   };
   useEffect(refreshMemories, []);
   const saveMemory = (id: string) => {
-    try { memoryCall("memory_update", { id, content: memoryEdits[id] ?? memories.find(m => m.id === id)?.content ?? "" }); setMemoryMsg("已保存"); refreshMemories(); }
+    try { memoryCall("memory_update", { id, content: memoryEdits[id] ?? memories.find(m => m.id === id)?.content ?? "" }); setMemoryMsg(t("saved")); refreshMemories(); }
     catch (e) { setMemoryMsg(String(e)); }
   };
   const deleteMemory = (id: string) => {
@@ -117,11 +122,11 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
 
   const save = () => {
     if (!draft.baseUrl.trim()) {
-      setError("Base URL 不能为空");
+      setError(t("baseRequired"));
       return;
     }
     if (!/^https?:\/\//i.test(draft.baseUrl.trim())) {
-      setError("Base URL 需以 http:// 或 https:// 开头");
+      setError(t("baseInvalid"));
       return;
     }
     const next: Settings = {
@@ -140,18 +145,35 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
       <div className="settings-panel">
         <header className="settings-head">
           <div>
-            <h2>设置</h2>
-            <p>模型通过 Kotlin 原生网络层代理，不受浏览器 CORS 限制。</p>
+            <h2>{t("settings")}</h2>
+            <p>{t("settingsNote")}</p>
           </div>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="关闭">
+          <button type="button" className="icon-btn" onClick={onClose} aria-label={t("close")}>
             ✕
           </button>
         </header>
 
         <div className="settings-body">
           <div className="settings-card">
-            <div className="settings-card-head"><span>外观</span></div>
-            <div className="theme-segmented" role="radiogroup" aria-label="外观模式">
+            <div className="settings-card-head"><span>{t("about")}</span></div>
+            <p className="settings-card-note">{t("version")}: {getAppVersion()} · {t("built")}: {__BUILD_TIME__}</p>
+            <p className="settings-card-note">{t("license")}: Apache-2.0</p>
+            <div className="settings-card-actions">
+              <a className="btn-ghost" href="https://github.com/congduan/andagent" target="_blank" rel="noreferrer">{t("repository")}</a>
+              <a className="btn-ghost" href="https://github.com/congduan/andagent/stargazers" target="_blank" rel="noreferrer">{t("star")}</a>
+              <button type="button" className="btn-ghost" onClick={() => setShowNotices(v => !v)}>{t("notices")}</button>
+            </div>
+            {showNotices && <div className="settings-notices"><pre>{noticesText || t("noticesUnavailable")}</pre></div>}
+          </div>
+          <div className="settings-card">
+            <div className="settings-card-head"><span>{t("language")}</span></div>
+            <div className="theme-segmented" role="radiogroup" aria-label={t("language")}>
+              {(["system", "zh", "en"] as LanguageMode[]).map(value => <button key={value} type="button" role="radio" aria-checked={mode === value} className={mode === value ? "active" : ""} onClick={() => setLanguageMode(value)}>{value === "system" ? t("system") : value === "zh" ? t("chinese") : t("english")}</button>)}
+            </div>
+          </div>
+          <div className="settings-card">
+            <div className="settings-card-head"><span>{t("appearance")}</span></div>
+            <div className="theme-segmented" role="radiogroup" aria-label={t("appearance")}>
               {THEME_OPTIONS.map((option) => (
                 <button
                   key={option.value}
@@ -161,11 +183,11 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
                   className={themeMode === option.value ? "active" : ""}
                   onClick={() => { setTheme(option.value); setThemeMode(option.value); }}
                 >
-                  {option.label}
+                  {t(option.value)}
                 </button>
               ))}
             </div>
-            <p className="settings-card-note">夜间为默认；跟随系统时自动随系统深浅色切换。</p>
+            <p className="settings-card-note">{t("themeNote")}</p>
           </div>
 
           <label className="field">
@@ -178,7 +200,7 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
               autoCorrect="off"
               spellCheck={false}
             />
-            <em>OpenAI 兼容端点，不要带 /chat/completions</em>
+            <em>{t("baseUrlHint")}</em>
           </label>
 
           <label className="field">
@@ -187,16 +209,16 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
               type="password"
               value={draft.apiKey}
               onChange={(e) => setDraft({ ...draft, apiKey: e.target.value })}
-              placeholder="粘贴 API Key"
+              placeholder={t("apiKeyPlaceholder")}
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
             />
-            <em>优先从本机 Download/config.json 读取，不会写入代码或 web 资产</em>
+            <em>{t("apiKeyHint")}</em>
           </label>
 
           <label className="field">
-            <span>模型 ID</span>
+            <span>{t("modelId")}</span>
             <input
               value={draft.model}
               onChange={(e) => setDraft({ ...draft, model: e.target.value })}
@@ -213,24 +235,24 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
               rows={5}
               value={draft.systemPrompt}
               onChange={(e) => setDraft({ ...draft, systemPrompt: e.target.value })}
-              placeholder="定义助手的身份与行为"
+              placeholder={t("systemPromptPlaceholder")}
             />
           </label>
 
           <div className="settings-card">
-            <div className="settings-card-head"><span>记忆</span></div>
-            <p className="settings-card-note">核心记忆每次对话常驻；归档记忆按当前问题检索。</p>
-            <strong>核心记忆 ({memories.filter(m => m.core).length}/10)</strong>
+            <div className="settings-card-head"><span>{t("memory")}</span></div>
+            <p className="settings-card-note">{t("memoryNote")}</p>
+            <strong>{t("coreMemory")} ({memories.filter(m => m.core).length}/10)</strong>
             {memories.filter(m => m.core).map(m => (
               <div className="memory-entry" key={m.id}>
                 <small>{m.category}</small>
                 <textarea rows={2} maxLength={500} value={memoryEdits[m.id] ?? m.content}
                   onChange={e => setMemoryEdits({ ...memoryEdits, [m.id]: e.target.value })} />
-                <button type="button" onClick={() => saveMemory(m.id)}>保存</button>
+                <button type="button" onClick={() => saveMemory(m.id)}>{t("save")}</button>
                 <button type="button" onClick={() => deleteMemory(m.id)}>删除</button>
               </div>
             ))}
-            <strong>归档记忆 ({memories.filter(m => !m.core).length}/200)</strong>
+            <strong>{t("archivedMemory")} ({memories.filter(m => !m.core).length}/200)</strong>
             {memories.filter(m => !m.core).map(m => (
               <div className="memory-entry" key={m.id}>
                 <span>{m.content}</span>
@@ -238,10 +260,10 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
               </div>
             ))}
             <button type="button" onClick={() => {
-              if (!window.confirm("清空全部记忆？此操作无法撤销。")) return;
-              try { memoryCall("memory_delete_all", { confirm: true }); refreshMemories(); setMemoryMsg("已清空"); }
+              if (!window.confirm(t("clearConfirm"))) return;
+              try { memoryCall("memory_delete_all", { confirm: true }); refreshMemories(); setMemoryMsg(t("cleared")); }
               catch (e) { setMemoryMsg(String(e)); }
-            }}>清空全部记忆</button>
+            }}>{t("clearMemory")}</button>
             {memoryMsg && <p role="status">{memoryMsg}</p>}
           </div>
 
@@ -305,7 +327,7 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
           </div>
 
           <div className="settings-card">
-            <div className="settings-card-head"><span>技能</span><span>{skills.length} 个</span></div>
+            <div className="settings-card-head"><span>{t("skills")}</span><span>{skills.length} 个</span></div>
             {skills.map((skill) => <div key={skill.name} className="settings-card-actions">
               <span title={skill.source}>{skill.name} · {skill.description} · {skill.toolCount} 工具</span>
               <label><input type="checkbox" checked={skill.enabled} onChange={(e) => { setSkillMsg(skillManage("enable", skill.name, String(e.target.checked))); refreshSkills(); }} />启用</label>
@@ -318,7 +340,7 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
           </div>
 
           <div className="settings-card">
-            <div className="settings-card-head"><span>定时任务</span><span>{cronTasks.length} 个任务</span></div>
+            <div className="settings-card-head"><span>{t("cron")}</span><span>{cronTasks.length} 个任务</span></div>
             <p className="settings-card-note">可在对话中创建定时任务。极端省电模式下，系统可能延迟几分钟触发。</p>
             {!exactAllowed && hasBridge() && <div className="settings-card-actions">
               <span>精确闹钟权限未授予</span>
@@ -333,7 +355,7 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
               {cronDetail === task.id && <p className="settings-card-note">上次：{task.lastRun ? new Date(task.lastRun).toLocaleString() : "尚未运行"} · 下次：{task.nextRun ? new Date(task.nextRun).toLocaleString() : "已暂停"}<br />上次结果：{task.lastResult || "无"}</p>}
             </div>)}
             <div className="settings-card-actions">
-              <button type="button" className="btn-ghost" onClick={() => { setCronMsg(cronPauseAll()); refreshCron(); }}>全部暂停</button>
+              <button type="button" className="btn-ghost" onClick={() => { setCronMsg(cronPauseAll()); refreshCron(); }}>{t("pauseAll")}</button>
               <button type="button" className="btn-ghost" onClick={refreshCron}>刷新</button>
             </div>
             {cronMsg && <p className={cronMsg.startsWith("ERROR:") ? "settings-error" : "settings-card-note"}>{cronMsg}</p>}
@@ -341,7 +363,7 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
 
           <div className="settings-card">
             <div className="settings-card-head">
-              <span>Shizuku 提权</span>
+              <span>{t("shizuku")}</span>
               <span className={`status-pill status-${shizuku.status}`}>{shizukuLabel}</span>
             </div>
             <p className="settings-card-note">
@@ -410,7 +432,7 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
 
           <div className="settings-card">
             <div className="settings-card-head">
-              <span>健康数据（步数）</span>
+              <span>{t("health")}</span>
             </div>
             <p className="settings-card-note">
               Android 14 起 Health Connect 内置；Android 13 及以下需先安装 Health Connect 应用。
@@ -426,7 +448,7 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
 
           <div className="settings-card">
             <div className="settings-card-head">
-              <span>DevTools 远程调试</span>
+              <span>{t("devtools")}</span>
               <span className={`status-pill ${devtools?.enabled ? "status-granted" : "status-not_granted"}`}>
                 {devtools?.enabled ? "已开启" : "未开启"}
               </span>
@@ -464,7 +486,7 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
           </div>
 
           <div className="settings-card">
-            <div className="settings-card-head"><span>脚本后端</span><span>{termuxStatus}</span></div>
+            <div className="settings-card-head"><span>{t("scriptBackend")}</span><span>{termuxStatus}</span></div>
             <p className="settings-card-note">运行 termux_setup 可安装用户空间；Termux App 回退需要 RUN_COMMAND 授权及 allow-external-apps=true。</p>
             <div className="settings-card-actions">
               <button type="button" className="btn-primary" onClick={() => {
@@ -478,16 +500,16 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
           {error && <div className="settings-error">{error}</div>}
 
           <div className="settings-note">
-            {hasBridge() ? "运行于 Android WebView · Kotlin 桥已连接" : "浏览器预览模式 · 工具与原生网络代理不可用"}
+            {hasBridge() ? t("bridgeConnected") : t("browserPreview")}
           </div>
         </div>
 
         <footer className="settings-foot">
           <button type="button" className="btn-ghost" onClick={onClose}>
-            取消
+            {t("cancel")}
           </button>
           <button type="button" className="btn-primary" onClick={save}>
-            保存
+            {t("save")}
           </button>
         </footer>
       </div>

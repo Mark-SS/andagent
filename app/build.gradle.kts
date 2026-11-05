@@ -69,6 +69,12 @@ android {
         buildConfig = true
     }
 
+    lint {
+        // This APK is distributed directly; targetSdk 28 is intentional for
+        // the existing legacy storage and permission behavior.
+        disable += "ExpiredTargetSdkVersion"
+    }
+
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
@@ -79,6 +85,7 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 

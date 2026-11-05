@@ -112,19 +112,21 @@ export function Drawer({
               }}
             >
               <span className="drawer-item-title">{s.title}</span>
-              <span className="drawer-item-time">
-                {new Date(s.updatedAt).toLocaleString("zh-CN", {
-                  month: "numeric",
-                  day: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>
-              {s.usage && (
-                <span className="drawer-item-usage">
-                  <UsageTag input={s.usage.input} output={s.usage.output} />
+              <span className="drawer-item-sub">
+                <span className="drawer-item-time">
+                  {new Date(s.updatedAt).toLocaleString("zh-CN", {
+                    month: "numeric",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
                 </span>
-              )}
+                {s.usage && (
+                  <span className="drawer-item-usage">
+                    <UsageTag input={s.usage.input} output={s.usage.output} />
+                  </span>
+                )}
+              </span>
               <button
                 type="button"
                 className="drawer-export"

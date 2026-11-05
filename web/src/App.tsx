@@ -31,6 +31,7 @@ import { SettingsPanel } from "./Settings";
 import { TEMPLATE_GROUPS } from "./templates";
 import { ToolCard } from "./ToolCard";
 import { fmtTokens } from "./usage";
+import { useI18n } from "./i18n";
 
 /** metadata.custom 透传的每条消息消耗（agent.ts toUiMessages 写入）。 */
 interface MessageUsageMeta {
@@ -47,10 +48,11 @@ function useMessageUsageMeta(): MessageUsageMeta | null {
 
 /** 消息底部 meta 行：↑in ↓out · 耗时；中断消息如实标注。 */
 function MessageMetaLine() {
+  const { t } = useI18n();
   const running = useAuiState((state) => state.message.status?.type === "running");
   const meta = useMessageUsageMeta();
   if (running || !meta) return null;
-  if (meta.aborted) return <div className="msg-meta">已中断（消耗未回报）</div>;
+  if (meta.aborted) return <div className="msg-meta">{t("aborted")}</div>;
   const input = meta.usage?.input ?? 0;
   const output = meta.usage?.output ?? 0;
   if (input <= 0 && output <= 0) return null;
@@ -140,6 +142,7 @@ function AssistantReasoning(props: {
   text: string;
   status?: { type: string } | null;
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const running = props.status?.type === "running";
@@ -154,7 +157,7 @@ function AssistantReasoning(props: {
         <span className="thinking-caret" aria-hidden="true">
           {open || running ? "▾" : "▸"}
         </span>
-        {running ? "思考中…" : "思考过程"}
+        {running ? t("thinkingNow") : t("thinking")}
       </button>
       {(open || running) && (
         <div className="thinking-body-wrap">
@@ -172,7 +175,7 @@ function AssistantReasoning(props: {
               }
             }}
           >
-            {copied ? "已复制" : "复制"}
+            {copied ? t("copied") : t("copy")}
           </button>
         </div>
       )}
@@ -181,6 +184,7 @@ function AssistantReasoning(props: {
 }
 
 function AssistantMessage() {
+  const { t } = useI18n();
   const running = useAuiState((state) => state.message.status?.type === "running");
   const text = useFullCopyText();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -198,7 +202,7 @@ function AssistantMessage() {
         {running && <span className="stream-cursor" aria-hidden="true" />}
         <MessageMetaLine />
         <MessagePrimitive.Error>
-          <div className="msg-error">这条消息渲染失败。</div>
+          <div className="msg-error">{t("renderFailed")}</div>
         </MessagePrimitive.Error>
       </div>
       {menu && text && (
@@ -243,6 +247,7 @@ function TemplateGrid() {
 }
 
 function Composer({ hasKey }: { hasKey: boolean }) {
+  const { t } = useI18n();
   const aui = useAui();
   const running = useAuiState((state) => state.thread.isRunning);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -376,12 +381,12 @@ function Composer({ hasKey }: { hasKey: boolean }) {
           className="composer-input"
           placeholder={
             voiceState === "recording"
-              ? "录音中…再次点击停止"
+              ? t("inputRecording")
               : voiceState === "transcribing"
-                ? "转写中…"
+                ? t("inputTranscribing")
                 : hasKey
-                  ? "给 AndAgent 发消息…"
-                  : "先在设置中填入 API Key…"
+                  ? t("inputPlaceholder")
+                  : t("inputNoKey")
           }
           minRows={1}
           maxRows={6}
@@ -393,12 +398,12 @@ function Composer({ hasKey }: { hasKey: boolean }) {
             type="button"
             className="send-btn stop"
             onClick={() => aui.thread.cancelRun()}
-            aria-label="停止生成"
+            aria-label={t("stop")}
           >
             <span className="stop-square" />
           </button>
         ) : (
-          <ComposerPrimitive.Send className="send-btn" aria-label="发送">
+          <ComposerPrimitive.Send className="send-btn" aria-label={t("send")}>
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
               <path
                 d="M4 12l15-8-4.5 8L19 20 4 12z"
@@ -415,13 +420,14 @@ function Composer({ hasKey }: { hasKey: boolean }) {
         </div>
       )}
       <div className="composer-hint">
-        Enter 发送 · Shift+Enter 换行 · AndAgent 可能会调用设备工具，请注意核对结果
+        {t("composerHint")}
       </div>
     </div>
   );
 }
 
 export default function App() {
+  const { t } = useI18n();
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
   const [showSettings, setShowSettings] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -497,8 +503,8 @@ export default function App() {
             <button
               type="button"
               className="icon-btn"
-              title="会话列表"
-              aria-label="打开会话列表"
+              title={t("sessions")}
+              aria-label={t("sessions")}
               onClick={() => setDrawerOpen(true)}
             >
               <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
@@ -524,8 +530,8 @@ export default function App() {
             <button
               type="button"
               className="icon-btn"
-              title="新对话"
-              aria-label="新对话"
+              title={t("newChat")}
+              aria-label={t("newChat")}
               disabled={!hasMessages || snapshot.running}
               onClick={() => engine.newSession()}
             >
@@ -541,8 +547,8 @@ export default function App() {
             <button
               type="button"
               className="icon-btn"
-              title="设置"
-              aria-label="设置"
+              title={t("settings")}
+              aria-label={t("settings")}
               onClick={() => setShowSettings(true)}
             >
               <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
@@ -566,16 +572,16 @@ export default function App() {
 
         {!settings.apiKey && (
           <div className="banner">
-            <span>还没有配置 API Key，模型请求会失败。</span>
+            <span>{t("missingKey")}</span>
             <button type="button" onClick={() => setShowSettings(true)}>
-              去设置
+              {t("goSettings")}
             </button>
           </div>
         )}
 
         {snapshot.error && (
           <div className="error-bar" role="alert">
-            <strong>请求失败</strong>
+            <strong>{t("requestFailed")}</strong>
             <span>{snapshot.error}</span>
           </div>
         )}
@@ -586,8 +592,8 @@ export default function App() {
               <ThreadPrimitive.Empty>
                 <div className="empty">
                   <div className="empty-mark">A</div>
-                  <h1>今天想让我做什么？</h1>
-                  <p>我可以读取设备状态、分析存储与相册，并把结果整理成结论。</p>
+                  <h1>{t("emptyTitle")}</h1>
+                  <p>{t("emptyBody")}</p>
                   <TemplateGrid />
                 </div>
               </ThreadPrimitive.Empty>

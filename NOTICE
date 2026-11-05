@@ -1,0 +1,9 @@
+AndAgent
+Copyright 2026 AndAgent contributors
+
+Licensed under the Apache License, Version 2.0. See LICENSE.
+
+This distribution includes third-party software. Names, exact versions, license
+identifiers, source links, and copyright notices are in THIRD-PARTY-NOTICES.md.
+The Termux adaptation and bootstrap attribution is in ATTRIBUTION.md; bundled
+sql.js/Grid.js and scrcpy license texts are retained in app/src/main/assets/.

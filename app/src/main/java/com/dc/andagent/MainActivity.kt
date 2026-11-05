@@ -291,7 +291,10 @@ class MainActivity : ComponentActivity() {
         val memoryPrefs = appContext.getSharedPreferences("andagent_memory", android.content.Context.MODE_PRIVATE)
         val memoryStore = com.dc.andagent.memory.MemoryStore(
             { memoryPrefs.getString("entries", null) },
-            { value -> memoryPrefs.edit().putString("entries", value).commit() },
+            { value ->
+                // A lost write must surface as an error, never as a silent "saved".
+                require(memoryPrefs.edit().putString("entries", value).commit()) { "记忆写入持久化失败" }
+            },
         )
         val tools: MutableMap<String, Tool> = java.util.concurrent.ConcurrentHashMap()
         quickJsEngine = QuickJsEngine(tools, scriptToolExecutor, appContext)

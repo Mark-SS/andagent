@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Please do **not** open a public issue for security vulnerabilities.
-Open a private security advisory via GitHub (Security → Advisories → New draft security advisory), or contact the maintainer directly.
+Open a private security advisory through [GitHub Security Advisories](https://github.com/congduan/andagent/security/advisories/new). If that route is unavailable, contact the maintainer through the GitHub profile at https://github.com/congduan.
 
 We aim to acknowledge reports within 72 hours.
 

@@ -38,6 +38,13 @@ The app reads endpoint/model/key from `Download/config.json` on the device, or f
 4. Destructive operations must ask before acting; the confirmation flow lives in the bridge layer.
 5. Update `ROADMAP-TODO.md` (status + commit) for anything user-visible.
 
+## Adding a tool
+
+1. Implement the Kotlin `Tool` contract, including its JSON Schema, permission checks, and `destructive` flag for writes.
+2. Register the tool in `MainActivity.kt`.
+3. Add the identical name, required fields, parameter types, and description to the agent-facing schema in `web/src/agent.ts` or `web/src/extraTools.ts` (whichever owns that tool group). Compare the two registries before opening a PR.
+4. Add a focused JVM unit test for parsing, guards, or core behavior and a web test when the frontend handles a new result shape. Run `npm test`, `npm run build`, `./gradlew :app:assembleDebug :app:testDebugUnitTest`.
+
 ## Architecture rules
 
 - The WebView talks to native only through the `AndroidBridge` JS interface — no side channels.

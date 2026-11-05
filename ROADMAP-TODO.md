@@ -1,5 +1,7 @@
 # andagent 推进事项清单（ROADMAP-TODO）
 
+> 发布状态：v0.25.2 的代码与文档已就绪，tag、远端推送及 GitHub Release 由主控发布后确认。历史 TODO 属后续版本，不代表 v0.25.2 发布门槛。
+
 > 单一事实源：每项完成打 ✅ 并附 commit；新需求追加到对应优先级区。
 > 状态：TODO / DOING / ✅ / BLOCKED(原因)
 > 引擎纪律：全部 Codex 实施，主控独立复测后才能标 ✅。

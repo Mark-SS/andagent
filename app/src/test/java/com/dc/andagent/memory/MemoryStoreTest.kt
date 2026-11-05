@@ -21,6 +21,24 @@ class MemoryStoreTest {
         repeat(201) { s.add("archive $it") }
         assertEquals(1, s.stats().first); assertEquals(200, s.stats().second)
     }
+    @Test fun fullArchivalEvictsOldestAccessedNotNewcomer() {
+        val s = store()
+        repeat(200) { s.add("archive $it") }
+        s.search("archive 0") // warm up the oldest entry
+        val kept = s.add("brand new memory")
+        assertEquals(200, s.stats().second)
+        assertTrue(s.getAll().any { it.id == kept.id })
+        assertTrue(s.getAll().none { it.content == "archive 1" }) // coldest entry evicted instead
+    }
+    @Test fun corruptEntryLeavesStateUntouched() {
+        raw = """{"entries":[{"id":"a","content":"good"},{"id":"b"}],"history":[]}""" // second entry lacks fields
+        val s = store()
+        assertEquals(0, s.getAll().size) // half-loaded data must not leak into state
+        val added = s.add("first save after corruption")
+        assertFalse(raw!!.contains(""""id":"a"""")) // persist() rewrote from clean state, dropped corrupt payload
+        assertTrue(s.getAll().map { it.content }.contains("first save after corruption"))
+        assertEquals(added.id, s.getAll().first().id)
+    }
     @Test fun duplicateNormalizesCaseAndSpace() {
         val s = store(); val a = s.add("  HELLO   world "); val b = s.add("hello world")
         assertEquals(a.id, b.id); assertEquals(1, s.stats().second)

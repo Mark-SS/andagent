@@ -579,7 +579,7 @@ const TOOL_DEFS = [
   { name: "memory_search", description: "按关键词搜索长期记忆。", parameters: { type: "object", properties: { query: { type: "string" }, limit: { type: "integer" } }, required: ["query"] } },
   { name: "memory_update", description: "按 id 更新记忆，支持自编辑 core。", parameters: { type: "object", properties: { id: { type: "string" }, content: { type: "string" } }, required: ["id", "content"] } },
   { name: "memory_delete", description: "按 id 删除记忆。", parameters: { type: "object", properties: { id: { type: "string" } }, required: ["id"] } },
-  { name: "memory_delete_all", description: "清空全部或指定分类记忆；需要 confirm=true。", parameters: { type: "object", properties: { category: { type: "string" }, confirm: { type: "boolean" } }, required: ["confirm"] } },
+  { name: "memory_delete_all", description: "清空全部或指定分类记忆。这是破坏性操作：仅当用户明确提出清空/删除全部记忆时才可传 confirm=true，禁止自行决定清空。", parameters: { type: "object", properties: { category: { type: "string" }, confirm: { type: "boolean" } }, required: ["confirm"] } },
   { name: "memory_get_all", description: "列出记忆。", parameters: { type: "object", properties: { core_only: { type: "boolean" } } } },
   { name: "memory_history", description: "查看记忆增改删历史。", parameters: { type: "object", properties: { id: { type: "string" } } } },
   { name: "memory_stats", description: "查看记忆数量和容量。", parameters: { type: "object", properties: {} } },
