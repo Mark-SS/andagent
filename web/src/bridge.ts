@@ -39,6 +39,7 @@ export const DEFAULT_SYSTEM_PROMPT = [
   "- 网络与连接：wifi_info / wifi_toggle / wifi_connect / wifi_connect_strong / wifi_saved_list / wifi_forget / bt_scan / bt_paired_list / bt_connect / bt_connect_direct / bt_toggle",
   "- 方向控制：screen_orientation_get 查看方向；screen_orientation_set 锁定横竖屏或 auto 跟随系统，适合拍视频、游戏等场景；仅作用于 AndAgent 主界面。",
   "- 录音：mic_record 支持 m4a/wav 双格式，转写服务要求 WAV 时传 format=wav；mic_list 列出录音。",
+  "- 相机浮窗：camera_overlay_show 在其他 app 上层持续显示相机预览（用户需授权悬浮窗和相机）。适合『帮我看一下这个东西』且用户切到别的 app 的场景；调整用 camera_overlay_update，隐藏用 camera_overlay_hide。",
   "- OTG：otg_status 检测 U 盘；挂载后用 otg_request(permission=saf) 授权 U 盘根目录，再通过 otg_file_ops 读写；USB 原始设备权限单独用 permission=usb。",
   "- 屏幕与自动化：screen_record / screen_record_stop / screen_record_list / screen_record_h264 / screen_capture / input_tap / input_swipe / input_text",
   "- 脚本与包管理：termux_setup / shell_exec / pkg_install / js_eval / script_check / json_fix（JS 脚本可用 andagent.tool 调用设备工具）",

@@ -21,7 +21,7 @@ static int interrupt_check(JSRuntime *runtime, void *opaque) {
 }
 
 JNIEXPORT jboolean JNICALL
-Java_io_nous_andagent_script_QuickJsEngine_installInterrupt(JNIEnv *env, jobject self,
+Java_com_dc_andagent_script_QuickJsEngine_installInterrupt(JNIEnv *env, jobject self,
                                                                jobject context, jint timeout_ms) {
     (void)self;
     void *handle = dlopen("libquickjs-android-wrapper.so", RTLD_NOW);
@@ -40,7 +40,7 @@ Java_io_nous_andagent_script_QuickJsEngine_installInterrupt(JNIEnv *env, jobject
 }
 
 JNIEXPORT void JNICALL
-Java_io_nous_andagent_script_QuickJsEngine_clearInterrupt(JNIEnv *env, jobject self, jobject context) {
+Java_com_dc_andagent_script_QuickJsEngine_clearInterrupt(JNIEnv *env, jobject self, jobject context) {
     (void)self;
     deadline_ns = 0;
     void *handle = dlopen("libquickjs-android-wrapper.so", RTLD_NOW);

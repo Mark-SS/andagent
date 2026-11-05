@@ -93,6 +93,7 @@ import com.dc.andagent.tools.MicListTool
 import com.dc.andagent.tools.OrientationTool
 import com.dc.andagent.tools.OtgTool
 import com.dc.andagent.tools.MicRecordTool
+import com.dc.andagent.tools.CameraOverlayTool
 import com.dc.andagent.tools.LocationGetTool
 import com.dc.andagent.tools.LocationStatusTool
 import com.dc.andagent.tools.ImageSaveTool
@@ -316,6 +317,9 @@ class MainActivity : ComponentActivity() {
             "widget_generate" to WidgetGenerateTool(appContext),
             "widget_save_and_pin" to WidgetSaveAndPinTool(appContext),
             "mic_record" to MicRecordTool(appContext, permissionBroker),
+            "camera_overlay_show" to CameraOverlayTool(appContext, permissionBroker, "camera_overlay_show"),
+            "camera_overlay_update" to CameraOverlayTool(appContext, permissionBroker, "camera_overlay_update"),
+            "camera_overlay_hide" to CameraOverlayTool(appContext, permissionBroker, "camera_overlay_hide"),
             "mic_list" to MicListTool(appContext),
             "screen_orientation_get" to OrientationTool({ this }, "screen_orientation_get"),
             "screen_orientation_set" to OrientationTool({ this }, "screen_orientation_set"),

@@ -28,6 +28,9 @@
     <!-- R28: MediaProjection screen capture — foreground service holding the projection -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
     <!-- Silent alarm/timer writes via AlarmClock intents (SKIP_UI=true) -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
     <!-- mic_record + WebView voice input (getUserMedia) -->
@@ -121,6 +124,10 @@
             android:name=".tools.ProjectionService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
+        <service
+            android:name=".tools.CameraOverlayService"
+            android:exported="false"
+            android:foregroundServiceType="camera" />
 
         <receiver
             android:name=".shell.TermuxResultReceiver"

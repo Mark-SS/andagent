@@ -372,7 +372,7 @@ const TOOL_DEFS = [
         panel: {
           type: "string",
           description:
-            "wifi | bluetooth | display | sound | volume | battery | storage | apps | app_details | location | security | privacy | date_time | nfc | airplane | developer | accessibility | input | data_usage | notification | home | cast | vpn | print | main",
+            "wifi | bluetooth | display | sound | volume | battery | storage | apps | app_details | location | security | privacy | date_time | nfc | airplane | developer | accessibility | input | data_usage | notification | home | cast | vpn | print | overlay | main",
         },
         package: { type: "string", description: "可选：app_details 时指定应用包名" },
       },

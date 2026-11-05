@@ -16,14 +16,14 @@ import kotlinx.serialization.json.JsonObject
 class OpenSettingsTool(private val context: Context) : Tool {
     override val name = "open_settings"
     override val description =
-        "打开 Android 系统设置的具体页面（如 WiFi、蓝牙、显示、声音、应用、电池、存储、位置、安全、日期时间等）。只跳转，不修改任何设置。"
+        "打开 Android 系统设置的具体页面（如 WiFi、蓝牙、显示、声音、应用、悬浮窗授权等）。只跳转，不修改任何设置。"
 
     override val parameters = schemaOf(
         "panel" to strParam(
             "设置页 key，可选值：wifi | bluetooth | display | sound | volume | battery | storage | " +
                 "apps | app_details(需 package 参数) | location | security | privacy | date_time | " +
                 "nfc | airplane | developer | accessibility | input | data_usage | notification | " +
-                "home | cast | vpn | print | user_dict | keyboard_settings | main",
+                "home | cast | vpn | print | overlay | user_dict | keyboard_settings | main",
         ),
         "package" to strParam("可选：app_details 时指定应用包名，省略则打开本应用详情"),
     )
@@ -53,6 +53,8 @@ class OpenSettingsTool(private val context: Context) : Tool {
                 Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
                     .setData(android.net.Uri.fromParts("package", target, null))
             }
+            "overlay" -> Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+                .setData(android.net.Uri.fromParts("package", context.packageName, null))
             "default_apps" -> Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
             "location" -> Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
             "security" -> Intent(Settings.ACTION_SECURITY_SETTINGS)
@@ -81,7 +83,7 @@ class OpenSettingsTool(private val context: Context) : Tool {
             else -> return (
                 "ERROR: 未知设置页 key '$panel'。可选：wifi/bluetooth/display/sound/volume/battery/" +
                     "storage/apps/app_details/location/security/privacy/date_time/nfc/airplane/" +
-                    "developer/accessibility/input/data_usage/notification/home/cast/vpn/print/main"
+                    "developer/accessibility/input/data_usage/notification/home/cast/vpn/print/overlay/main"
                 )
         }
 

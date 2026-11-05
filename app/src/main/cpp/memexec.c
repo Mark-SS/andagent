@@ -30,7 +30,7 @@
  * argv/envp are NUL-separated, double-NUL terminated (from Kotlin side).
  */
 JNIEXPORT jint JNICALL
-Java_io_nous_andagent_shell_MemExec_nativeExec(
+Java_com_dc_andagent_shell_MemExec_nativeExec(
     JNIEnv *env, jclass clazz,
     jbyteArray elfBytes,
     jbyteArray argvBytes,
@@ -137,7 +137,7 @@ Java_io_nous_andagent_shell_MemExec_nativeExec(
 
 /* Wait for the child; returns exit status (waitpid raw status). */
 JNIEXPORT jint JNICALL
-Java_io_nous_andagent_shell_MemExec_nativeWait(JNIEnv *env, jclass clazz, jint pid) {
+Java_com_dc_andagent_shell_MemExec_nativeWait(JNIEnv *env, jclass clazz, jint pid) {
     (void)env; (void)clazz;
     int status = 0;
     pid_t r = waitpid((pid_t)pid, &status, 0);
