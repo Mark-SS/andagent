@@ -61,8 +61,8 @@ android {
         applicationId = "com.dc.andagent"
         minSdk = 26
         targetSdk = 28
-        versionCode = 35
-        versionName = "0.26.0"
+        versionCode = 36
+        versionName = "0.27.0"
     }
 
     buildFeatures {

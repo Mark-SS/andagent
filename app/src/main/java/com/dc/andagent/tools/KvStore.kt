@@ -1,6 +1,7 @@
 package com.dc.andagent.tools
 
 import android.content.Context
+import android.content.SharedPreferences
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -21,9 +22,22 @@ import kotlinx.serialization.json.put
  * The Android-backed part is intentionally thin; all validation, TTL and
  * JSON wrapping logic lives in the companion object so it can be unit-tested
  * on a plain JVM without Robolectric.
+ *
+ * R55: entries in the [SECURE_NAMESPACE] are additionally encrypted at rest
+ * with the injected [KvCipher] (Android Keystore AES-256-GCM in production).
+ * Every other namespace keeps the plaintext envelope format.
  */
-class KvStore(private val context: Context) {
-    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+class KvStore internal constructor(
+    private val prefs: SharedPreferences,
+    private val cipher: KvCipher?,
+) {
+    constructor(context: Context, cipher: KvCipher? = null) : this(
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE),
+        cipher,
+    )
+
+    /** Lazily created so JVM tests that inject a fake cipher never touch the Keystore. */
+    private val secureCipher: KvCipher by lazy { cipher ?: KeystoreCipher() }
 
     data class Entry(val value: JsonElement, val expiresAt: Long?)
 
@@ -57,7 +71,9 @@ class KvStore(private val context: Context) {
         requireValidName(ns, "namespace")
         requireValidName(key, "key")
         val storedKey = encode(ns, key)
-        val raw = prefs.getString(storedKey, null) ?: return null
+        val stored = prefs.getString(storedKey, null) ?: return null
+        // Secure entries that cannot be decrypted are treated as absent (never crash).
+        val raw = decodeEnvelope(ns, storedKey, stored) ?: return null
         val expiresAt = expiryOf(raw)
         if (isExpired(expiresAt, now)) {
             prefs.edit().remove(storedKey).apply()
@@ -93,9 +109,11 @@ class KvStore(private val context: Context) {
         }
         ensureCapacity(ns, values.keys)
         val expiry = expiryFrom(ttlMs, now)
+        // Encode/encrypt everything first: a Keystore failure must not leave a partial batch.
+        val encoded = values.mapValues { (_, value) -> encodeEnvelope(ns, wrap(value, expiry)) }
         val editor = prefs.edit()
-        for ((key, value) in values) {
-            editor.putString(encode(ns, key), wrap(value, expiry))
+        for ((key, stored) in encoded) {
+            editor.putString(encode(ns, key), stored)
         }
         editor.apply()
         return expiry
@@ -125,7 +143,8 @@ class KvStore(private val context: Context) {
             val decoded = decode(stored) ?: continue
             if (decoded.first != ns) continue
             if (needle != null && !decoded.second.startsWith(needle)) continue
-            val expiresAt = (raw as? String)?.let(::expiryOf)
+            val envelope = decodeEnvelope(decoded.first, stored, raw as? String ?: continue) ?: continue
+            val expiresAt = expiryOf(envelope)
             if (isExpired(expiresAt, now)) {
                 expired += stored
                 continue
@@ -145,7 +164,8 @@ class KvStore(private val context: Context) {
         val expired = mutableListOf<String>()
         for ((stored, raw) in prefs.all) {
             val decoded = decode(stored) ?: continue
-            val expiresAt = (raw as? String)?.let(::expiryOf)
+            val envelope = decodeEnvelope(decoded.first, stored, raw as? String ?: continue) ?: continue
+            val expiresAt = expiryOf(envelope)
             if (isExpired(expiresAt, now)) {
                 expired += stored
                 continue
@@ -176,24 +196,34 @@ class KvStore(private val context: Context) {
      * null/blank/"all", as a JSON backup string. The result is returned to the
      * tool caller, never written back into KV, so it is not bound by the 64KB
      * per-value limit; all-namespace exports are capped by [MAX_EXPORT_BYTES].
+     *
+     * R55 backup isolation: an all-namespace export NEVER contains the
+     * [SECURE_NAMESPACE], regardless of [includeSecure]. The secure namespace
+     * can only be exported when it is named explicitly AND [includeSecure] is
+     * true; otherwise a count=0 envelope with a hint is returned.
      */
     @Synchronized
     fun export(
         namespace: String? = null,
         includeExpired: Boolean = false,
+        includeSecure: Boolean = false,
         now: Long = System.currentTimeMillis(),
     ): String {
         val all = namespace.isNullOrBlank() || namespace == "all"
         val ns = namespaceOrDefault(namespace)
         if (!all) requireValidName(ns, "namespace")
+        if (!all && ns == SECURE_NAMESPACE && !includeSecure) return secureExportHint(now)
         val records = mutableListOf<BackupRecord>()
         for ((stored, raw) in prefs.all) {
             val decoded = decode(stored) ?: continue
             if (!all && decoded.first != ns) continue
+            // Hard rule: the secure namespace never rides along in an "all" backup.
+            if (all && decoded.first == SECURE_NAMESPACE) continue
             val rawText = raw as? String ?: continue
-            val expiresAt = expiryOf(rawText)
+            val envelope = decodeEnvelope(decoded.first, stored, rawText) ?: continue
+            val expiresAt = expiryOf(envelope)
             if (!includeExpired && isExpired(expiresAt, now)) continue
-            val value = unwrap(rawText) ?: continue
+            val value = unwrap(envelope) ?: continue
             records += BackupRecord(decoded.first, decoded.second, value, expiresAt)
         }
         val scope = if (all) ALL_SCOPE else ns
@@ -242,7 +272,8 @@ class KvStore(private val context: Context) {
         val result = linkedMapOf<String, MutableSet<String>>()
         for ((stored, raw) in prefs.all) {
             val decoded = decode(stored) ?: continue
-            val expiresAt = (raw as? String)?.let(::expiryOf)
+            val envelope = decodeEnvelope(decoded.first, stored, raw as? String ?: continue) ?: continue
+            val expiresAt = expiryOf(envelope)
             if (isExpired(expiresAt, now)) continue
             result.getOrPut(decoded.first) { linkedSetOf() } += decoded.second
         }
@@ -268,9 +299,54 @@ class KvStore(private val context: Context) {
         return prefs.all.entries.mapNotNull { (stored, raw) ->
             val decoded = decode(stored) ?: return@mapNotNull null
             if (decoded.first != ns) return@mapNotNull null
-            val expiresAt = (raw as? String)?.let(::expiryOf)
+            val envelope = decodeEnvelope(decoded.first, stored, raw as? String ?: return@mapNotNull null)
+                ?: return@mapNotNull null
+            val expiresAt = expiryOf(envelope)
             if (isExpired(expiresAt, now)) null else decoded.second
         }.toSet()
+    }
+
+    /**
+     * Encrypts a plaintext envelope when [ns] is the secure namespace. Throws
+     * a stable error when the Keystore cannot initialize so the tool can
+     * surface it; other namespaces are never affected.
+     */
+    private fun encodeEnvelope(ns: String, envelope: String): String {
+        if (ns != SECURE_NAMESPACE) return envelope
+        val payload = try {
+            secureCipher.encrypt(envelope)
+        } catch (e: Throwable) {
+            throw IllegalArgumentException("secure 命名空间加密初始化失败")
+        }
+        return SECURE_PREFIX + payload
+    }
+
+    /**
+     * Returns the plaintext envelope for a stored value, decrypting secure
+     * entries. Null means "unreadable" (corrupt payload or broken Keystore);
+     * callers treat that key as absent and never crash.
+     *
+     * A legacy plaintext secure entry (written before R55) is re-encrypted in
+     * place on first read, so plaintext never lingers on disk past upgrade.
+     * If re-encryption fails the plaintext is returned as-is rather than
+     * bricking an existing key; the next write encrypts normally.
+     */
+    private fun decodeEnvelope(ns: String, storedKey: String, stored: String): String? {
+        if (ns != SECURE_NAMESPACE) return stored
+        if (!stored.startsWith(SECURE_PREFIX)) {
+            // Legacy plaintext: migrate in place, best-effort.
+            try {
+                prefs.edit().putString(storedKey, encodeEnvelope(ns, stored)).apply()
+            } catch (e: Throwable) {
+                // Keystore unavailable: keep serving plaintext, retry next read.
+            }
+            return stored
+        }
+        return try {
+            secureCipher.decrypt(stored.removePrefix(SECURE_PREFIX))
+        } catch (e: Throwable) {
+            null
+        }
     }
 
     companion object {
@@ -284,6 +360,11 @@ class KvStore(private val context: Context) {
         const val ALL_SCOPE = "all"
         const val IMPORT_MODE_MERGE = "merge"
         const val IMPORT_MODE_REPLACE = "replace"
+        /** R55: the only encrypted namespace (exact match, no prefix rules). */
+        const val SECURE_NAMESPACE = "secure"
+        /** R55: storage prefix so a future key rotation can introduce `enc2:`. */
+        const val SECURE_PREFIX = "enc1:"
+        const val SECURE_EXPORT_HINT = "敏感命名空间默认不导出，传 include_secure=true"
 
         private val NAME = Regex("[a-zA-Z0-9_.-]{1,64}")
 
@@ -390,9 +471,25 @@ class KvStore(private val context: Context) {
         }
 
         /**
+         * R55: count=0 backup returned for an explicit secure export that did
+         * not opt in via include_secure=true. Never silently returns data.
+         */
+        fun secureExportHint(exportedAt: Long): String = buildJsonObject {
+            put("ok", true)
+            put("scope", SECURE_NAMESPACE)
+            put("count", 0)
+            put("exportedAt", exportedAt)
+            put("namespaces", buildJsonArray {})
+            put("message", SECURE_EXPORT_HINT)
+        }.toString()
+
+        /**
          * Strictly parses a backup payload. Any structural problem, illegal
          * name, malformed envelope or oversized value throws, so callers can
          * guarantee "validate everything, then write".
+         *
+         * R55: a payload that contains the secure namespace is rejected
+         * outright — backups must never overwrite encrypted sensitive keys.
          */
         fun parseBackup(dataJson: String): List<BackupRecord> {
             val root = runCatching { Json.parseToJsonElement(dataJson) }.getOrNull()
@@ -407,6 +504,9 @@ class KvStore(private val context: Context) {
                     ?: throw IllegalArgumentException("namespaces[$index] 必须是对象")
                 val rawNamespace = (nsObject["namespace"] as? JsonPrimitive)?.contentOrNull
                 if (!isValidName(rawNamespace)) throw IllegalArgumentException("namespaces[$index] 的 namespace 非法")
+                if (rawNamespace == SECURE_NAMESPACE) {
+                    throw IllegalArgumentException("secure 命名空间不允许导入备份（防止覆盖加密敏感键）")
+                }
                 val items = nsObject["items"]
                     ?: throw IllegalArgumentException("namespaces[$index] 缺少 items 对象")
                 if (items !is JsonObject) throw IllegalArgumentException("namespaces[$index].items 必须是对象")

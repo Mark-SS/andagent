@@ -16,7 +16,7 @@ val KV_TOOLS = listOf(
 )
 
 class KvTool(private val context: Context, override val name: String) : Tool {
-    private val store = KvStore(context)
+    private val store = KvStore(context, KeystoreCipher())
 
     override val description: String = when (name) {
         "kv_get" -> "读取 KV 键值（namespace 默认 default），返回值与过期时间；不存在时返回 found=false。"
@@ -25,7 +25,7 @@ class KvTool(private val context: Context, override val name: String) : Tool {
         "kv_keys" -> "列出命名空间下的键名及剩余 TTL 秒数，可选 prefix 前缀过滤。"
         "kv_namespaces" -> "列出所有 KV 命名空间及其键数量。"
         "kv_clear" -> "清空整个命名空间的所有键，必须 confirm=true。"
-        "kv_export" -> "按命名空间导出 KV 备份 JSON（省略 namespace 或传 all 导出全部；全部导出上限 512KB）。只读操作。"
+        "kv_export" -> "按命名空间导出 KV 备份 JSON（省略 namespace 或传 all 导出全部，all 永不包含 secure 敏感命名空间；全部导出上限 512KB）。只读操作。"
         "kv_import" -> "导入 kv_export 输出的 JSON 备份。merge（默认）同名键覆盖、其余保留；replace 先清空目标命名空间，必须 confirm=true。"
         else -> "KV 存储工具"
     }
@@ -61,8 +61,9 @@ class KvTool(private val context: Context, override val name: String) : Tool {
             required = listOf("namespace"),
         )
         "kv_export" -> schemaOf(
-            "namespace" to strParam("命名空间；省略或 all 导出全部"),
+            "namespace" to strParam("命名空间；省略或 all 导出全部（all 永不包含 secure）"),
             "include_expired" to boolParam("是否包含已过期键，默认 false"),
+            "include_secure" to boolParam("仅当显式导出 secure 命名空间时需设为 true，默认 false"),
             required = emptyList(),
         )
         "kv_import" -> schemaOf(
@@ -205,6 +206,7 @@ class KvTool(private val context: Context, override val name: String) : Tool {
         store.export(
             namespace = args.strArg("namespace"),
             includeExpired = args.boolArg("include_expired") == true,
+            includeSecure = args.boolArg("include_secure") == true,
         )
 
     private fun importBackup(args: JsonObject): String {
