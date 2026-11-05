@@ -29,7 +29,6 @@ class NfcMifareCodecTest {
         assertArrayEquals(byteArrayOf(0x00, 0x01, 0x7f, 0x80.toByte(), 0xff.toByte()),
             hexToBytes("00017F80FF")!!)
         assertArrayEquals(byteArrayOf(0xAB.toByte(), 0xCD.toByte()), hexToBytes("ab cd")!!)
-        assertArrayEquals(ByteArray(0), byteArrayOf())
         assertNull(hexToBytes("ABC"))          // odd length
         assertNull(hexToBytes("GG0011223344")) // non-hex
         assertNull(hexToBytes(""))             // empty
@@ -83,8 +82,8 @@ class NfcMifareCodecTest {
     }
 
     @Test
-    fun mctDumpTrailerHarvestsKeyAAndKeyB() {
-        // 32 hex digits = 16-byte block: keyA(6) + access(4) + keyB(6).
+    fun mctDumpBlockLinesHarvestLeadingAndTrailingKeyFields() {
+        // 32-hex-digit .dump block lines: keyA in first 12, keyB in last 12 hex digits.
         val dump = """
             +Sector: 0
             112233445566778899AABBCCDDEEFF00
@@ -93,14 +92,13 @@ class NfcMifareCodecTest {
             00000000000000000000000000000000
         """.trimIndent()
         val keys = MctKeys.parse(dump)
-        // First data block's leading/trailing 12 hex are data, not keys, but the harness
-        // treats every 32-hex block line as a trailer candidate; header lines are ignored.
-        assertTrue(keys.contains("112233445566"))
-        assertTrue(keys.contains("CCDDEEFF00".let { ("000000000000") })) // blank-key from trailer
-        assertTrue(keys.contains("FFFFFFFFFFFF"))
-        assertTrue(keys.contains("A0A1A2A3A4A5"))
-        // Header lines must never become keys.
+        // "+Sector" header lines are ignored.
         assertFalse(keys.any { it.startsWith("+") })
+        assertTrue(keys.contains("112233445566"))  // keyA field of line 1
+        assertTrue(keys.contains("BBCCDDEEFF00"))  // keyB field of line 1
+        assertTrue(keys.contains("FFFFFFFFFFFF"))  // keyA field of trailer
+        assertTrue(keys.contains("A0A1A2A3A4A5"))  // keyB field of trailer
+        assertTrue(keys.contains("000000000000"))  // all-zero block
         assertEquals(keys.size, keys.distinct().size)
     }
 
