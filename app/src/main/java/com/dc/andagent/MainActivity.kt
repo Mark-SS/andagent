@@ -89,6 +89,9 @@ import com.dc.andagent.tools.ScreenRecordTool
 import com.dc.andagent.tools.SensorListTool
 import com.dc.andagent.tools.SensorReadTool
 import com.dc.andagent.tools.StepsHistoryTool
+import com.dc.andagent.tools.MicListTool
+import com.dc.andagent.tools.OrientationTool
+import com.dc.andagent.tools.OtgTool
 import com.dc.andagent.tools.MicRecordTool
 import com.dc.andagent.tools.LocationGetTool
 import com.dc.andagent.tools.LocationStatusTool
@@ -308,6 +311,12 @@ class MainActivity : ComponentActivity() {
             "widget_generate" to WidgetGenerateTool(appContext),
             "widget_save_and_pin" to WidgetSaveAndPinTool(appContext),
             "mic_record" to MicRecordTool(appContext, permissionBroker),
+            "mic_list" to MicListTool(appContext),
+            "screen_orientation_get" to OrientationTool({ this }, "screen_orientation_get"),
+            "screen_orientation_set" to OrientationTool({ this }, "screen_orientation_set"),
+            "otg_status" to OtgTool(appContext, "otg_status").withBroker(permissionBroker),
+            "otg_request" to OtgTool(appContext, "otg_request").withBroker(permissionBroker),
+            "otg_file_ops" to OtgTool(appContext, "otg_file_ops").withBroker(permissionBroker),
             "phone_call" to PhoneCallTool(appContext, permissionBroker),
             "sms_send" to SmsSendTool(appContext, permissionBroker),
             "location_get" to LocationGetTool(appContext, permissionBroker),

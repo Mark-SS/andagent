@@ -381,11 +381,12 @@ const TOOL_DEFS = [
   {
     name: "mic_record",
     description:
-      "录制一段麦克风音频并保存为文件（M4A）。用于录音备忘、语音素材；返回文件路径。",
+      "录制麦克风音频并保存为 M4A 或 16kHz 单声道 WAV；返回路径、时长、格式和音频库 URI。",
     parameters: {
       type: "object",
       properties: {
         seconds: { type: "integer", description: "录音时长（秒），默认 10，范围 1-300" },
+        format: { type: "string", enum: ["m4a", "wav"], description: "文件格式，默认 m4a" },
       },
       required: [],
     },

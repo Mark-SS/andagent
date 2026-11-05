@@ -6,6 +6,12 @@ import type { Tool as PiTool } from "@mariozechner/pi-ai";
  * FILE_OPS_TOOLS / ZIP_TOOLS / EMAIL_TOOLS / STORE_TOOLS plus NFC/Termux).
  */
 export const EXTRA_TOOL_DEFS = [
+  { name: "mic_list", description: "列出 AndAgent 录音文件和 MediaStore 音频库记录（时长、大小、格式、时间）。", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "screen_orientation_get", description: "读取当前屏幕旋转角、方向、物理像素尺寸与分辨率。", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "screen_orientation_set", description: "锁定 AndAgent 主界面横竖屏或恢复系统自动方向。", parameters: { type: "object", properties: { mode: { type: "string", enum: ["portrait", "landscape", "auto", "reverse_portrait", "reverse_landscape"] } }, required: ["mode"] } },
+  { name: "otg_status", description: "检测挂载的 OTG U 盘、USB 设备与 SAF 授权。", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "otg_request", description: "申请 USB 设备权限或打开 SAF U 盘根目录授权选择器。", parameters: { type: "object", properties: { permission: { type: "string", enum: ["usb", "saf"] } }, required: ["permission"] } },
+  { name: "otg_file_ops", description: "经 SAF 对 U 盘执行 list/read/write/delete/mkdir；root 为已授权 U 盘根目录树 URI，path 为相对路径。", parameters: { type: "object", properties: { root: { type: "string" }, op: { type: "string", enum: ["list", "read", "write", "delete", "mkdir"] }, path: { type: "string" }, content: { type: "string" } }, required: ["root", "op", "path"] } },
   { name: "web_search", description: "无需 API key 搜索互联网。Bing 网页搜索为主，DuckDuckGo 即时答案补充；返回标题、链接、摘要及来源。时效性问题先搜索。", parameters: { type: "object", properties: { query: { type: "string" }, limit: { type: "integer" }, mkt: { type: "string" } }, required: ["query"] } },
   { name: "web_read", description: "读取 HTTPS 网页正文，去除脚本、样式和标签；最多返回 max_chars 字符。", parameters: { type: "object", properties: { url: { type: "string" }, max_chars: { type: "integer" } }, required: ["url"] } },
   { name: "nfc_write_raw", description: "写入自定义 NDEF 记录：kind=mime/external/raw；payload 支持 base64: 或 hex: 前缀；mime 用 type 指定 MIME，external 用 domain:type。会覆盖卡片原内容，写入前先告知用户。", parameters: { type: "object", properties: { kind: { type: "string" }, payload: { type: "string" }, type: { type: "string" } }, required: ["payload"] } },
