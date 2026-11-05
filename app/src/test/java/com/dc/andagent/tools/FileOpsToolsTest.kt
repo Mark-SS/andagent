@@ -209,6 +209,24 @@ class FileOpsToolsTest {
         assertTrue("应用根目录必须仍然存在", filesDir.exists())
     }
 
+    @Test fun deleteRefusesTheAppDataDirEvenWhenRecursive() {
+        val dataDir = File(app.applicationInfo.dataDir).canonicalFile
+        assertTrue("前置条件：dataDir 应存在", dataDir.exists())
+        val probe = File(dataDir, "r59-data-dir-probe.txt").apply { writeText("survive") }
+        try {
+            val result = fileOp(
+                "file_delete",
+                obj("path" to s(dataDir.path), "confirm" to b(true), "recursive" to b(true)),
+            )
+            assertErrorContains("拒绝删除应用根目录", result)
+            assertTrue("应用数据根目录必须仍然存在", dataDir.exists())
+            assertTrue("dataDir 内文件不得被递归删除", probe.exists())
+            assertEquals("survive", probe.readText())
+        } finally {
+            probe.delete()
+        }
+    }
+
     @Test fun deleteNonEmptyDirectoryNeedsRecursiveFlag() {
         val dir = File(root, "nonempty").apply { mkdirs() }
         writeFile("nonempty/child.txt", "x")
@@ -333,6 +351,7 @@ class FileOpsToolsTest {
             "覆盖请加 confirm=true",
             zipOp("zip_create", obj("path" to s(target.path), "sources_json" to s(jsonSources(source.path)))),
         )
+        assertEquals("拒绝覆盖时已有 ZIP 的字节不得改变", "not a zip", target.readText())
         assertErrorContains(
             "sources_json 为空",
             zipOp("zip_create", obj("path" to s(File(root, "empty.zip").path), "sources_json" to s("[]"))),
@@ -492,5 +511,7 @@ class FileOpsToolsTest {
         val dest = File(root, "huge-out")
         val result = zipOp("zip_extract", obj("path" to s(zip.path), "dest" to s(dest.path)))
         assertErrorContains("超过 500MB", result)
+        val leftovers = dest.listFiles()?.map { it.name }.orEmpty()
+        assertTrue("超限中止后不得留下残留输出（含 .part），实际：$leftovers", leftovers.isEmpty())
     }
 }

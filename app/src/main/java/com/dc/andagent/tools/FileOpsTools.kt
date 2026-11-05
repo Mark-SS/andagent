@@ -145,8 +145,14 @@ class FileOpsTool(private val context: Context, override val name: String) : Too
         val recursive = args.boolArg("recursive") == true
         if (file.isDirectory && file.listFiles()?.isNotEmpty() == true && !recursive)
             return "ERROR: 目录非空；递归删除需 recursive=true"
-        if (file.path in listOf(context.filesDir.canonicalPath, context.getExternalFilesDir(null)?.canonicalPath))
-            return "ERROR: 拒绝删除应用根目录"
+        val protectedRoots = listOfNotNull(
+            // applicationInfo.dataDir is the stable API-1 equivalent of
+            // Context.getDataDir(), which is missing from some test runtimes.
+            File(context.applicationInfo.dataDir).canonicalPath,
+            context.filesDir.canonicalPath,
+            context.getExternalFilesDir(null)?.canonicalPath,
+        )
+        if (file.path in protectedRoots) return "ERROR: 拒绝删除应用根目录"
         val ok = if (recursive) deleteRecursive(file) else file.delete()
         return if (ok) "DELETED: ${file.path}" else "ERROR: 删除失败（权限或占用）"
     }
@@ -363,17 +369,29 @@ class ZipTool(override val name: String) : Tool {
                 if (target.exists() && args.boolArg("confirm") != true)
                     return "ERROR: 目标文件已存在（${target.name}），覆盖请加 confirm=true"
                 target.parentFile?.mkdirs()
-                zip.getInputStream(entry)?.use { input ->
-                    FileOutputStream(target).use { output ->
-                        val buffer = ByteArray(64 * 1024)
-                        while (true) {
-                            val n = input.read(buffer)
-                            if (n < 0) break
-                            bytes += n
-                            if (bytes > 500 * 1024 * 1024) error("解压数据超过 500MB，已中止")
-                            output.write(buffer, 0, n)
+                // Write to a sibling .part file first so a mid-stream failure
+                // (500MB cap, corrupt entry, IO error) cannot leave a partial
+                // output behind; only a fully written file is renamed into place.
+                val tmp = File(target.parentFile, "${target.name}.part")
+                try {
+                    val input = zip.getInputStream(entry) ?: error("无法读取条目：${entry.name}")
+                    input.use { stream ->
+                        FileOutputStream(tmp).use { output ->
+                            val buffer = ByteArray(64 * 1024)
+                            while (true) {
+                                val n = stream.read(buffer)
+                                if (n < 0) break
+                                bytes += n
+                                if (bytes > 500 * 1024 * 1024) error("解压数据超过 500MB，已中止")
+                                output.write(buffer, 0, n)
+                            }
                         }
                     }
+                    if (target.exists() && !target.delete()) error("无法覆盖：${target.path}")
+                    if (!tmp.renameTo(target)) error("无法写入目标文件：${target.path}")
+                } catch (t: Throwable) {
+                    tmp.delete()
+                    throw t
                 }
                 extracted++
             }
