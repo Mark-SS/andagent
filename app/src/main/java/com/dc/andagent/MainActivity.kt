@@ -99,6 +99,7 @@ import com.dc.andagent.tools.LocationStatusTool
 import com.dc.andagent.tools.ImageSaveTool
 import com.dc.andagent.tools.ImageEditTool
 import com.dc.andagent.tools.FilePickResultBridge
+import com.dc.andagent.tools.SafTreeStore
 import com.dc.andagent.tools.FilePickTool
 import com.dc.andagent.tools.OpenFolderTool
 import com.dc.andagent.tools.AlbumOpenTool
@@ -228,8 +229,44 @@ class MainActivity : ComponentActivity() {
         healthPermissionResult.set(granted)
     }
 
+    private val singleFileLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        FilePickResultBridge.reportNext(FilePickResultBridge.Kind.SINGLE, listOfNotNull(uri?.toString()))
+    }
+
+    private val multipleFileLauncher = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        FilePickResultBridge.reportNext(FilePickResultBridge.Kind.MULTIPLE, uris.map { it.toString() })
+    }
+
+    private val treeLauncher = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            runCatching { contentResolver.takePersistableUriPermission(uri, flags) }
+            SafTreeStore.add(this, uri.toString())
+        }
+        FilePickResultBridge.reportNext(FilePickResultBridge.Kind.TREE, listOfNotNull(uri?.toString()))
+    }
+
+    private val filePickLaunchCallback: (String, String, Boolean, Boolean) -> Unit = { id, mime, multiple, tree ->
+        runOnUiThread {
+            try {
+                if (isFinishing || isDestroyed) {
+                    FilePickResultBridge.fail(id, "主界面不可用")
+                } else if (tree) {
+                    treeLauncher.launch(null)
+                } else if (multiple) {
+                    multipleFileLauncher.launch(arrayOf(mime))
+                } else {
+                    singleFileLauncher.launch(arrayOf(mime))
+                }
+            } catch (e: Exception) {
+                FilePickResultBridge.fail(id, "无法打开选择器：${e.message}")
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        FilePickResultBridge.launcher = filePickLaunchCallback
 
         val settingsStore = SettingsStore(this)
         val appContext = applicationContext
@@ -331,7 +368,7 @@ class MainActivity : ComponentActivity() {
             "location_get" to LocationGetTool(appContext, permissionBroker),
             "location_status" to LocationStatusTool(appContext),
             "open_folder" to OpenFolderTool(appContext),
-            "file_pick" to FilePickTool(appContext, FilePickResultBridge, activityProvider = { this.takeIf { !it.isFinishing } }),
+            "file_pick" to FilePickTool(FilePickResultBridge),
             "image_save" to ImageSaveTool(appContext, permissionBroker),
             "image_edit" to ImageEditTool(appContext, "image_edit"),
             "image_preview" to ImageEditTool(appContext, "image_preview"),
@@ -652,6 +689,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        if (FilePickResultBridge.launcher === filePickLaunchCallback) FilePickResultBridge.launcher = null
         dbGuiDialog?.dismiss()
         embeddedDialog?.dismiss()
         if (::nfcSession.isInitialized) nfcSession.close()

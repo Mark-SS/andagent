@@ -281,27 +281,23 @@ class ExternalDataTool(
     /* ------------------------------ SAF trees ---------------------------- */
 
     private fun safTreePick(): String {
-        val id = "tree_${System.currentTimeMillis()}"
+        val id = "tree_${java.util.UUID.randomUUID()}"
         val latch = CountDownLatch(1)
-        FilePickResultBridge.pending[id] = latch
-        val picker = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
-            addFlags(
-                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
-                    Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION,
-            )
+        if (!FilePickResultBridge.begin(id, FilePickResultBridge.Kind.TREE, latch))
+            return "ERROR: 目录选择器不可用或已有选择请求进行中"
+        try {
+            FilePickResultBridge.launcher?.invoke(id, "", false, true)
+                ?: FilePickResultBridge.fail(id, "目录选择器不可用")
+        } catch (e: Exception) {
+            FilePickResultBridge.fail(id, "无法打开目录选择器：${e.message}")
         }
-        val launcher = Intent(context, FilePickActivity::class.java).apply {
-            putExtra("requestId", id)
-            putExtra("pickerIntent", picker)
-            putExtra("persistTree", true)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        context.startActivity(launcher)
         val ok = latch.await(120, TimeUnit.SECONDS)
-        FilePickResultBridge.pending.remove(id)
+        val failure = FilePickResultBridge.failures[id]
+        val uri = FilePickResultBridge.results[id]?.firstOrNull()
+        FilePickResultBridge.finish(id)
         if (!ok) return "ERROR: 目录选择超时（120s）"
-        val uri = FilePickResultBridge.results.remove(id)?.firstOrNull()
-            ?: return "CANCELLED: 用户取消了目录选择"
+        if (failure != null) return "ERROR: $failure"
+        if (uri == null) return "CANCELLED: 用户取消了目录选择"
         return "WRITTEN: 已获得目录树的持久授权：$uri"
     }
 

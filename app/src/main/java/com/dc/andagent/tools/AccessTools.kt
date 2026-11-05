@@ -1,7 +1,6 @@
 package com.dc.andagent.tools
 
 import android.Manifest
-import android.app.Activity
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -75,9 +74,7 @@ class OpenFolderTool(private val context: Context) : Tool {
  * the tool blocks until the user picks (or 120s timeout).
  */
 class FilePickTool(
-    private val context: Context,
     private val resultBridge: FilePickResultBridge,
-    private val activityProvider: () -> Activity? = { null },
 ) : Tool {
     override val name = "file_pick"
     override val description =
@@ -91,37 +88,23 @@ class FilePickTool(
     override suspend fun execute(args: JsonObject): String {
         val mime = args.strArg("mime") ?: "*/*"
         val multiple = args.boolArg("multiple") ?: false
-        val id = "pick_${System.currentTimeMillis()}"
+        val id = "pick_${java.util.UUID.randomUUID()}"
         val latch = java.util.concurrent.CountDownLatch(1)
-        FilePickResultBridge.pending[id] = latch
-
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = mime
-            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, multiple)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val kind = if (multiple) FilePickResultBridge.Kind.MULTIPLE else FilePickResultBridge.Kind.SINGLE
+        if (!resultBridge.begin(id, kind, latch)) return "ERROR: 文件选择器不可用或已有选择请求进行中"
+        try {
+            resultBridge.launcher?.invoke(id, mime, multiple, false)
+                ?: resultBridge.fail(id, "文件选择器不可用")
+        } catch (e: Exception) {
+            resultBridge.fail(id, "无法打开文件选择器：${e.message}")
         }
-        val pickIntent = Intent(context, FilePickActivity::class.java).apply {
-            putExtra("requestId", id)
-            putExtra("pickerIntent", intent)
-            // NEW_TASK 把 trampoline 放进独立任务栈——部分 ROM 从独立栈的
-            // startActivityForResult 回来 resultCode 恒 CANCELED。单任务栈顶
-            // 启动（无 NEW_TASK）保证结果回链完整；context 是 app 上下文时仍需
-            // NEW_TASK，此时由 Activity 重建防护兜底。
-        }
-        val launchContext: Context = activityProvider() ?: context
-        if (launchContext is Activity) {
-            // 从 Activity 上下文发起：同栈启动，结果回链最可靠。
-            pickIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-        } else {
-            pickIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        launchContext.startActivity(pickIntent)
-
         val ok = latch.await(120, java.util.concurrent.TimeUnit.SECONDS)
-        FilePickResultBridge.pending.remove(id)
+        val failure = resultBridge.failures[id]
+        val uris = resultBridge.results[id]
+        resultBridge.finish(id)
         if (!ok) return "ERROR: 文件选择超时（120s）或用户未响应"
-        val uris = FilePickResultBridge.results[id] ?: return "ERROR: 选择器未返回结果"
+        if (failure != null) return "ERROR: $failure"
+        if (uris == null) return "ERROR: 选择器未返回结果"
         if (uris.isEmpty()) return "CANCELLED: 用户取消了文件选择"
         return buildJsonObject {
             put("count", uris.size)

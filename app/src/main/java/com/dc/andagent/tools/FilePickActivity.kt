@@ -63,12 +63,48 @@ class FilePickActivity : Activity() {
     }
 }
 
-/** Static bridge between the picker activity and the blocked tool thread. */
+/** Shared result bridge for MainActivity's registered Activity Result launchers. */
 object FilePickResultBridge {
+    enum class Kind { SINGLE, MULTIPLE, TREE }
+
     val pending = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.CountDownLatch>()
     val results = java.util.concurrent.ConcurrentHashMap<String, List<String>>()
+    val failures = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val queued = Kind.entries.associateWith { java.util.ArrayDeque<String>() }
+    private var activeId: String? = null
+
+    @Volatile var launcher: ((String, String, Boolean, Boolean) -> Unit)? = null
+
+    @Synchronized fun begin(id: String, kind: Kind, latch: java.util.concurrent.CountDownLatch): Boolean {
+        if (activeId != null || launcher == null) return false
+        activeId = id
+        pending[id] = latch
+        queued.getValue(kind).addLast(id)
+        return true
+    }
+
+    @Synchronized fun finish(id: String) {
+        pending.remove(id)
+        results.remove(id)
+        failures.remove(id)
+        if (activeId == id) activeId = null
+        // Keep the queued ID until its callback arrives: a late result must
+        // never be attributed to a newer request using the same launcher.
+    }
+
+    @Synchronized fun reportNext(kind: Kind, uris: List<String>) {
+        val id = queued.getValue(kind).pollFirst() ?: return
+        report(id, uris)
+    }
+
+    @Synchronized fun fail(id: String, reason: String) {
+        queued.values.forEach { it.remove(id) }
+        failures[id] = reason
+        pending[id]?.countDown()
+    }
 
     fun report(id: String, uris: List<String>) {
+        if (!pending.containsKey(id)) return
         results[id] = uris
         pending[id]?.countDown()
     }
