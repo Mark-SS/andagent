@@ -35,6 +35,11 @@ class SettingsStore(context: Context) {
             "apiKey" to "api_key",
             "model" to "model",
             "systemPrompt" to "system_prompt",
+            "transcribeModel" to "transcribe_model",
+            "transcribeBaseUrl" to "transcribe_base_url",
+            "ttsBaseUrl" to "tts_base_url",
+            "ttsModel" to "tts_model",
+            "ttsVoice" to "tts_voice",
         )
 
         const val DEFAULT_SYSTEM_PROMPT =
@@ -146,4 +151,27 @@ class SettingsStore(context: Context) {
     var devtoolsDebugging: Boolean
         get() = prefs.getBoolean("devtools_debugging", false)
         set(value) = prefs.edit().putBoolean("devtools_debugging", value).apply()
+
+    /** 语音转写（STT）：模型 id，如 whisper-1 / glm-asr / fun-asr；空 = whisper-1 兼容默认。 */
+    var transcribeModel: String
+        get() = prefs.getString("transcribe_model", "")!!
+        set(value) = prefs.edit().putString("transcribe_model", value).apply()
+
+    /** 语音转写端点：缺省跟随 baseUrl（同 host 的 /audio/transcriptions）。 */
+    var transcribeBaseUrl: String
+        get() = prefs.getString("transcribe_base_url", "")!!
+        set(value) = prefs.edit().putString("transcribe_base_url", value).apply()
+
+    /** 语音合成（TTS）：端点 + 模型（OpenAI 兼容 /audio/speech）。 */
+    var ttsBaseUrl: String
+        get() = prefs.getString("tts_base_url", "")!!
+        set(value) = prefs.edit().putString("tts_base_url", value).apply()
+
+    var ttsModel: String
+        get() = prefs.getString("tts_model", "")!!
+        set(value) = prefs.edit().putString("tts_model", value).apply()
+
+    var ttsVoice: String
+        get() = prefs.getString("tts_voice", "")!!
+        set(value) = prefs.edit().putString("tts_voice", value).apply()
 }

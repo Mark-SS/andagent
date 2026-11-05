@@ -355,12 +355,13 @@ class AgentBridge(
                 emitToolResult(reqId, false, "ERROR: 未配置 API Key，无法调用转写服务")
                 return@execute
             }
-            val url = settings.baseUrl.trimEnd('/') + "/audio/transcriptions"
+            val url = (settings.transcribeBaseUrl.ifBlank { settings.baseUrl }).trimEnd('/') + "/audio/transcriptions"
+            val sttModel = settings.transcribeModel.ifBlank { "whisper-1" }
             val body = okhttp3.MultipartBody.Builder()
                 .setType(okhttp3.MultipartBody.FORM)
                 .addFormDataPart("file", file.name,
                     file.asRequestBody("audio/mp4".toMediaType()))
-                .addFormDataPart("model", "whisper-1")
+                .addFormDataPart("model", sttModel)
                 .addFormDataPart("language", language.ifBlank { "zh" })
                 .addFormDataPart("response_format", "json")
                 .build()

@@ -14,6 +14,11 @@ export interface Settings {
   apiKey: string;
   model: string;
   systemPrompt: string;
+  transcribeModel?: string;
+  transcribeBaseUrl?: string;
+  ttsBaseUrl?: string;
+  ttsModel?: string;
+  ttsVoice?: string;
 }
 
 export const DEFAULT_SYSTEM_PROMPT = [
