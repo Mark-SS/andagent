@@ -1,3 +1,4 @@
+import { translate } from "./i18n";
 import { useState } from "react";
 import { execTool } from "./bridge";
 
@@ -18,7 +19,7 @@ export function JsonNode({ label, value, depth = 0 }: { label: string; value: un
 
 export function JsonTreeCard({ code }: { code: string }) {
   let data: unknown;
-  try { data = JSON.parse(code); } catch { return <div className="rich-error">JSON 数据格式错误</div>; }
+  try { data = JSON.parse(code); } catch { return <div className="rich-error">{translate("jsonInvalid")}</div>; }
   return <div className="json-tree-card"><JsonNode label="root" value={data} /></div>;
 }
 
@@ -58,7 +59,7 @@ function parseTable(code: string): TableData | null {
           const columns = obj.columns.map(cell);
           return { columns, rows: obj.rows.map((row) => Array.isArray(row) ? row.map(cell) : [cell(row)]), keyValue: false };
         }
-        return { columns: ["字段", "值"], rows: Object.entries(obj).map(([k, v]) => [k, cell(v)]), keyValue: true };
+        return { columns: [translate("field"), translate("value")], rows: Object.entries(obj).map(([k, v]) => [k, cell(v)]), keyValue: true };
       }
     } catch {
       return null;
@@ -74,7 +75,7 @@ function parseTable(code: string): TableData | null {
   const pairs = lines.filter((line) => !line.includes("|") && line.includes(":"))
     .map((line) => { const at = line.indexOf(":"); return [line.slice(0, at).trim(), line.slice(at + 1).trim()] as [string, string]; });
   if (pairs.length === lines.length && pairs.length > 0) {
-    return { columns: ["字段", "值"], rows: pairs, keyValue: true };
+    return { columns: [translate("field"), translate("value")], rows: pairs, keyValue: true };
   }
   const sep = lines[0].includes("|") ? "|" : ",";
   const columns = lines[0].split(sep).map((s) => s.trim());
@@ -83,7 +84,7 @@ function parseTable(code: string): TableData | null {
 
 export function TableCard({ code }: { code: string }) {
   const data = parseTable(code);
-  if (!data) return <div className="rich-error">表格数据格式错误</div>;
+  if (!data) return <div className="rich-error">{translate("tableInvalid")}</div>;
   if (data.keyValue) {
     return <dl className="kv-card">{data.rows.map(([key, value], i) => <div key={i}><dt>{key}</dt><dd>{value}</dd></div>)}</dl>;
   }
@@ -93,14 +94,14 @@ export function TableCard({ code }: { code: string }) {
 export function ImageCard({ code }: { code: string }) {
   const [expanded, setExpanded] = useState(false);
   let data: { base64?: string; uri?: string; caption?: string };
-  try { data = JSON.parse(code); } catch { return <div className="rich-error">图片数据格式错误</div>; }
+  try { data = JSON.parse(code); } catch { return <div className="rich-error">{translate("imageInvalid")}</div>; }
   const src = data.base64 ? `data:image/png;base64,${data.base64}` : data.uri;
-  if (!src || !(src.startsWith("data:image/") || src.startsWith("content://") || src.startsWith("https://"))) return <div className="rich-error">图片来源无效</div>;
+  if (!src || !(src.startsWith("data:image/") || src.startsWith("content://") || src.startsWith("https://"))) return <div className="rich-error">{translate("imageSourceInvalid")}</div>;
   return <div className="image-card">
-    <button type="button" onClick={() => setExpanded(true)} aria-label="放大图片"><img src={src} alt={data.caption ?? "编辑图片"} /></button>
+    <button type="button" onClick={() => setExpanded(true)} aria-label={translate("enlargeImage")}><img src={src} alt={data.caption ?? translate("editedImage")} /></button>
     {data.caption && <div className="image-caption">{data.caption}</div>}
-    {expanded && <div className="image-lightbox" role="dialog" aria-modal="true" aria-label="图片预览" onClick={() => setExpanded(false)}>
-      <button type="button" onClick={() => setExpanded(false)} aria-label="关闭预览">×</button><img src={src} alt={data.caption ?? "编辑图片"} />
+    {expanded && <div className="image-lightbox" role="dialog" aria-modal="true" aria-label={translate("imagePreview")} onClick={() => setExpanded(false)}>
+      <button type="button" onClick={() => setExpanded(false)} aria-label={translate("closePreview")}>×</button><img src={src} alt={data.caption ?? translate("editedImage")} />
     </div>}
   </div>;
 }
@@ -108,13 +109,13 @@ export function ImageCard({ code }: { code: string }) {
 export function PhotosCard({ code }: { code: string }) {
   const [error, setError] = useState("");
   let photos: Photo[] = [];
-  try { const data = JSON.parse(code); photos = Array.isArray(data) ? data : data.photos ?? []; } catch { return <div className="rich-error">照片数据格式错误</div>; }
+  try { const data = JSON.parse(code); photos = Array.isArray(data) ? data : data.photos ?? []; } catch { return <div className="rich-error">{translate("photosInvalid")}</div>; }
   return <div className="photos-grid">{photos.map((photo, i) => {
     const src = photo.thumbnailBase64 ? `data:image/jpeg;base64,${photo.thumbnailBase64}` : photo.thumb;
     return <button type="button" key={photo.id ?? photo.uri ?? i} onClick={async () => {
       const result = await execTool("album_open", { id: photo.id, uri: photo.uri });
       if (!result.ok) setError(result.result);
-    }}><img src={src} alt={photo.name ?? `照片 ${i + 1}`} loading="lazy" /><span>{photo.name ?? `照片 ${i + 1}`}</span></button>;
+    }}><img src={src} alt={photo.name ?? `${translate("photo")} ${i + 1}`} loading="lazy" /><span>{photo.name ?? `${translate("photo")} ${i + 1}`}</span></button>;
   })}{error && <div className="rich-error">{error}</div>}</div>;
 }
 
@@ -126,13 +127,13 @@ export function KvCard({ code }: { code: string }) {
 export function GeoCard({ code }: { code: string }) {
   const [error, setError] = useState("");
   let data: { lat: number; lng: number; label?: string };
-  try { data = JSON.parse(code); } catch { return <div className="rich-error">地图数据格式错误</div>; }
+  try { data = JSON.parse(code); } catch { return <div className="rich-error">{translate("mapInvalid")}</div>; }
   const { lat, lng, label } = data;
-  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return <div className="rich-error">坐标无效</div>;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return <div className="rich-error">{translate("coordinateInvalid")}</div>;
   const bbox = `${lng - .01},${lat - .01},${lng + .01},${lat + .01}`;
   const src = `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&marker=${lat}%2C${lng}`;
-  return <div className="geo-card"><div>{label ?? `${lat}, ${lng}`}</div><iframe title={label ?? "地图"} src={src} loading="lazy" /><button type="button" onClick={async () => {
+  return <div className="geo-card"><div>{label ?? `${lat}, ${lng}`}</div><iframe title={label ?? translate("map")} src={src} loading="lazy" /><button type="button" onClick={async () => {
     const result = await execTool("open_uri", { uri: `geo:${lat},${lng}` });
     if (!result.ok) setError(result.result);
-  }}>在地图应用打开</button>{error && <div className="rich-error">{error}</div>}</div>;
+  }}>{translate("openMapApp")}</button>{error && <div className="rich-error">{error}</div>}</div>;
 }

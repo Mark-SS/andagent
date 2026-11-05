@@ -1,9 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { beforeEach, describe, it, expect } from "vitest";
 import { parseSvg } from "./SvgCard";
 
 // R39: ```svg fences render only after DOMParser confirms the root node is
 // <svg> — this is the injection guard for dangerouslySetInnerHTML.
 describe("SvgCard.parseSvg", () => {
+  beforeEach(() => localStorage.setItem("andagent.language", "zh"));
   it("accepts a plain SVG document", () => {
     const { svg, error } = parseSvg('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><circle r="4" cx="5" cy="5"/></svg>');
     expect(error).toBeNull();

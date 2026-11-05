@@ -1,3 +1,4 @@
+import { translate, useI18n } from "./i18n";
 import { useEffect, useRef, useState } from "react";
 import { lastShellResult, termuxTerminalExec, termuxTerminalPoll } from "./bridge";
 
@@ -32,7 +33,8 @@ function saveHistory(history: string[]): void {
 }
 
 export function TerminalCard({ code }: { code: string }) {
-  let title = "终端（Termux 共享会话）";
+  const { t } = useI18n();
+  let title = translate("terminalTitle");
   try {
     const parsed = JSON.parse(code || "{}") as { title?: string };
     if (typeof parsed.title === "string" && parsed.title.trim()) title = parsed.title.trim();
@@ -122,7 +124,7 @@ export function TerminalCard({ code }: { code: string }) {
         {lines.map((line, i) => (
           <div key={i} className={line.startsWith("↳ exit") ? "terminal-exit" : undefined}>{line || " "}</div>
         ))}
-        {!lines.length && <div className="terminal-idle">输入命令回车执行；跑在与助手相同的 Termux 会话中（cd/env 互通）</div>}
+        {!lines.length && <div className="terminal-idle">{t("terminalIdle")}</div>}
       </pre>
       <div className="terminal-input-row">
         <span className="terminal-prompt">$</span>
@@ -131,12 +133,12 @@ export function TerminalCard({ code }: { code: string }) {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={onKeyDown}
           disabled={!!dead}
-          placeholder={dead ? "会话不可用" : "输入命令…"}
+          placeholder={dead ? t("sessionUnavailable") : t("enterCommand")}
           spellCheck={false}
           autoCapitalize="off"
           autoCorrect="off"
         />
-        <button type="button" className="terminal-run" onClick={submit} disabled={!!dead}>执行</button>
+        <button type="button" className="terminal-run" onClick={submit} disabled={!!dead}>{t("execute")}</button>
       </div>
     </>
   );
@@ -145,22 +147,22 @@ export function TerminalCard({ code }: { code: string }) {
     <div className={`terminal-card${fullscreen ? " fullscreen" : ""}${closed ? " closed" : ""}`}>
       <div className="terminal-bar">
         <span className="terminal-title">⌨️ {title}</span>
-        <button type="button" onClick={() => setShowAgentOutput(true)}>助手输出</button>
-        <button type="button" onClick={() => setFullscreen((v) => !v)}>{fullscreen ? "退出全屏" : "全屏"}</button>
-        <button type="button" onClick={() => { setLines([]); pinned.current = true; }}>清屏</button>
-        <button type="button" onClick={() => { setClosed((v) => !v); }}>{closed ? "重新打开" : "关闭"}</button>
+        <button type="button" onClick={() => setShowAgentOutput(true)}>{t("assistantOutput")}</button>
+        <button type="button" onClick={() => setFullscreen((v) => !v)}>{fullscreen ? t("exitFullscreen") : t("fullscreen")}</button>
+        <button type="button" onClick={() => { setLines([]); pinned.current = true; }}>{t("clearScreen")}</button>
+        <button type="button" onClick={() => { setClosed((v) => !v); }}>{closed ? t("reopen") : t("close")}</button>
       </div>
       {showAgentOutput && (
-        <div className="image-lightbox" role="dialog" aria-modal="true" aria-label="shell_exec 输出" onClick={() => setShowAgentOutput(false)}>
-          <button type="button" onClick={() => setShowAgentOutput(false)} aria-label="关闭输出">×</button>
+        <div className="image-lightbox" role="dialog" aria-modal="true" aria-label={t("shellOutput")} onClick={() => setShowAgentOutput(false)}>
+          <button type="button" onClick={() => setShowAgentOutput(false)} aria-label={t("closePreview")}>×</button>
           <div className="mermaid-lightbox-body" onClick={(e) => e.stopPropagation()}>
-            <div className="tool-label">最近一次 shell_exec 的完整结果</div>
-            <pre className="tool-pre" style={{ maxHeight: "70vh" }}>{lastShellResult() || "（助手还没有执行过 shell 命令）"}</pre>
+            <div className="tool-label">{t("lastShellResult")}</div>
+            <pre className="tool-pre" style={{ maxHeight: "70vh" }}>{lastShellResult() || t("noShellResult")}</pre>
           </div>
         </div>
       )}
       {closed
-        ? <div className="terminal-idle">终端已关闭（bash 会话保留，与助手共享）；点「重新打开」继续</div>
+        ? <div className="terminal-idle">{t("terminalClosed")}</div>
         : body}
       {dead && <div className="terminal-error">{dead}</div>}
     </div>

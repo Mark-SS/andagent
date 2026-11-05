@@ -1,3 +1,4 @@
+import { translate, useI18n } from "./i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 /**
@@ -43,11 +44,11 @@ function parseSpec(code: string): ShaderSpec {
 
 function compile(gl: WebGL2RenderingContext, type: number, source: string): WebGLShader {
   const shader = gl.createShader(type);
-  if (!shader) throw new Error("无法创建 shader");
+  if (!shader) throw new Error(translate("shaderCreateFailed"));
   gl.shaderSource(shader, source);
   gl.compileShader(shader);
   if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    const log = gl.getShaderInfoLog(shader) ?? "未知编译错误";
+    const log = gl.getShaderInfoLog(shader) ?? translate("shaderUnknownError");
     gl.deleteShader(shader);
     throw new Error(log);
   }
@@ -55,6 +56,7 @@ function compile(gl: WebGL2RenderingContext, type: number, source: string): WebG
 }
 
 export function ShaderCard({ code }: { code: string }) {
+  const { t } = useI18n();
   const spec = useMemo(() => parseSpec(code), [code]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [error, setError] = useState("");
@@ -66,7 +68,7 @@ export function ShaderCard({ code }: { code: string }) {
     if (!canvas) return;
     const gl = canvas.getContext("webgl2", { antialias: false, alpha: false });
     if (!gl) {
-      setError("此设备不支持 WebGL2");
+      setError(translate("webglUnsupported"));
       return;
     }
     setError("");
@@ -76,14 +78,14 @@ export function ShaderCard({ code }: { code: string }) {
       const vs = compile(gl, gl.VERTEX_SHADER, VERTEX);
       const fs = compile(gl, gl.FRAGMENT_SHADER, spec.fragment);
       program = gl.createProgram();
-      if (!program) throw new Error("无法创建 program");
+      if (!program) throw new Error(translate("programCreateFailed"));
       gl.attachShader(program, vs);
       gl.attachShader(program, fs);
       gl.linkProgram(program);
       gl.deleteShader(vs);
       gl.deleteShader(fs);
       if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-        throw new Error(gl.getProgramInfoLog(program) ?? "链接失败");
+        throw new Error(gl.getProgramInfoLog(program) ?? translate("shaderLinkFailed"));
       }
       const buffer = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
@@ -117,7 +119,7 @@ export function ShaderCard({ code }: { code: string }) {
         gl.getExtension("WEBGL_lose_context")?.loseContext();
       };
     } catch (e) {
-      setError(`Shader 编译失败：${String(e)}`);
+      setError(`${t("shaderCompileFailed")}：${String(e)}`);
       return () => { if (program) gl.deleteProgram(program); };
     }
   }, [spec, paused, fullscreen]);
@@ -126,8 +128,8 @@ export function ShaderCard({ code }: { code: string }) {
     <div className={`shader-card${fullscreen ? " fullscreen" : ""}`}>
       <div className="webview-bar">
         <span className="webview-uri">✨ {spec.title}</span>
-        <button type="button" onClick={() => setPaused((v) => !v)}>{paused ? "继续" : "暂停"}</button>
-        <button type="button" onClick={() => setFullscreen((v) => !v)}>{fullscreen ? "退出全屏" : "全屏"}</button>
+        <button type="button" onClick={() => setPaused((v) => !v)}>{paused ? t("resume") : t("pause")}</button>
+        <button type="button" onClick={() => setFullscreen((v) => !v)}>{fullscreen ? t("exitFullscreen") : t("fullscreen")}</button>
       </div>
       <canvas ref={canvasRef} aria-label={spec.title} />
       {error && <div className="rich-error">{error}</div>}

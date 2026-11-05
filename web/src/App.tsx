@@ -65,6 +65,7 @@ function MessageMetaLine() {
 }
 
 function useMessageText(): string {
+  const { t: translate } = useI18n();
   return useAuiState((state) =>
     state.message.content
       .map((part) => {
@@ -72,7 +73,7 @@ function useMessageText(): string {
         // Include reasoning so 长按复制 covers 思考过程 too.
         if (part.type === "reasoning") {
           const t = (part as { text?: string }).text ?? "";
-          return t ? `【思考过程】\n${t}` : "";
+          return t ? `【${translate("reasoningCopy")}】\n${t}` : "";
         }
         return "";
       })
@@ -84,13 +85,14 @@ function useMessageText(): string {
 
 /** Full transcript of an assistant message: thinking + text + tool calls/results. */
 function useFullCopyText(): string {
+  const { t: translate } = useI18n();
   return useAuiState((state) =>
     state.message.content
       .map((part) => {
         if (part.type === "text") return part.text;
         if (part.type === "reasoning") {
           const t = (part as { text?: string }).text ?? "";
-          return t ? `【思考过程】\n${t}` : "";
+          return t ? `【${translate("reasoningCopy")}】\n${t}` : "";
         }
         if (part.type === "tool-call") {
           const tc = part as {
@@ -100,14 +102,14 @@ function useFullCopyText(): string {
             result?: string | unknown;
             isError?: boolean;
           };
-          const lines = [`【工具】${tc.toolName ?? "?"}`];
-          if (tc.argsText) lines.push(`参数: ${tc.argsText}`);
+          const lines = [`【${translate("toolCopy")}】${tc.toolName ?? "?"}`];
+          if (tc.argsText) lines.push(`${translate("arguments")}: ${tc.argsText}`);
           if (tc.result !== undefined && tc.result !== null) {
             const r =
               typeof tc.result === "string" ? tc.result : JSON.stringify(tc.result, null, 1);
-            lines.push(`结果: ${r}`);
+            lines.push(`${translate("result")}: ${r}`);
           }
-          if (tc.isError) lines.push("(出错)");
+          if (tc.isError) lines.push(`(${translate("errorCopy")})`);
           return lines.join("\n");
         }
         return "";
@@ -213,30 +215,31 @@ function AssistantMessage() {
 }
 
 function TemplateGrid() {
+  const { language } = useI18n();
   const aui = useAui();
   return (
     <div className="template-groups">
       {TEMPLATE_GROUPS.map((group) => (
-        <div className="template-group" key={group.label}>
-          <div className="template-group-label">{group.label}</div>
+        <div className="template-group" key={group.label.zh}>
+          <div className="template-group-label">{group.label[language]}</div>
           <div className="template-grid">
             {group.templates.map((t) => (
               <button
                 type="button"
                 className="template-card"
-                key={t.title}
-                title={t.prompt}
+                key={t.title.zh}
+                title={t.prompt[language]}
                 onClick={() =>
                   aui.thread.append({
                     role: "user",
-                    content: [{ type: "text", text: t.prompt }],
+                    content: [{ type: "text", text: t.prompt[language] }],
                   })
                 }
               >
                 <span className="template-icon" aria-hidden="true">
                   {t.icon}
                 </span>
-                <span className="template-title">{t.title}</span>
+                <span className="template-title">{t.title[language]}</span>
               </button>
             ))}
           </div>
@@ -270,7 +273,7 @@ function Composer({ hasKey }: { hasKey: boolean }) {
         const blob = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
         if (blob.size < 800) {
           setVoiceState("idle");
-          setVoiceError("录音太短，没收到声音");
+          setVoiceError(t("voiceTooShort"));
           return;
         }
         setVoiceState("transcribing");
@@ -297,7 +300,7 @@ function Composer({ hasKey }: { hasKey: boolean }) {
           }
         } catch (e) {
           setVoiceState("idle");
-          setVoiceError(`转写失败：${String(e)}`);
+          setVoiceError(`${t("transcribeFailed")}：${String(e)}`);
         }
       };
       mr.start();
@@ -309,7 +312,7 @@ function Composer({ hasKey }: { hasKey: boolean }) {
         if (voiceStateRef.current === "recording") stopRecording();
       }, 60_000);
     } catch (e) {
-      setVoiceError(`无法访问麦克风：${String(e)}（需要 RECORD_AUDIO 权限）`);
+      setVoiceError(`${t("micFailed")}：${String(e)} (RECORD_AUDIO)`);
     }
   };
 
@@ -354,8 +357,8 @@ function Composer({ hasKey }: { hasKey: boolean }) {
             className={`mic-btn ${voiceState === "recording" ? "recording" : ""}`}
             onClick={onMicClick}
             disabled={voiceState === "transcribing"}
-            title={voiceState === "recording" ? "停止录音" : "语音输入"}
-            aria-label={voiceState === "recording" ? "停止录音" : "语音输入"}
+            title={voiceState === "recording" ? t("stopRecording") : t("voiceInput")}
+            aria-label={voiceState === "recording" ? t("stopRecording") : t("voiceInput")}
           >
             {voiceState === "transcribing" ? (
               <span className="mic-spinner" aria-hidden="true" />
@@ -433,10 +436,10 @@ export default function App() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [exportNotice, setExportNotice] = useState<string | null>(null);
   useEffect(() => {
-    const onExported = (event: Event) => setExportNotice(`已导出到 ${(event as CustomEvent<string>).detail}`);
+    const onExported = (event: Event) => setExportNotice(t("exportedTo", { path: (event as CustomEvent<string>).detail }));
     window.addEventListener("andagent:conversation-exported", onExported);
     return () => window.removeEventListener("andagent:conversation-exported", onExported);
-  }, []);
+  }, [t]);
   const version = useRef<string>("…").current;
   const engineRef = useRef<AgentEngine | null>(null);
   if (!engineRef.current) engineRef.current = new AgentEngine(settings);
@@ -497,7 +500,7 @@ export default function App() {
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <div className="app">
-        {exportNotice && <div className="banner" role="status">{exportNotice}<button type="button" onClick={() => setExportNotice(null)}>关闭</button></div>}
+        {exportNotice && <div className="banner" role="status">{exportNotice}<button type="button" onClick={() => setExportNotice(null)}>{t("close")}</button></div>}
         <header className="app-head">
           <div className="head-left">
             <button
@@ -519,7 +522,7 @@ export default function App() {
             <div className="brand">
               <div className="brand-text">
                 <strong>AndAgent</strong>
-                <span>{hasBridge() ? `v${appVersion}` : `浏览器预览 v${appVersion}`}</span>
+                <span>{hasBridge() ? `v${appVersion}` : t("browserPreviewVersion", { version: appVersion })}</span>
               </div>
             </div>
           </div>

@@ -1,3 +1,4 @@
+import { translate, useI18n } from "./i18n";
 import { useEffect, useRef, useState } from "react";
 import * as echarts from "echarts/core";
 import { BarChart, LineChart, PieChart } from "echarts/charts";
@@ -47,19 +48,19 @@ function parseOption(code: string): EChartsCoreOption {
   try {
     parsed = JSON.parse(code);
   } catch (e) {
-    throw new Error(`option JSON 解析失败：${e instanceof Error ? e.message : String(e)}`);
+    throw new Error(`${translate("chartParseFailed")}：${e instanceof Error ? e.message : String(e)}`);
   }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("option 必须是一个 JSON 对象");
+    throw new Error(translate("chartObjectRequired"));
   }
   const option = parsed as Record<string, unknown>;
   const rawSeries = option.series;
   const series = Array.isArray(rawSeries) ? rawSeries : rawSeries ? [rawSeries] : [];
-  if (series.length === 0) throw new Error("option 缺少 series");
+  if (series.length === 0) throw new Error(translate("chartSeriesMissing"));
   for (const entry of series) {
     const type = (entry as { type?: unknown } | null)?.type;
     if (typeof type !== "string" || !ALLOWED_TYPES.has(type)) {
-      throw new Error(`不支持的图表类型：${String(type ?? "未指定")}（仅支持 bar/line/pie）`);
+      throw new Error(`${translate("chartUnsupported")}：${String(type ?? translate("unspecified"))} (bar/line/pie)`);
     }
   }
   return option as EChartsCoreOption;
@@ -71,6 +72,7 @@ function parseOption(code: string): EChartsCoreOption {
  * component and resized with its container.
  */
 export function ChartCard({ code }: { code: string }) {
+  const { t, language } = useI18n();
   const hostRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,7 +95,7 @@ export function ChartCard({ code }: { code: string }) {
       chart.setOption(option, true);
     } catch (e) {
       chart?.dispose();
-      setError(`图表渲染失败：${e instanceof Error ? e.message : String(e)}`);
+      setError(`${t("chartRenderFailed")}：${e instanceof Error ? e.message : String(e)}`);
       return;
     }
 
@@ -103,13 +105,13 @@ export function ChartCard({ code }: { code: string }) {
       observer.disconnect();
       chart?.dispose();
     };
-  }, [code]);
+  }, [code, language]);
 
   if (error) {
     return (
       <div className="chart-card chart-error">
         <div className="chart-head">
-          <span className="chart-badge">图表</span>
+          <span className="chart-badge">{t("chart")}</span>
           <span className="chart-error-text">{error}</span>
         </div>
       </div>
@@ -119,7 +121,7 @@ export function ChartCard({ code }: { code: string }) {
   return (
     <div className="chart-card">
       <div className="chart-head">
-        <span className="chart-badge">图表</span>
+        <span className="chart-badge">{t("chart")}</span>
       </div>
       <div ref={hostRef} className="chart-body" />
     </div>

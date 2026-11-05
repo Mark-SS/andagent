@@ -1,3 +1,4 @@
+import { useI18n } from "./i18n";
 import { useState } from "react";
 import { openEmbeddedWebview } from "./bridge";
 
@@ -10,6 +11,7 @@ import { openEmbeddedWebview } from "./bridge";
  * sandboxed to keep navigation from escaping the card.
  */
 export function WebViewCard({ uri }: { uri: string }) {
+  const { t } = useI18n();
   const [error, setError] = useState("");
   const [visible, setVisible] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
@@ -21,16 +23,16 @@ export function WebViewCard({ uri }: { uri: string }) {
     setError(result.startsWith("ERROR:") ? result : "");
   };
 
-  if (!allowed) return <div className="webview-card"><div className="webview-uri">🌐 {uri}</div><div className="webview-error">仅支持 HTTPS 网页</div></div>;
+  if (!allowed) return <div className="webview-card"><div className="webview-uri">🌐 {uri}</div><div className="webview-error">{t("httpsOnly")}</div></div>;
 
   return (
     <div className={`webview-card${fullscreen ? " fullscreen" : ""}`}>
       <div className="webview-bar">
         <span className="webview-uri">🌐 {uri}</span>
-        {visible && <button type="button" onClick={() => setNonce((v) => v + 1)} title="刷新">↻</button>}
-        <button type="button" onClick={() => setFullscreen((v) => !v)}>{fullscreen ? "退出全屏" : "全屏"}</button>
-        <button type="button" onClick={openExternal} title="在独立窗口中打开">独立窗口</button>
-        <button type="button" onClick={() => { setFullscreen(false); setVisible((v) => !v); }}>{visible ? "关闭" : "展开"}</button>
+        {visible && <button type="button" onClick={() => setNonce((v) => v + 1)} title={t("refresh")}>↻</button>}
+        <button type="button" onClick={() => setFullscreen((v) => !v)}>{fullscreen ? t("exitFullscreen") : t("fullscreen")}</button>
+        <button type="button" onClick={openExternal} title={t("openExternal")}>{t("externalWindow")}</button>
+        <button type="button" onClick={() => { setFullscreen(false); setVisible((v) => !v); }}>{visible ? t("close") : t("expand")}</button>
       </div>
       {visible && (
         <iframe

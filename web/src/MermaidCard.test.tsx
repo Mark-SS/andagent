@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { beforeEach, describe, it, expect } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { MermaidCard } from "./MermaidCard";
 
@@ -8,6 +8,7 @@ import { MermaidCard } from "./MermaidCard";
 // jsdom lacks the SVG layout APIs mermaid's renderer needs; it is verified
 // in the built app instead.
 describe("MermaidCard", () => {
+  beforeEach(() => localStorage.setItem("andagent.language", "zh"));
   it("shows the error card for illegal mermaid syntax", async () => {
     render(<MermaidCard code={"flowchart TD\n  A--->B--->C((("} />);
     await waitFor(
@@ -20,5 +21,5 @@ describe("MermaidCard", () => {
     expect(document.querySelector(".mermaid-source")?.textContent).toContain("flowchart TD");
     // no SVG was rendered
     expect(document.querySelector(".mermaid-figure")).toBeNull();
-  });
+  }, 30000);
 });

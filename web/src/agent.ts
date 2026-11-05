@@ -10,7 +10,8 @@ import type {
 } from "@mariozechner/pi-ai";
 import type { ThreadMessageLike } from "@assistant-ui/react";
 import { execTool, type Settings } from "./bridge";
-import { PERMISSION_GUIDE } from "./permissionGuide";
+import { PERMISSION_GUIDE, PERMISSION_GUIDE_EN } from "./permissionGuide";
+import { currentLanguage } from "./i18n";
 import { toModelMessages } from "./modelMessages";
 import { SessionStore, type SessionMeta } from "./sessions";
 import { EXTRA_TOOL_DEFS } from "./extraTools";
@@ -622,11 +623,52 @@ const CHART_GUIDE = [
   "```",
 ].join("\n");
 
+const LIVE_GUIDE = [
+  "实时画布与循环（```live 围栏）：",
+  "- 用户要实时曲线、动态图表、持续监控、时钟或动画可视化时，输出 ```live 围栏，内容为合法 JSON：{\"name\":\"标题\",\"interval_ms\":1000,\"code\":\"JS 循环体\"}。卡片由用户点击启动；可加 render 字段，用 canvas JS 接收 ctx,t,w,h,data 绘制实时数据。",
+  "- code 每 tick 执行一次：andagent.tool(name, JSON.stringify(args)) 取设备数据（如 sensor_read、battery_detail、android_reflect）；andagent.kv.get(namespace,key) / set(namespace,key,value) 保存跨 tick 状态；live.result(data) 提交本轮结果（JSON ≤16KB）。",
+  "- 实时加速度示例：{\"name\":\"加速度\",\"interval_ms\":200,\"code\":\"const s=JSON.parse(andagent.tool('sensor_read',JSON.stringify({sensor:'accelerometer'})));const pts=andagent.kv.get('live_accel','pts')||[];pts.push(s.values.slice(0,3));const next=pts.slice(-60);andagent.kv.set('live_accel','pts',next);live.result({type:'line',points:next})\"}。根据 sensor_read 实际返回结构提取轴值。",
+  "- 要画实时曲线时必须提供 render：从 data.points 读点，使用 ctx.beginPath / moveTo / lineTo / stroke 在 canvas 上绘制；省略 render 时卡片只显示本轮 JSON 文本。",
+  "- 单 tick 500ms 硬超时；连续 5 次异常自动停止；用户可在卡片上暂停、停止或重启。",
+  "- 静态 canvas 2D 绘图用 ```canvas 围栏，内容可为 JS 或 {\"code\":\"...\",\"animate\":true} JSON；运行在 sandbox iframe，代码接收 ctx,t,w,h，animate:true 可随 requestAnimationFrame 重绘。",
+].join("\n");
+
+const CHART_GUIDE_EN = [
+  "Data visualization rules:",
+  "Use ```geo JSON for locations and ```kv for device or battery key-value status.",
+  "1. For comparisons, trends, or proportions, add a ```chart fence containing valid ECharts option JSON.",
+  "2. Use pure JSON only: no functions, comments, variables, single quotes, or JavaScript expressions.",
+  "3. Chart series types are limited to bar, line, and pie, specified with series[].type. Use string or number arrays for labels and values.",
+  "4. Read tool JSON, summarize the data, and place the prepared option in the chart fence. Do not paste raw JSON output.",
+  "5. Use LaTeX for formulas ($...$ inline or $$...$$ blocks); use ```mermaid for flow, sequence, or architecture diagrams.",
+  "6. Example:",
+  "```chart",
+  '{"tooltip":{},"legend":{},"xAxis":{"type":"category","data":["Jan","Feb","Mar"]},"yAxis":{"type":"value"},"series":[{"name":"Photos","type":"bar","data":[12,20,8]}]}',
+  "```",
+].join("\n");
+
+const LIVE_GUIDE_EN = [
+  "Live canvas and loops (```live fence):",
+  "- For live curves, dynamic charts, ongoing monitoring, clocks, or animated visuals, output a ```live fence with valid JSON: {\"name\":\"Title\",\"interval_ms\":1000,\"code\":\"JS loop body\"}. The user starts the card. An optional render field contains canvas JS receiving ctx,t,w,h,data.",
+  "- code runs once per tick. andagent.tool(name, JSON.stringify(args)) reads device data (such as sensor_read, battery_detail, android_reflect); andagent.kv.get(namespace,key) and set(namespace,key,value) persist state across ticks; live.result(data) submits the JSON result (up to 16 KB).",
+  "- Accelerometer example: {\"name\":\"Acceleration\",\"interval_ms\":200,\"code\":\"const s=JSON.parse(andagent.tool('sensor_read',JSON.stringify({sensor:'accelerometer'})));const pts=andagent.kv.get('live_accel','pts')||[];pts.push(s.values.slice(0,3));const next=pts.slice(-60);andagent.kv.set('live_accel','pts',next);live.result({type:'line',points:next})\"}.",
+  "- For a live curve include render: read data.points and draw with ctx.beginPath, moveTo, lineTo, and stroke. Without render the card shows JSON text.",
+  "- Each tick has a hard 500ms timeout. Five consecutive failures stop the loop. The user can pause, stop, or restart it from the card.",
+  "- For static 2D drawing, output a ```canvas fence with JS or JSON {\"code\":\"...\",\"animate\":true}. It runs in a sandbox iframe with ctx,t,w,h; animate:true redraws with requestAnimationFrame.",
+].join("\n");
+
 const STORAGE_MEDIA_GUIDE = [
   "结构化存储：用户要记账、清单或笔记库时，先用 db_create 建库，再用 db_exec 建表，后续用参数化 INSERT 和 db_query SELECT。",
   "轻量键值：用户要记住偏好、计数器或小型状态时，用 kv_set 写入，kv_get/kv_keys 读取；临时数据加 ttl_ms；清空命名空间用 kv_clear 且 confirm=true（最多 64 个命名空间、每命名空间 512 键、单值 64KB）。",
   "记账表例：CREATE TABLE records(id INTEGER PRIMARY KEY, date TEXT, item TEXT, amount REAL)。",
   "输出呈现：给用户音频或视频文件时，用 ```audio 或 ```video 围栏，内容为 JSON，例如 {\"uri\":\"/本地路径/file.mp4\",\"title\":\"文件名\"}；uri 可为本地文件路径或 https。",
+].join("\n");
+
+const STORAGE_MEDIA_GUIDE_EN = [
+  "Structured storage: for expenses, lists, or notes, create a database with db_create, then a table with db_exec; use parameterized INSERT and db_query SELECT afterward.",
+  "Key-value storage: use kv_set for preferences, counters, or small state; kv_get/kv_keys to read. Use ttl_ms for temporary values. kv_clear requires confirm=true (up to 64 namespaces, 512 keys per namespace, 64KB per value).",
+  "Example expense schema: CREATE TABLE records(id INTEGER PRIMARY KEY, date TEXT, item TEXT, amount REAL).",
+  "For audio or video files, output a ```audio or ```video fence with JSON such as {\"uri\":\"/local/path/file.mp4\",\"title\":\"Filename\"}. uri may be a local path or HTTPS URL.",
 ].join("\n");
 
 /** Always appended, so prompts saved before this fix cannot re-enable base64 fences. */
@@ -635,6 +677,13 @@ const MEDIA_CONTEXT_GUIDE = [
   "- screen_capture、album_photos、image_edit、image_preview、image_collage 的缩略图由工具卡片自动渲染给用户；工具结果里的图片数据不会进入你的上下文，你也看不到像素。",
   "- 不要输出 ```image / ```photos 围栏，不要复述或粘贴 base64、previewFence 等图片数据；用文字说明结果、文件数量、savedPath 或 content:// uri。",
   "- 需要继续处理图片时，用返回的路径或 uri 作为下一次工具调用的 source。",
+].join("\n");
+
+const MEDIA_CONTEXT_GUIDE_EN = [
+  "Image and context rules:",
+  "- Tool cards automatically display thumbnails from screen_capture, album_photos, image_edit, image_preview, and image_collage. Image bytes do not enter your context, so you cannot see the pixels.",
+  "- Do not output ```image / ```photos fences or repeat base64 or previewFence. Describe results, counts, savedPath, or content:// uri in text.",
+  "- For further image processing, pass the returned path or uri as the next tool source.",
 ].join("\n");
 
 const ZERO_USAGE = {
@@ -979,11 +1028,12 @@ export class AgentEngine {
               this.settings.systemPrompt.trim(),
               memoryPrompt(content),
               skillPrompt(),
-              "反射桥：android_reflect 仅能调用 AudioManager、MediaRouter、CameraManager/CameraCharacteristics、SensorManager、PowerManager、ActivityManager、ConnectivityManager、Build/SystemClock、Settings.System/Global/Secure、TelephonyManager、DisplayManager、PackageManager 的白名单方法。批量 api_* 工具见工具列表；优先用专门工具，反射用于长尾查询。",
-              CHART_GUIDE,
-              STORAGE_MEDIA_GUIDE,
-              MEDIA_CONTEXT_GUIDE,
-              PERMISSION_GUIDE,
+              currentLanguage() === "en" ? "Reflection: android_reflect can call only allowlisted methods of AudioManager, MediaRouter, CameraManager/CameraCharacteristics, SensorManager, PowerManager, ActivityManager, ConnectivityManager, Build/SystemClock, Settings.System/Global/Secure, TelephonyManager, DisplayManager, and PackageManager. See declared api_* tools; prefer dedicated tools." : "反射桥：android_reflect 仅能调用 AudioManager、MediaRouter、CameraManager/CameraCharacteristics、SensorManager、PowerManager、ActivityManager、ConnectivityManager、Build/SystemClock、Settings.System/Global/Secure、TelephonyManager、DisplayManager、PackageManager 的白名单方法。批量 api_* 工具见工具列表；优先用专门工具，反射用于长尾查询。",
+              currentLanguage() === "en" ? CHART_GUIDE_EN : CHART_GUIDE,
+              currentLanguage() === "en" ? LIVE_GUIDE_EN : LIVE_GUIDE,
+              currentLanguage() === "en" ? STORAGE_MEDIA_GUIDE_EN : STORAGE_MEDIA_GUIDE,
+              currentLanguage() === "en" ? MEDIA_CONTEXT_GUIDE_EN : MEDIA_CONTEXT_GUIDE,
+              currentLanguage() === "en" ? PERMISSION_GUIDE_EN : PERMISSION_GUIDE,
             ]
               .filter(Boolean)
               .join("\n\n"),

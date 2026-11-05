@@ -1,3 +1,4 @@
+import { useI18n } from "./i18n";
 import { memo, useMemo, useState } from "react";
 import {
   MarkdownTextPrimitive,
@@ -21,6 +22,7 @@ import { ShaderCard } from "./ShaderCard";
 import { WidgetPreviewCard } from "./WidgetPreviewCard";
 
 function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighlighterProps) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const kind = (language ?? "").toLowerCase();
   const isChart = ["chart", "photos", "image", "kv", "table", "json-tree", "geo", "audio", "video", "camera", "widget", "canvas", "live", "shader", "terminal", "mermaid", "svg"].includes(kind);
@@ -54,7 +56,7 @@ function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighligh
   if (liveFence) {
     return (
       <div className="fence-placeholder" data-kind={kind}>
-        <span className="fence-placeholder-label">{kind} 生成中…</span>
+        <span className="fence-placeholder-label">{kind} {t("generating")}</span>
       </div>
     );
   }
@@ -80,7 +82,7 @@ function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighligh
       const data = JSON.parse(code) as { uri?: string; title?: string; poster?: string };
       if (typeof data.uri === "string") return <MediaCard kind={kind} uri={data.uri} title={data.title} poster={data.poster} />;
     } catch { /* invalid media JSON */ }
-    return <div className="media-error">媒体数据格式错误</div>;
+    return <div className="media-error">{t("mediaInvalid")}</div>;
   }
 
   const copy = async () => {
@@ -98,7 +100,7 @@ function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighligh
       <div className="code-head">
         <span className="code-lang">{language || "text"}</span>
         <button type="button" className="code-copy" onClick={copy}>
-          {copied ? "已复制" : "复制"}
+          {copied ? t("copied") : t("copy")}
         </button>
       </div>
       <Pre className="code-block">

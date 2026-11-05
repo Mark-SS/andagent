@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useI18n } from "./i18n";
 import { createPortal } from "react-dom";
 
 /** Clipboard write with a legacy fallback for WebViews without async clipboard. */
@@ -84,6 +85,7 @@ interface CopyMenuProps {
 
 /** One-action context menu ("复制全文") anchored at the long-press point. */
 export function CopyMenu({ text, x, y, onClose }: CopyMenuProps) {
+  const { t } = useI18n();
   const [state, setState] = useState<"idle" | "done" | "failed">("idle");
   const left = Math.max(8, Math.min(x, window.innerWidth - 132));
   const top = Math.max(8, Math.min(y, window.innerHeight - 54));
@@ -114,7 +116,7 @@ export function CopyMenu({ text, x, y, onClose }: CopyMenuProps) {
           <span className="copy-menu-icon" aria-hidden="true">
             ⧉
           </span>
-          {state === "idle" ? "复制全文" : state === "done" ? "已复制" : "复制失败"}
+          {state === "idle" ? t("copyAll") : state === "done" ? t("copied") : t("copyFailed")}
         </button>
       </div>
     </div>,

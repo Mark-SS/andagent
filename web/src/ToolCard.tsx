@@ -1,3 +1,4 @@
+import { useI18n } from "./i18n";
 import { useEffect, useMemo, useState } from "react";
 import type { ToolCallMessagePartProps } from "@assistant-ui/react";
 import { cancelToolByCallId } from "./bridge";
@@ -7,120 +8,121 @@ import { PhotosCard } from "./RichCards";
 
 interface ToolMeta {
   label: string;
+  labelEn?: string;
   icon: string;
   destructive?: boolean;
 }
 
 const META: Record<string, ToolMeta> = {
-  get_time: { label: "获取时间", icon: "🕐" },
-  db_create: { label: "创建数据库", icon: "🗄️" },
-  db_list: { label: "数据库列表", icon: "🗄️" },
-  db_gui: { label: "打开数据库", icon: "🗄️" },
-  db_tables: { label: "数据表列表", icon: "🗄️" },
-  db_schema: { label: "数据表结构", icon: "🗄️" },
-  db_exec: { label: "执行 SQL", icon: "🗄️", destructive: true },
-  memory_add: { label: "保存记忆", icon: "🧠" },
-  memory_search: { label: "搜索记忆", icon: "🧠" },
-  memory_update: { label: "更新记忆", icon: "🧠" },
-  memory_delete: { label: "删除记忆", icon: "🧠", destructive: true },
-  memory_delete_all: { label: "清空记忆", icon: "🧠", destructive: true },
-  memory_get_all: { label: "记忆列表", icon: "🧠" },
-  memory_history: { label: "记忆历史", icon: "🧠" },
-  memory_stats: { label: "记忆容量", icon: "🧠" },
-  db_query: { label: "查询数据库", icon: "🗄️" },
-  db_drop: { label: "删除数据库", icon: "🗑️", destructive: true },
-  nfc_status: { label: "NFC 状态", icon: "📶" },
-  nfc_read: { label: "读取 NFC", icon: "📶" },
-  nfc_write_text: { label: "写入 NFC 文本", icon: "📶", destructive: true },
-  nfc_write_uri: { label: "写入 NFC 链接", icon: "📶", destructive: true },
-  nfc_mf_dump: { label: "MIFARE 扇区 dump", icon: "📶" },
-  nfc_mf_write_block: { label: "MIFARE 写块", icon: "📶", destructive: true },
-  nfc_ul_read: { label: "Ultralight 读页", icon: "📶" },
-  nfc_ul_write_page: { label: "Ultralight 写页", icon: "📶", destructive: true },
-  nfc_keys_manage: { label: "NFC key 库", icon: "🔑" },
-  web_embed: { label: "内嵌浏览器", icon: "🌐" },
-  device_info: { label: "设备信息", icon: "📱" },
-  storage_scan: { label: "存储扫描", icon: "💾" },
-  album_stats: { label: "相册统计", icon: "🖼️" },
-  album_photos: { label: "相册照片", icon: "📸" },
-  album_open: { label: "图库打开", icon: "🖼️" },
-  calendar_list: { label: "日历账户", icon: "📅" },
-  calendar_events: { label: "日程查询", icon: "🗓️" },
-  calendar_add: { label: "创建日程", icon: "➕", destructive: true },
-  calendar_delete: { label: "删除日程", icon: "🗑️", destructive: true },
-  alarm_set: { label: "设置闹钟", icon: "⏰" },
-  timer_set: { label: "设置计时器", icon: "⏱️" },
-  battery_detail: { label: "电池详情", icon: "🔋" },
-  wifi_info: { label: "Wi-Fi 信息", icon: "📶" },
-  clipboard_write: { label: "写入剪贴板", icon: "📋" },
-  clipboard_read: { label: "读取剪贴板", icon: "📋" },
-  notify_send: { label: "发送通知", icon: "🔔" },
-  app_list: { label: "应用列表", icon: "📦" },
-  bt_scan: { label: "蓝牙扫描", icon: "📡" },
-  bt_paired_list: { label: "已配对设备", icon: "🔵" },
-  bt_connect: { label: "蓝牙连接", icon: "🔵" },
-  bt_connect_direct: { label: "蓝牙直接连接", icon: "🔵", destructive: true },
-  bt_toggle: { label: "蓝牙开关", icon: "🔵", destructive: true },
-  wifi_connect: { label: "Wi-Fi 面板", icon: "📶" },
-  wifi_connect_strong: { label: "Wi-Fi 连接", icon: "📶", destructive: true },
-  wifi_saved_list: { label: "已存网络", icon: "📶" },
-  wifi_forget: { label: "遗忘网络", icon: "📶", destructive: true },
-  wifi_toggle: { label: "Wi-Fi 开关", icon: "📶", destructive: true },
-  termux_setup: { label: "脚本环境", icon: "⌨️" },
-  js_eval: { label: "QuickJS 脚本", icon: "📜" },
-  script_save: { label: "保存脚本", icon: "💾" },
-  script_list: { label: "脚本库", icon: "📜" },
-  script_read: { label: "读取脚本", icon: "📄" },
-  script_run: { label: "运行脚本", icon: "▶️" },
-  script_delete: { label: "删除脚本", icon: "🗑️", destructive: true },
-  script_check: { label: "检查语法", icon: "✓" },
-  json_fix: { label: "修复 JSON", icon: "🔧" },
-  shell_exec: { label: "运行脚本", icon: "⌨️" },
-  pkg_install: { label: "安装软件包", icon: "📦", destructive: true },
-  screen_capture: { label: "屏幕截图", icon: "🖼️" },
-  image_edit: { label: "图片编辑", icon: "🎨" },
-  image_preview: { label: "图片预览", icon: "🖼️" },
-  image_info: { label: "图片信息", icon: "ℹ️" },
-  image_collage: { label: "图片拼图", icon: "🧩" },
-  screen_record_h264: { label: "H.264 录屏", icon: "🎥" },
-  input_tap: { label: "点击屏幕", icon: "👆", destructive: true },
-  input_swipe: { label: "滑动屏幕", icon: "👆", destructive: true },
-  input_text: { label: "输入文本", icon: "⌨️", destructive: true },
-  open_settings: { label: "打开系统设置", icon: "⚙️" },
-  open_uri: { label: "跳转应用", icon: "🔗" },
-  phone_call: { label: "拨打电话", icon: "📞" },
-  location_get: { label: "获取位置", icon: "📍" },
-  location_status: { label: "定位状态", icon: "🛰️" },
-  sms_send: { label: "发送短信", icon: "💬" },
-  mic_record: { label: "麦克风录音", icon: "🎤" },
-  camera_overlay_show: { label: "打开相机浮窗", icon: "📷" },
-  camera_overlay_update: { label: "调整相机浮窗", icon: "📷" },
-  camera_overlay_hide: { label: "关闭相机浮窗", icon: "📷" },
-  mic_list: { label: "录音列表", icon: "🎵" },
-  screen_orientation_get: { label: "屏幕方向", icon: "🧭" },
-  screen_orientation_set: { label: "旋转屏幕", icon: "🔄" },
-  otg_status: { label: "OTG 状态", icon: "🔌" },
-  otg_request: { label: "OTG 授权", icon: "🔑" },
-  otg_file_ops: { label: "U 盘文件", icon: "💾", destructive: true },
-  screen_record: { label: "录屏", icon: "🎥" },
-  screen_record_stop: { label: "停止录屏", icon: "⏹️" },
-  screen_record_list: { label: "录屏列表", icon: "🎞️" },
-  file_download: { label: "下载文件", icon: "📥" },
-  file_search: { label: "搜索文件", icon: "🔎" },
-  file_write: { label: "写文件", icon: "📝", destructive: true },
-  file_read: { label: "读文件", icon: "📄" },
-  file_list: { label: "列文件", icon: "📂" },
-  sensor_list: { label: "传感器列表", icon: "🧭" },
-  sensor_read: { label: "读传感器", icon: "🧭" },
-  steps_today: { label: "今日步数", icon: "👟" },
-  steps_history: { label: "步数历史", icon: "👟" },
+  get_time: { label: "获取时间", labelEn: "Get time", icon: "🕐" },
+  db_create: { label: "创建数据库", labelEn: "Create database", icon: "🗄️" },
+  db_list: { label: "数据库列表", labelEn: "List databases", icon: "🗄️" },
+  db_gui: { label: "打开数据库", labelEn: "Open database", icon: "🗄️" },
+  db_tables: { label: "数据表列表", labelEn: "List tables", icon: "🗄️" },
+  db_schema: { label: "数据表结构", labelEn: "Table schema", icon: "🗄️" },
+  db_exec: { label: "执行 SQL", labelEn: "Run SQL", icon: "🗄️", destructive: true },
+  memory_add: { label: "保存记忆", labelEn: "Save memory", icon: "🧠" },
+  memory_search: { label: "搜索记忆", labelEn: "Search memory", icon: "🧠" },
+  memory_update: { label: "更新记忆", labelEn: "Update memory", icon: "🧠" },
+  memory_delete: { label: "删除记忆", labelEn: "Delete memory", icon: "🧠", destructive: true },
+  memory_delete_all: { label: "清空记忆", labelEn: "Clear memory", icon: "🧠", destructive: true },
+  memory_get_all: { label: "记忆列表", labelEn: "List memories", icon: "🧠" },
+  memory_history: { label: "记忆历史", labelEn: "Memory history", icon: "🧠" },
+  memory_stats: { label: "记忆容量", labelEn: "Memory capacity", icon: "🧠" },
+  db_query: { label: "查询数据库", labelEn: "Query database", icon: "🗄️" },
+  db_drop: { label: "删除数据库", labelEn: "Delete database", icon: "🗑️", destructive: true },
+  nfc_status: { label: "NFC 状态", labelEn: "NFC status", icon: "📶" },
+  nfc_read: { label: "读取 NFC", labelEn: "Read NFC", icon: "📶" },
+  nfc_write_text: { label: "写入 NFC 文本", labelEn: "Write NFC text", icon: "📶", destructive: true },
+  nfc_write_uri: { label: "写入 NFC 链接", labelEn: "Write NFC link", icon: "📶", destructive: true },
+  nfc_mf_dump: { label: "MIFARE 扇区 dump", labelEn: "Dump MIFARE sectors", icon: "📶" },
+  nfc_mf_write_block: { label: "MIFARE 写块", labelEn: "Write MIFARE block", icon: "📶", destructive: true },
+  nfc_ul_read: { label: "Ultralight 读页", labelEn: "Read Ultralight page", icon: "📶" },
+  nfc_ul_write_page: { label: "Ultralight 写页", labelEn: "Write Ultralight page", icon: "📶", destructive: true },
+  nfc_keys_manage: { label: "NFC key 库", labelEn: "NFC key library", icon: "🔑" },
+  web_embed: { label: "内嵌浏览器", labelEn: "Embedded browser", icon: "🌐" },
+  device_info: { label: "设备信息", labelEn: "Device info", icon: "📱" },
+  storage_scan: { label: "存储扫描", labelEn: "Scan storage", icon: "💾" },
+  album_stats: { label: "相册统计", labelEn: "Photo library stats", icon: "🖼️" },
+  album_photos: { label: "相册照片", labelEn: "Photo library photos", icon: "📸" },
+  album_open: { label: "图库打开", labelEn: "Open gallery", icon: "🖼️" },
+  calendar_list: { label: "日历账户", labelEn: "Calendar accounts", icon: "📅" },
+  calendar_events: { label: "日程查询", labelEn: "Find events", icon: "🗓️" },
+  calendar_add: { label: "创建日程", labelEn: "Create event", icon: "➕", destructive: true },
+  calendar_delete: { label: "删除日程", labelEn: "Delete event", icon: "🗑️", destructive: true },
+  alarm_set: { label: "设置闹钟", labelEn: "Set alarm", icon: "⏰" },
+  timer_set: { label: "设置计时器", labelEn: "Set timer", icon: "⏱️" },
+  battery_detail: { label: "电池详情", labelEn: "Battery details", icon: "🔋" },
+  wifi_info: { label: "Wi-Fi 信息", labelEn: "Wi-Fi info", icon: "📶" },
+  clipboard_write: { label: "写入剪贴板", labelEn: "Write clipboard", icon: "📋" },
+  clipboard_read: { label: "读取剪贴板", labelEn: "Read clipboard", icon: "📋" },
+  notify_send: { label: "发送通知", labelEn: "Send notification", icon: "🔔" },
+  app_list: { label: "应用列表", labelEn: "List apps", icon: "📦" },
+  bt_scan: { label: "蓝牙扫描", labelEn: "Scan Bluetooth", icon: "📡" },
+  bt_paired_list: { label: "已配对设备", labelEn: "Paired devices", icon: "🔵" },
+  bt_connect: { label: "蓝牙连接", labelEn: "Connect Bluetooth", icon: "🔵" },
+  bt_connect_direct: { label: "蓝牙直接连接", labelEn: "Direct Bluetooth connection", icon: "🔵", destructive: true },
+  bt_toggle: { label: "蓝牙开关", labelEn: "Toggle Bluetooth", icon: "🔵", destructive: true },
+  wifi_connect: { label: "Wi-Fi 面板", labelEn: "Wi-Fi panel", icon: "📶" },
+  wifi_connect_strong: { label: "Wi-Fi 连接", labelEn: "Connect Wi-Fi", icon: "📶", destructive: true },
+  wifi_saved_list: { label: "已存网络", labelEn: "Saved networks", icon: "📶" },
+  wifi_forget: { label: "遗忘网络", labelEn: "Forget network", icon: "📶", destructive: true },
+  wifi_toggle: { label: "Wi-Fi 开关", labelEn: "Toggle Wi-Fi", icon: "📶", destructive: true },
+  termux_setup: { label: "脚本环境", labelEn: "Script environment", icon: "⌨️" },
+  js_eval: { label: "QuickJS 脚本", labelEn: "QuickJS script", icon: "📜" },
+  script_save: { label: "保存脚本", labelEn: "Save script", icon: "💾" },
+  script_list: { label: "脚本库", labelEn: "Script library", icon: "📜" },
+  script_read: { label: "读取脚本", labelEn: "Read script", icon: "📄" },
+  script_run: { label: "运行脚本", labelEn: "Run script", icon: "▶️" },
+  script_delete: { label: "删除脚本", labelEn: "Delete script", icon: "🗑️", destructive: true },
+  script_check: { label: "检查语法", labelEn: "Check syntax", icon: "✓" },
+  json_fix: { label: "修复 JSON", labelEn: "Fix JSON", icon: "🔧" },
+  shell_exec: { label: "运行脚本", labelEn: "Run script", icon: "⌨️" },
+  pkg_install: { label: "安装软件包", labelEn: "Install package", icon: "📦", destructive: true },
+  screen_capture: { label: "屏幕截图", labelEn: "Screenshot", icon: "🖼️" },
+  image_edit: { label: "图片编辑", labelEn: "Edit image", icon: "🎨" },
+  image_preview: { label: "图片预览", labelEn: "Preview image", icon: "🖼️" },
+  image_info: { label: "图片信息", labelEn: "Image info", icon: "ℹ️" },
+  image_collage: { label: "图片拼图", labelEn: "Image collage", icon: "🧩" },
+  screen_record_h264: { label: "H.264 录屏", labelEn: "H.264 screen recording", icon: "🎥" },
+  input_tap: { label: "点击屏幕", labelEn: "Tap screen", icon: "👆", destructive: true },
+  input_swipe: { label: "滑动屏幕", labelEn: "Swipe screen", icon: "👆", destructive: true },
+  input_text: { label: "输入文本", labelEn: "Enter text", icon: "⌨️", destructive: true },
+  open_settings: { label: "打开系统设置", labelEn: "Open system settings", icon: "⚙️" },
+  open_uri: { label: "跳转应用", labelEn: "Open app link", icon: "🔗" },
+  phone_call: { label: "拨打电话", labelEn: "Make call", icon: "📞" },
+  location_get: { label: "获取位置", labelEn: "Get location", icon: "📍" },
+  location_status: { label: "定位状态", labelEn: "Location status", icon: "🛰️" },
+  sms_send: { label: "发送短信", labelEn: "Send SMS", icon: "💬" },
+  mic_record: { label: "麦克风录音", labelEn: "Record audio", icon: "🎤" },
+  camera_overlay_show: { label: "打开相机浮窗", labelEn: "Open camera overlay", icon: "📷" },
+  camera_overlay_update: { label: "调整相机浮窗", labelEn: "Adjust camera overlay", icon: "📷" },
+  camera_overlay_hide: { label: "关闭相机浮窗", labelEn: "Close camera overlay", icon: "📷" },
+  mic_list: { label: "录音列表", labelEn: "List recordings", icon: "🎵" },
+  screen_orientation_get: { label: "屏幕方向", labelEn: "Screen orientation", icon: "🧭" },
+  screen_orientation_set: { label: "旋转屏幕", labelEn: "Rotate screen", icon: "🔄" },
+  otg_status: { label: "OTG 状态", labelEn: "OTG status", icon: "🔌" },
+  otg_request: { label: "OTG 授权", labelEn: "Grant OTG access", icon: "🔑" },
+  otg_file_ops: { label: "U 盘文件", labelEn: "USB drive files", icon: "💾", destructive: true },
+  screen_record: { label: "录屏", labelEn: "Record screen", icon: "🎥" },
+  screen_record_stop: { label: "停止录屏", labelEn: "Stop recording", icon: "⏹️" },
+  screen_record_list: { label: "录屏列表", labelEn: "List screen recordings", icon: "🎞️" },
+  file_download: { label: "下载文件", labelEn: "Download file", icon: "📥" },
+  file_search: { label: "搜索文件", labelEn: "Search files", icon: "🔎" },
+  file_write: { label: "写文件", labelEn: "Write file", icon: "📝", destructive: true },
+  file_read: { label: "读文件", labelEn: "Read file", icon: "📄" },
+  file_list: { label: "列文件", labelEn: "List files", icon: "📂" },
+  sensor_list: { label: "传感器列表", labelEn: "List sensors", icon: "🧭" },
+  sensor_read: { label: "读传感器", labelEn: "Read sensor", icon: "🧭" },
+  steps_today: { label: "今日步数", labelEn: "Today’s steps", icon: "👟" },
+  steps_history: { label: "步数历史", labelEn: "Step history", icon: "👟" },
 };
 
 const COLLAPSE_LINES = 15;
 
-function formatArgs(args: unknown): string {
+function formatArgs(args: unknown, noArgs: string): string {
   if (!args || (typeof args === "object" && Object.keys(args).length === 0)) {
-    return "无参数";
+    return noArgs;
   }
   try {
     return JSON.stringify(args, null, 2);
@@ -142,7 +144,7 @@ function formatResult(raw: string): { text: string; json: boolean } {
   }
 }
 
-function summarize(raw: string): string {
+function summarize(raw: string, terms: { array: string; items: string }): string {
   const trimmed = raw.trim();
   if (!trimmed) return "";
   try {
@@ -152,7 +154,7 @@ function summarize(raw: string): string {
       if (listKey) {
         const count = (obj[listKey] as unknown[]).length;
         const total = typeof obj.count === "number" ? obj.count : count;
-        return `${listKey}：${total} 条`;
+        return `${listKey}：${total} ${terms.items}`;
       }
       const pairs = Object.keys(obj)
         .slice(0, 3)
@@ -165,7 +167,7 @@ function summarize(raw: string): string {
     }
     if (trimmed.startsWith("[")) {
       const arr = JSON.parse(trimmed) as unknown[];
-      return `数组：${arr.length} 条`;
+      return `${terms.array}：${arr.length} ${terms.items}`;
     }
   } catch {
     /* not JSON — fall through */
@@ -191,6 +193,7 @@ function JsonNode({ label, value, depth = 0 }: { label: string; value: unknown; 
 }
 
 export function ToolCard(props: ToolCallMessagePartProps) {
+  const { t, language } = useI18n();
   const running = props.result === undefined;
   const failed = !!props.isError;
   const [open, setOpen] = useState(false);
@@ -225,7 +228,7 @@ export function ToolCard(props: ToolCallMessagePartProps) {
     try { const result = JSON.parse(raw) as { sourceThumbnailBase64?: string }; if (result.sourceThumbnailBase64) beforeImage = `data:image/png;base64,${result.sourceThumbnailBase64}`; } catch { /* no image */ }
   }
 
-  const preview = running ? (props.toolName.startsWith("nfc_") && !["nfc_status", "nfc_hce_status", "nfc_keys_manage"].includes(props.toolName) ? "请贴近 NFC 卡片，最多等待 60 秒…" : "正在执行…") : summarize(raw);
+  const preview = running ? (props.toolName.startsWith("nfc_") && !["nfc_status", "nfc_hce_status", "nfc_keys_manage"].includes(props.toolName) ? t("toolNfcWaiting") : t("toolRunning")) : summarize(raw, { array: t("array"), items: t("items") });
   const parsed = useMemo(() => { try { return formatted.json ? JSON.parse(raw) : null; } catch { return null; } }, [raw, formatted.json]);
   const media = !running && !failed && ["file_download", "mic_record", "screen_record_h264", "screen_record", "screen_record_stop"].includes(props.toolName) ? mediaFromResult(raw) : null;
   const webUri = props.toolName === "web_embed" && parsed?.type === "webview" && typeof parsed.uri === "string" ? parsed.uri : null;
@@ -241,20 +244,20 @@ export function ToolCard(props: ToolCallMessagePartProps) {
         <span className="tool-icon" aria-hidden="true">
           {meta.icon}
         </span>
-        <span className="tool-name">{meta.label}</span>
-        {meta.destructive && <span className="tool-badge">写入</span>}
+        <span className="tool-name">{language === "en" ? meta.labelEn ?? meta.label : meta.label}</span>
+        {meta.destructive && <span className="tool-badge">{t("toolWriting")}</span>}
         <span className="tool-preview">{preview}</span>
         <span className={`tool-state${failed ? " state-error" : ""}`}>
           {running ? (
             <>
-              <span className="dot-pulse" /> 执行中
+              <span className="dot-pulse" /> {t("toolRunningState")}
             </>
           ) : interrupted ? (
-            "已被用户中断"
+            t("toolInterrupted")
           ) : failed ? (
-            "失败"
+            t("toolFailed")
           ) : (
-            "完成"
+            t("toolDone")
           )}
         </span>
         <span className={`tool-chevron${open ? " open" : ""}`}>
@@ -273,7 +276,7 @@ export function ToolCard(props: ToolCallMessagePartProps) {
             className="tool-stop"
             onClick={() => cancelToolByCallId(props.toolCallId)}
           >
-            停止
+            {t("stopAction")}
           </button>
         </div>
       )}
@@ -281,26 +284,26 @@ export function ToolCard(props: ToolCallMessagePartProps) {
       {written && !failed && !running && (
         <div className="tool-confirm">
           <span aria-hidden="true">✓</span>
-          <span>已写入设备数据，请核对下方结果</span>
+          <span>{t("toolWritten")}</span>
         </div>
       )}
 
       {webUri && <WebViewCard uri={webUri} />}
       {photoGrid && <PhotosCard code={JSON.stringify(parsed?.photos ?? [])} />}
       {media && <MediaCard kind={media.kind} uri={media.uri} />}
-      {captureImage && <div className="tool-image-comparison">{beforeImage && <figure><img src={beforeImage} alt="编辑前" /><figcaption>编辑前</figcaption></figure>}<figure><img src={captureImage} alt="编辑后" /><figcaption>{beforeImage ? "编辑后" : "图片预览"}</figcaption></figure></div>}
+      {captureImage && <div className="tool-image-comparison">{beforeImage && <figure><img src={beforeImage} alt={t("beforeEdit")} /><figcaption>{t("beforeEdit")}</figcaption></figure>}<figure><img src={captureImage} alt={t("afterEdit")} /><figcaption>{beforeImage ? t("afterEdit") : t("imagePreview")}</figcaption></figure></div>}
 
       {open && (
         <div className="tool-body">
           <div className="tool-section">
-            <div className="tool-label">参数</div>
-            <pre className="tool-pre">{formatArgs(props.args)}</pre>
+            <div className="tool-label">{t("arguments")}</div>
+            <pre className="tool-pre">{formatArgs(props.args, t("noArgs"))}</pre>
           </div>
           {!running && (
             <div className="tool-section">
               <div className="tool-label">
-                结果{formatted.json ? " · JSON" : ""}
-                {canFold ? ` · ${lines.length} 行` : ""}
+                {t("result")}{formatted.json ? " · JSON" : ""}
+                {canFold ? ` · ${lines.length} ${t("rows")}` : ""}
                 <button
                   type="button"
                   className="tool-copy"
@@ -314,18 +317,18 @@ export function ToolCard(props: ToolCallMessagePartProps) {
                     }
                   }}
                 >
-                  {copied ? "已复制" : "复制"}
+                  {copied ? t("copied") : t("copy")}
                 </button>
               </div>
-              {formatted.json && parsed !== null && <details className="json-tree"><summary>树形查看</summary><JsonNode label="result" value={parsed} /></details>}
-              <pre className="tool-pre tool-result">{captureImage ? "截图已保存；缩略图见上方" : shown}</pre>
+              {formatted.json && parsed !== null && <details className="json-tree"><summary>{t("treeView")}</summary><JsonNode label="result" value={parsed} /></details>}
+              <pre className="tool-pre tool-result">{captureImage ? t("screenshotSaved") : shown}</pre>
               {canFold && (
                 <button
                   type="button"
                   className="tool-expand"
                   onClick={() => setExpanded((v) => !v)}
                 >
-                  {expanded ? "收起" : `展开（还有 ${lines.length - COLLAPSE_LINES} 行）`}
+                  {expanded ? t("collapse") : t("expandMore", { count: lines.length - COLLAPSE_LINES })}
                 </button>
               )}
             </div>

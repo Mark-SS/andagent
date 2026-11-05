@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import type { SessionMeta } from "./sessions";
 import { resolvedTheme, toggleTheme } from "./theme";
+import { useI18n } from "./i18n";
 import { fmtTokens, type UsageSum } from "./usage";
 
 /** ↑in ↓out 小字；会话头部与条目共用。 */
 function UsageTag({ input, output }: { input: number; output: number }) {
+  const { t } = useI18n();
   if (input <= 0 && output <= 0) return null;
   return (
-    <span className="usage-tag" title={`输入 ${input} · 输出 ${output} tokens`}>
+    <span className="usage-tag" title={`${t("input")} ${input} · ${t("output")} ${output} tokens`}>
       ↑{fmtTokens(input)} ↓{fmtTokens(output)}
     </span>
   );
@@ -41,6 +43,7 @@ export function Drawer({
   onDelete: (id: string) => void;
   onExport: (id: string) => void;
 }) {
+  const { t, language } = useI18n();
   const [visible, setVisible] = useState(open);
   const [theme, setThemeState] = useState(() => resolvedTheme());
 
@@ -65,19 +68,19 @@ export function Drawer({
   return (
     <div className={`drawer-root ${open ? "open" : ""}`}>
       <div className="drawer-scrim" onClick={onClose} aria-hidden="true" />
-      <nav className="drawer" aria-label="会话列表">
+      <nav className="drawer" aria-label={t("sessions")}>
         <div className="drawer-head">
           <div>
             <strong>AndAgent</strong>
-            <div className="drawer-sub">会话 · v{version}</div>
+            <div className="drawer-sub">{t("sessionsShort")} · v{version}</div>
           </div>
           <div className="drawer-head-right">
             <UsageTag input={sessionUsage.input} output={sessionUsage.output} />
             <button
               type="button"
               className="icon-btn"
-              aria-label={theme === "dark" ? "切换到日间模式" : "切换到夜间模式"}
-              title={theme === "dark" ? "日间模式" : "夜间模式"}
+              aria-label={theme === "dark" ? t("switchLight") : t("switchDark")}
+              title={theme === "dark" ? t("lightMode") : t("darkMode")}
               onClick={toggleTheme}
             >
               {theme === "dark" ? "☀️" : "🌙"}
@@ -89,11 +92,11 @@ export function Drawer({
           <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
             <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
-          新对话
+          {t("newChat")}
         </button>
 
         <div className="drawer-list">
-          {sessions.length === 0 && <div className="drawer-empty">还没有历史会话</div>}
+          {sessions.length === 0 && <div className="drawer-empty">{t("noSessions")}</div>}
           {sessions.map((s) => (
             <div
               key={s.id}
@@ -114,7 +117,7 @@ export function Drawer({
               <span className="drawer-item-title">{s.title}</span>
               <span className="drawer-item-sub">
                 <span className="drawer-item-time">
-                  {new Date(s.updatedAt).toLocaleString("zh-CN", {
+                  {new Date(s.updatedAt).toLocaleString(language === "zh" ? "zh-CN" : "en-US", {
                     month: "numeric",
                     day: "numeric",
                     hour: "2-digit",
@@ -126,29 +129,29 @@ export function Drawer({
                     <UsageTag input={s.usage.input} output={s.usage.output} />
                   </span>
                 )}
+                <button
+                  type="button"
+                  className="drawer-export"
+                  aria-label={t("exportSession", { name: s.title })}
+                  onClick={(e) => { e.stopPropagation(); onExport(s.id); }}
+                >{t("export")}</button>
+                <button
+                  type="button"
+                  className="drawer-del"
+                  aria-label={t("deleteSession", { name: s.title })}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (window.confirm(t("confirmDeleteSession", { name: s.title }))) onDelete(s.id);
+                  }}
+                >
+                  ×
+                </button>
               </span>
-              <button
-                type="button"
-                className="drawer-export"
-                aria-label={`导出会话 ${s.title}`}
-                onClick={(e) => { e.stopPropagation(); onExport(s.id); }}
-              >导出</button>
-              <button
-                type="button"
-                className="drawer-del"
-                aria-label={`删除会话 ${s.title}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(s.id);
-                }}
-              >
-                ×
-              </button>
             </div>
           ))}
         </div>
 
-        <div className="drawer-foot">AndAgent v{version} · 设备智能助手</div>
+        <div className="drawer-foot">AndAgent v{version} · {t("assistantTagline")}</div>
       </nav>
     </div>
   );

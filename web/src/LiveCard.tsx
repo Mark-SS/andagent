@@ -1,3 +1,4 @@
+import { useI18n } from "./i18n";
 import { useEffect, useMemo, useState } from "react";
 import { execTool } from "./bridge";
 import { CanvasCard } from "./CanvasCard";
@@ -14,6 +15,7 @@ text.split('\\n').slice(0,14).forEach(function(line,i){ctx.fillText(line.slice(0
 `;
 
 export function LiveCard({ code }: { code: string }) {
+  const { t } = useI18n();
   const spec = useMemo(() => {
     try {
       const parsed = JSON.parse(code) as LiveSpec;
@@ -54,7 +56,7 @@ export function LiveCard({ code }: { code: string }) {
     finally { setBusy(false); }
   };
 
-  if (!spec) return <div className="rich-error">Live 数据格式错误</div>;
+  if (!spec) return <div className="rich-error">{t("liveInvalid")}</div>;
   const data = state?.results?.at(-1);
   const canvasCode = JSON.stringify({ width: spec.width ?? 640, height: spec.height ?? 360,
     title: spec.name, code: spec.render ?? DEFAULT_RENDER });
@@ -63,11 +65,11 @@ export function LiveCard({ code }: { code: string }) {
       <span className="webview-uri">● {spec.name} {state ? `· ${state.state} · ${state.ticks} tick` : ""}</span>
       {(!id || state?.state === "stopped") && <button type="button" disabled={busy} onClick={() => void action("live_start", {
         name: spec.name, code: spec.code, interval_ms: spec.interval_ms ?? 1000, consumer: "dialog",
-      })}>{id ? "重新启动" : "启动循环"}</button>}
+      })}>{id ? t("restart") : t("startLoop")}</button>}
       {id && state?.state !== "stopped" && <>
         <button type="button" disabled={busy} onClick={() => void action("live_pause", { id, paused: state?.state !== "paused" })}>
-          {state?.state === "paused" ? "继续" : "暂停"}</button>
-        <button type="button" disabled={busy} onClick={() => void action("live_stop", { id })}>停止</button>
+          {state?.state === "paused" ? t("resume") : t("pause")}</button>
+        <button type="button" disabled={busy} onClick={() => void action("live_stop", { id })}>{t("stopAction")}</button>
       </>}
     </div>
     {error && <div className="rich-error">{error}</div>}

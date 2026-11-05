@@ -1,3 +1,4 @@
+import { translate, useI18n } from "./i18n";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { execTool, openAppSettings } from "./bridge";
 
@@ -18,7 +19,7 @@ function parseOptions(code: string): { facingMode: FacingMode } {
   if (!text) return { facingMode: "environment" };
   const parsed: unknown = JSON.parse(text);
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("内容必须是 JSON 对象");
+    throw new Error(translate("cameraJsonRequired"));
   }
   const facing = (parsed as { facingMode?: unknown }).facingMode;
   return { facingMode: facing === "user" ? "user" : "environment" };
@@ -28,7 +29,7 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error("读取照片失败"));
+    reader.onerror = () => reject(new Error(translate("readPhotoFailed")));
     reader.readAsDataURL(blob);
   });
 }
@@ -40,13 +41,14 @@ function stamp(): string {
 }
 
 export function CameraCard({ code }: { code: string }) {
+  const { t } = useI18n();
   const options = useMemo(() => {
     try {
       return { facingMode: parseOptions(code).facingMode, error: null as string | null };
     } catch (e) {
       return {
         facingMode: "environment" as FacingMode,
-        error: `相机参数格式错误：${e instanceof Error ? e.message : String(e)}（内容须为 {} 或 {"facingMode":"environment"}）`,
+        error: `${translate("cameraArgsInvalid")}：${e instanceof Error ? e.message : String(e)} (${translate("cameraArgsHint")})`,
       };
     }
   }, [code]);
@@ -105,7 +107,7 @@ export function CameraCard({ code }: { code: string }) {
     setDataUrl(null);
     if (!navigator.mediaDevices?.getUserMedia) {
       setPhase("idle");
-      setError("当前环境不支持相机取景（getUserMedia 需要 HTTPS 安全上下文）");
+      setError(translate("cameraUnsupported"));
       return;
     }
     // One live camera card at a time: evict the previous owner first.
@@ -130,11 +132,11 @@ export function CameraCard({ code }: { code: string }) {
       const text = String((e as { message?: string })?.message ?? e);
       if (name === "NotAllowedError" || name === "SecurityError" || /permission|denied/i.test(text)) {
         setPermDenied(true);
-        setError("相机权限被拒绝。请允许 AndAgent 使用摄像头后重试（可在系统设置中开启）。");
+        setError(translate("cameraDenied"));
       } else if (name === "NotFoundError" || name === "OverconstrainedError") {
-        setError(want === "user" ? "未找到前置摄像头" : "未找到后置摄像头");
+        setError(want === "user" ? translate("frontCameraMissing") : translate("rearCameraMissing"));
       } else {
-        setError(`无法启动相机：${text}`);
+        setError(`${t("cameraStartFailed")}：${text}`);
       }
     }
   };
@@ -145,7 +147,7 @@ export function CameraCard({ code }: { code: string }) {
     const w = video.videoWidth;
     const h = video.videoHeight;
     if (!w || !h) {
-      setError("摄像头还未就绪，稍候再拍");
+      setError(translate("cameraNotReady"));
       return;
     }
     const canvas = document.createElement("canvas");
@@ -153,7 +155,7 @@ export function CameraCard({ code }: { code: string }) {
     canvas.height = h;
     const ctx = canvas.getContext("2d");
     if (!ctx) {
-      setError("无法创建画布");
+      setError(translate("canvasCreateFailed"));
       return;
     }
     setError(null);
@@ -162,7 +164,7 @@ export function CameraCard({ code }: { code: string }) {
       canvas.toBlob(resolve, "image/jpeg", 0.9),
     );
     if (!blob) {
-      setError("拍照失败（无法编码 JPEG）");
+      setError(translate("cameraEncodeFailed"));
       return;
     }
     // Release the camera right after the shot; 重拍 re-acquires the stream.
@@ -184,7 +186,7 @@ export function CameraCard({ code }: { code: string }) {
     const result = await execTool("image_save", {
       base64: url.slice(url.indexOf(",") + 1),
       filename: name,
-      display_name: `相机照片 ${stamp()}`,
+      display_name: `${t("cameraPhoto")} ${stamp()}`,
     });
     if (!mountedRef.current) return;
     setSavePending(false);
@@ -201,7 +203,7 @@ export function CameraCard({ code }: { code: string }) {
     return (
       <div className="camera-card">
         <div className="chart-head">
-          <span className="chart-badge">相机</span>
+          <span className="chart-badge">{t("camera")}</span>
           <span className="chart-error-text">{options.error}</span>
         </div>
       </div>
@@ -211,29 +213,29 @@ export function CameraCard({ code }: { code: string }) {
   return (
     <div className="camera-card">
       <div className="chart-head">
-        <span className="chart-badge">相机</span>
+        <span className="chart-badge">{t("camera")}</span>
         <span className="camera-facing">
-          {phase === "live" ? (facing === "environment" ? "实时取景 · 后置" : "实时取景 · 前置") : "实时取景"}
+          {phase === "live" ? (facing === "environment" ? translate("liveRear") : translate("liveFront")) : translate("liveView")}
         </span>
       </div>
       {phase === "live" ? (
         <video ref={videoRef} className="camera-video" autoPlay playsInline muted />
       ) : phase === "captured" && dataUrl ? (
-        <img className="camera-shot" src={dataUrl} alt="刚拍摄的照片" />
+        <img className="camera-shot" src={dataUrl} alt={t("capturedPhoto")} />
       ) : (
-        <div className="camera-idle">{error ? "相机未启动" : "点击「启动相机」开始取景，拍照后自动存入相册"}</div>
+        <div className="camera-idle">{error ? translate("cameraNotStarted") : translate("cameraIdle")}</div>
       )}
       <div className="camera-actions">
         {phase === "live" ? (
           <>
             <button type="button" className="camera-shoot" onClick={() => void shoot()}>
-              拍照
+              {t("takePhoto")}
             </button>
             <button
               type="button"
               onClick={() => void start(facing === "environment" ? "user" : "environment")}
             >
-              切换{facing === "environment" ? "前置" : "后置"}
+              {t("switchCamera")}{facing === "environment" ? translate("front") : translate("rear")}
             </button>
             <button
               type="button"
@@ -242,22 +244,22 @@ export function CameraCard({ code }: { code: string }) {
                 setPhase("idle");
               }}
             >
-              关闭
+              {t("close")}
             </button>
           </>
         ) : phase === "captured" ? (
           <>
             <button type="button" className="camera-shoot" onClick={retake}>
-              重拍
+              {t("retake")}
             </button>
           </>
         ) : (
           <button type="button" className="camera-shoot" onClick={() => void start(facing)}>
-            启动相机
+            {t("startCamera")}
           </button>
         )}
       </div>
-      {savePending && <div className="camera-save">正在保存到相册…</div>}
+      {savePending && <div className="camera-save">{t("savingPhoto")}</div>}
       {saveResult && (
         <div className={saveResult.startsWith("ERROR:") ? "rich-error camera-result" : "camera-save"}>
           {saveResult}
@@ -268,7 +270,7 @@ export function CameraCard({ code }: { code: string }) {
           <span>{error}</span>
           {permDenied && (
             <button type="button" onClick={() => openAppSettings()}>
-              去系统设置
+              {t("openSystemSettings")}
             </button>
           )}
         </div>

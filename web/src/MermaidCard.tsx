@@ -1,3 +1,4 @@
+import { useI18n } from "./i18n";
 import { useEffect, useRef, useState, useId } from "react";
 import { resolvedTheme } from "./theme";
 
@@ -20,6 +21,7 @@ function loadMermaid(): Promise<MermaidModule> {
  * Re-renders with the matching mermaid theme when the app theme changes.
  */
 export function MermaidCard({ code }: { code: string }) {
+  const { t } = useI18n();
   const [svg, setSvg] = useState("");
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState(false);
@@ -65,7 +67,7 @@ export function MermaidCard({ code }: { code: string }) {
 
   if (error) {
     return <div className="mermaid-card mermaid-error">
-      <div className="mermaid-error-head">Mermaid 图渲染失败</div>
+      <div className="mermaid-error-head">{t("mermaidRenderFailed")}</div>
       <pre className="mermaid-error-msg">{error}</pre>
       <pre className="mermaid-source">{code}</pre>
     </div>;
@@ -77,14 +79,14 @@ export function MermaidCard({ code }: { code: string }) {
       className="mermaid-figure"
       role={svg ? "button" : undefined}
       tabIndex={svg ? 0 : undefined}
-      aria-label={svg ? "全屏查看图表" : undefined}
+      aria-label={svg ? t("viewChartFullscreen") : undefined}
       onClick={() => svg && setExpanded(true)}
       onKeyDown={(e) => { if (svg && (e.key === "Enter" || e.key === " ")) setExpanded(true); }}
       dangerouslySetInnerHTML={{ __html: svg }}
     />
-    {!svg && !error && <div className="mermaid-loading">正在渲染图表…</div>}
-    {expanded && svg && <div className="image-lightbox" role="dialog" aria-modal="true" aria-label="图表预览" onClick={() => setExpanded(false)}>
-      <button type="button" onClick={() => setExpanded(false)} aria-label="关闭预览">×</button>
+    {!svg && !error && <div className="mermaid-loading">{t("renderingChart")}</div>}
+    {expanded && svg && <div className="image-lightbox" role="dialog" aria-modal="true" aria-label={t("chartPreview")} onClick={() => setExpanded(false)}>
+      <button type="button" onClick={() => setExpanded(false)} aria-label={t("closePreview")}>×</button>
       <div className="mermaid-lightbox-body" dangerouslySetInnerHTML={{ __html: svg }} />
     </div>}
   </div>;

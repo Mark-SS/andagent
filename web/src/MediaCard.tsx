@@ -1,3 +1,4 @@
+import { translate, useI18n } from "./i18n";
 import { useState } from "react";
 
 export type MediaKind = "audio" | "video";
@@ -30,20 +31,21 @@ export function mediaSource(uri: string): string | null {
 
 function describeMediaError(code: number | undefined, src: string): string {
   switch (code) {
-    case 1: return "加载被中断";
-    case 2: return "网络错误：本地文件服务不可达";
-    case 3: return "解码失败：WebView 不支持该音频/视频编码格式";
-    case 4: return "资源不可用：文件不存在、类型不支持或路径不在可访问目录（应用媒体目录 / Download/andagent / Download）";
-    default: return `加载失败（${src.slice(0, 80)}）`;
+    case 1: return translate("mediaInterrupted");
+    case 2: return translate("mediaNetworkError");
+    case 3: return translate("mediaDecodeError");
+    case 4: return translate("mediaUnavailable");
+    default: return `${translate("mediaLoadFailed")} (${src.slice(0, 80)})`;
   }
 }
 
 export function MediaCard({ kind, uri, title, poster }: { kind: MediaKind; uri: string; title?: string; poster?: string }) {
+  const { t } = useI18n();
   const [duration, setDuration] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const src = mediaSource(uri);
-  const filename = title || decodeURIComponent(uri.split("/").pop() || (kind === "audio" ? "音频" : "视频"));
-  if (!src) return <div className="media-card"><div className="media-title">{filename}</div><div className="media-error">文件不在应用媒体目录中，无法在对话内播放</div></div>;
+  const filename = title || decodeURIComponent(uri.split("/").pop() || (kind === "audio" ? t("audio") : t("video")));
+  if (!src) return <div className="media-card"><div className="media-title">{filename}</div><div className="media-error">{t("mediaOutside")}</div></div>;
   const time = duration ? `${Math.floor(duration / 60)}:${String(Math.floor(duration % 60)).padStart(2, "0")}` : "";
   const onError = (event: React.SyntheticEvent<HTMLMediaElement>) =>
     setError(describeMediaError(event.currentTarget.error?.code, src));

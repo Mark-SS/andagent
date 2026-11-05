@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import type { Settings } from "./bridge";
 import {
+  defaultSystemPrompt,
+  isDefaultSystemPrompt,
+  hasSavedSystemPrompt,
   getDevToolsStatus,
   getProjectionStatus,
   getShizukuStatus,
@@ -24,11 +27,7 @@ import noticesText from "../../THIRD-PARTY-NOTICES.md?raw";
 import { setLanguageMode, useI18n, type LanguageMode } from "./i18n";
 import { loadThemeMode, setTheme, type ThemeMode } from "./theme";
 
-const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
-  { value: "system", label: "跟随系统" },
-  { value: "light", label: "日间" },
-  { value: "dark", label: "夜间" },
-];
+const THEME_OPTIONS: ThemeMode[] = ["system", "light", "dark"];
 
 interface Props {
   settings: Settings;
@@ -37,9 +36,10 @@ interface Props {
 }
 
 export function SettingsPanel({ settings, onClose, onSave }: Props) {
-  const { t, mode } = useI18n();
+  const { t, mode, language } = useI18n();
   const [showNotices, setShowNotices] = useState(false);
   const [draft, setDraft] = useState<Settings>(settings);
+  useEffect(() => { setDraft(prev => !hasSavedSystemPrompt() && isDefaultSystemPrompt(prev.systemPrompt) ? { ...prev, systemPrompt: defaultSystemPrompt() } : prev); }, [language]);
   const [error, setError] = useState<string | null>(null);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => loadThemeMode());
   const [shizuku, setShizuku] = useState<ShizukuStatus>(() => getShizukuStatus());
@@ -108,17 +108,17 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
 
   const shizukuLabel =
     shizuku.status === "granted"
-      ? "已授权"
+      ? t("granted")
       : shizuku.status === "not_granted"
-        ? "未授权"
-        : "不可用";
+        ? t("notGranted")
+        : t("unavailable");
 
   const projectionLabel =
     projection.channel === "projection"
-      ? projection.recording ? "录屏中" : "已授权（MediaProjection）"
+      ? projection.recording ? t("recording") : t("projectionGranted")
       : projection.channel === "shizuku"
-        ? "走 Shizuku"
-        : "未配置";
+        ? t("viaShizuku")
+        : t("notConfigured");
 
   const save = () => {
     if (!draft.baseUrl.trim()) {
@@ -176,14 +176,14 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
             <div className="theme-segmented" role="radiogroup" aria-label={t("appearance")}>
               {THEME_OPTIONS.map((option) => (
                 <button
-                  key={option.value}
+                  key={option}
                   type="button"
                   role="radio"
-                  aria-checked={themeMode === option.value}
-                  className={themeMode === option.value ? "active" : ""}
-                  onClick={() => { setTheme(option.value); setThemeMode(option.value); }}
+                  aria-checked={themeMode === option}
+                  className={themeMode === option ? "active" : ""}
+                  onClick={() => { setTheme(option); setThemeMode(option); }}
                 >
-                  {t(option.value)}
+                  {t(option)}
                 </button>
               ))}
             </div>
@@ -230,7 +230,7 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
           </label>
 
           <label className="field">
-            <span>System Prompt</span>
+            <span>{t("systemPrompt")}</span>
             <textarea
               rows={5}
               value={draft.systemPrompt}
@@ -249,14 +249,14 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
                 <textarea rows={2} maxLength={500} value={memoryEdits[m.id] ?? m.content}
                   onChange={e => setMemoryEdits({ ...memoryEdits, [m.id]: e.target.value })} />
                 <button type="button" onClick={() => saveMemory(m.id)}>{t("save")}</button>
-                <button type="button" onClick={() => deleteMemory(m.id)}>删除</button>
+                <button type="button" onClick={() => deleteMemory(m.id)}>{t("delete")}</button>
               </div>
             ))}
             <strong>{t("archivedMemory")} ({memories.filter(m => !m.core).length}/200)</strong>
             {memories.filter(m => !m.core).map(m => (
               <div className="memory-entry" key={m.id}>
                 <span>{m.content}</span>
-                <button type="button" onClick={() => deleteMemory(m.id)}>删除</button>
+                <button type="button" onClick={() => deleteMemory(m.id)}>{t("delete")}</button>
               </div>
             ))}
             <button type="button" onClick={() => {
@@ -268,21 +268,21 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
           </div>
 
           <div className="settings-card">
-            <div className="settings-card-head"><span>语音（STT 转写 / TTS 合成）</span></div>
+            <div className="settings-card-head"><span>{t("voiceSettings")}</span></div>
             <label className="field">
-              <span>转写模型 ID</span>
+              <span>{t("transcribeModel")}</span>
               <input
                 value={draft.transcribeModel ?? ""}
                 onChange={(e) => setDraft({ ...draft, transcribeModel: e.target.value })}
-                placeholder="whisper-1（默认）/ glm-asr / fun-asr…"
+                placeholder="whisper-1 / glm-asr / fun-asr"
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
               />
-              <em>🎤 语音输入走 baseUrl 的 /audio/transcriptions；报「模型不存在」就把服务方的模型 ID 填这里</em>
+              <em>{t("transcribeModelHint")}</em>
             </label>
             <label className="field">
-              <span>转写端点（可选，留空跟随 Base URL）</span>
+              <span>{t("transcribeEndpoint")}</span>
               <input
                 value={draft.transcribeBaseUrl ?? ""}
                 onChange={(e) => setDraft({ ...draft, transcribeBaseUrl: e.target.value })}
@@ -293,7 +293,7 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
               />
             </label>
             <label className="field">
-              <span>TTS 端点（可选，OpenAI 兼容 /audio/speech）</span>
+              <span>{t("ttsEndpoint")}</span>
               <input
                 value={draft.ttsBaseUrl ?? ""}
                 onChange={(e) => setDraft({ ...draft, ttsBaseUrl: e.target.value })}
@@ -304,7 +304,7 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
               />
             </label>
             <label className="field">
-              <span>TTS 模型 / 音色</span>
+              <span>{t("ttsVoice")}</span>
               <div style={{ display: "flex", gap: 8 }}>
                 <input
                   value={draft.ttsModel ?? ""}
@@ -327,36 +327,36 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
           </div>
 
           <div className="settings-card">
-            <div className="settings-card-head"><span>{t("skills")}</span><span>{skills.length} 个</span></div>
+            <div className="settings-card-head"><span>{t("skills")}</span><span>{skills.length} {t("skillsCount")}</span></div>
             {skills.map((skill) => <div key={skill.name} className="settings-card-actions">
-              <span title={skill.source}>{skill.name} · {skill.description} · {skill.toolCount} 工具</span>
-              <label><input type="checkbox" checked={skill.enabled} onChange={(e) => { setSkillMsg(skillManage("enable", skill.name, String(e.target.checked))); refreshSkills(); }} />启用</label>
-              <button type="button" className="btn-ghost" onClick={() => { if (window.confirm(`删除技能「${skill.name}」？`)) { setSkillMsg(skillManage("delete", skill.name, "true")); refreshSkills(); } }}>删除</button>
+              <span title={skill.source}>{skill.name} · {skill.description} · {skill.toolCount} {t("toolsCount")}</span>
+              <label><input type="checkbox" checked={skill.enabled} onChange={(e) => { setSkillMsg(skillManage("enable", skill.name, String(e.target.checked))); refreshSkills(); }} />{t("enabled")}</label>
+              <button type="button" className="btn-ghost" onClick={() => { if (window.confirm(t("deleteSkillConfirm", { name: skill.name }))) { setSkillMsg(skillManage("delete", skill.name, "true")); refreshSkills(); } }}>{t("delete")}</button>
             </div>)}
-            <div className="settings-card-actions"><input value={skillSource} onChange={(e) => setSkillSource(e.target.value)} placeholder="技能 URL 或本地路径" /><button type="button" className="btn-ghost" onClick={() => { setSkillMsg(skillManage("install", "", skillSource)); refreshSkills(); }}>安装</button></div>
-            <div className="settings-card-actions"><input value={skillQuery} onChange={(e) => setSkillQuery(e.target.value)} placeholder="搜索技能" /><button type="button" className="btn-ghost" onClick={() => setSkillMsg(skillManage("search", "", skillQuery))}>搜索</button><button type="button" className="btn-ghost" onClick={() => { setSkillMsg(skillManage("reload")); refreshSkills(); }}>扫描刷新</button></div>
-            <div className="settings-card-actions"><input value={skillIndex} onChange={(e) => setSkillIndex(e.target.value)} placeholder="自定义 JSON 索引 URL（可选）" /><button type="button" className="btn-ghost" onClick={() => setSkillMsg(skillManage("index", "", skillIndex))}>保存索引</button></div>
+            <div className="settings-card-actions"><input value={skillSource} onChange={(e) => setSkillSource(e.target.value)} placeholder={t("skillSource")} /><button type="button" className="btn-ghost" onClick={() => { setSkillMsg(skillManage("install", "", skillSource)); refreshSkills(); }}>{t("install")}</button></div>
+            <div className="settings-card-actions"><input value={skillQuery} onChange={(e) => setSkillQuery(e.target.value)} placeholder={t("skillSearch")} /><button type="button" className="btn-ghost" onClick={() => setSkillMsg(skillManage("search", "", skillQuery))}>{t("search")}</button><button type="button" className="btn-ghost" onClick={() => { setSkillMsg(skillManage("reload")); refreshSkills(); }}>{t("skillRefresh")}</button></div>
+            <div className="settings-card-actions"><input value={skillIndex} onChange={(e) => setSkillIndex(e.target.value)} placeholder={t("skillIndex")} /><button type="button" className="btn-ghost" onClick={() => setSkillMsg(skillManage("index", "", skillIndex))}>{t("saveIndex")}</button></div>
             {skillMsg && <p className="settings-card-note">{skillMsg.slice(0, 1200)}</p>}
           </div>
 
           <div className="settings-card">
-            <div className="settings-card-head"><span>{t("cron")}</span><span>{cronTasks.length} 个任务</span></div>
-            <p className="settings-card-note">可在对话中创建定时任务。极端省电模式下，系统可能延迟几分钟触发。</p>
+            <div className="settings-card-head"><span>{t("cron")}</span><span>{cronTasks.length} {t("taskCount")}</span></div>
+            <p className="settings-card-note">{t("cronNote")}</p>
             {!exactAllowed && hasBridge() && <div className="settings-card-actions">
-              <span>精确闹钟权限未授予</span>
-              <button type="button" className="btn-ghost" onClick={() => { setCronMsg(cronOpenExactSettings()); window.setTimeout(refreshCron, 1000); }}>打开「闹钟和提醒」设置</button>
+              <span>{t("exactAlarmMissing")}</span>
+              <button type="button" className="btn-ghost" onClick={() => { setCronMsg(cronOpenExactSettings()); window.setTimeout(refreshCron, 1000); }}>{t("exactAlarmSettings")}</button>
             </div>}
             {cronTasks.map((task) => <div key={task.id}>
               <div className="settings-card-actions">
                 <button type="button" className="btn-ghost" onClick={() => setCronDetail(cronDetail === task.id ? "" : task.id)}>{task.name} · {task.schedule} · {task.kind}</button>
-                <label><input type="checkbox" checked={task.enabled} onChange={(e) => { setCronMsg(cronToggle(task.id, e.target.checked)); refreshCron(); }} /> 启用</label>
-                <button type="button" className="btn-ghost" onClick={() => { if (window.confirm(`删除定时任务「${task.name}」？`)) { setCronMsg(cronDelete(task.id)); refreshCron(); } }}>删除</button>
+                <label><input type="checkbox" checked={task.enabled} onChange={(e) => { setCronMsg(cronToggle(task.id, e.target.checked)); refreshCron(); }} />{t("enabled")}</label>
+                <button type="button" className="btn-ghost" onClick={() => { if (window.confirm(t("deleteCronConfirm", { name: task.name }))) { setCronMsg(cronDelete(task.id)); refreshCron(); } }}>{t("delete")}</button>
               </div>
-              {cronDetail === task.id && <p className="settings-card-note">上次：{task.lastRun ? new Date(task.lastRun).toLocaleString() : "尚未运行"} · 下次：{task.nextRun ? new Date(task.nextRun).toLocaleString() : "已暂停"}<br />上次结果：{task.lastResult || "无"}</p>}
+              {cronDetail === task.id && <p className="settings-card-note">{t("lastRun")}：{task.lastRun ? new Date(task.lastRun).toLocaleString() : t("neverRun")} · {t("nextRun")}：{task.nextRun ? new Date(task.nextRun).toLocaleString() : t("paused")}<br />{t("lastResult")}：{task.lastResult || t("none")}</p>}
             </div>)}
             <div className="settings-card-actions">
               <button type="button" className="btn-ghost" onClick={() => { setCronMsg(cronPauseAll()); refreshCron(); }}>{t("pauseAll")}</button>
-              <button type="button" className="btn-ghost" onClick={refreshCron}>刷新</button>
+              <button type="button" className="btn-ghost" onClick={refreshCron}>{t("refresh")}</button>
             </div>
             {cronMsg && <p className={cronMsg.startsWith("ERROR:") ? "settings-error" : "settings-card-note"}>{cronMsg}</p>}
           </div>
@@ -367,66 +367,53 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
               <span className={`status-pill status-${shizuku.status}`}>{shizukuLabel}</span>
             </div>
             <p className="settings-card-note">
-              {shizuku.note ?? "录屏等功能需要 Shizuku 以 shell 身份运行。"}
+              {shizuku.note ?? t("shizukuNote")}
               {shizuku.managerVersion ? ` · v${shizuku.managerVersion}` : ""}
             </p>
             {shizukuMsg && <p className="settings-card-note">{shizukuMsg}</p>}
             {shizuku.lastRequestError && (
-              <p className="settings-error">授权失败：{shizuku.lastRequestError}</p>
+              <p className="settings-error">{t("authorizationFailed")}：{shizuku.lastRequestError}</p>
             )}
             <div className="settings-card-actions">
-              <button type="button" className="btn-primary" onClick={askShizuku}>
-                请求授权
-              </button>
+              <button type="button" className="btn-primary" onClick={askShizuku}>{t("requestAccess")}</button>
               <a
                 className="btn-ghost"
                 href="market://details?id=moe.shizuku.privileged.api"
-              >
-                去激活 / 安装 Shizuku
-              </a>
-              <button type="button" className="btn-ghost" onClick={() => setShizuku(getShizukuStatus())}>
-                刷新状态
-              </button>
+              >{t("activateShizuku")}</a>
+              <button type="button" className="btn-ghost" onClick={() => setShizuku(getShizukuStatus())}>{t("refreshStatus")}</button>
             </div>
             <details className="settings-details">
-              <summary>激活步骤（Android 11+ 无线调试）</summary>
+              <summary>{t("shizukuSteps")}</summary>
               <ol>
-                <li>安装并打开 Shizuku（包名 moe.shizuku.privileged.api）。</li>
-                <li>在系统开发者选项中开启「无线调试」。</li>
-                <li>回到 Shizuku，选择「通过无线调试启动」，按提示完成配对。</li>
-                <li>回到本页点击「请求授权」并在 Shizuku 弹窗中允许。</li>
-                <li>Android 10 及以下需要电脑通过 ADB 启动 Shizuku 服务。</li>
+                <li>{t("shizukuStep1")}</li>
+                <li>{t("shizukuStep2")}</li>
+                <li>{t("shizukuStep3")}</li>
+                <li>{t("shizukuStep4")}</li>
+                <li>{t("shizukuStep5")}</li>
               </ol>
             </details>
           </div>
 
           <div className="settings-card">
             <div className="settings-card-head">
-              <span>屏幕捕获（截屏 / 录屏）</span>
+              <span>{t("projection")}</span>
               <span className={`status-pill ${projection.channel === "projection" ? "status-granted" : "status-not_granted"}`}>
                 {projectionLabel}
               </span>
             </div>
             <p className="settings-card-note">
-              截屏 / 录屏优先走 MediaProjection（无需 Shizuku，系统弹窗授权一次即可，之后全自动）；
-              未授权时回退 Shizuku（scrcpy / screenrecord）。授权后如需彻底关闭，点「停止」。
+              {t("projectionNote")}
             </p>
             {projection.error && <p className="settings-error">{projection.error}</p>}
             {projectionMsg && <p className="settings-card-note">{projectionMsg}</p>}
             <div className="settings-card-actions">
-              <button type="button" className="btn-primary" onClick={askProjection}>
-                授权屏幕捕获
-              </button>
+              <button type="button" className="btn-primary" onClick={askProjection}>{t("grantProjection")}</button>
               <button
                 type="button"
                 className="btn-ghost"
                 onClick={() => { setProjectionMsg(stopProjection()); window.setTimeout(() => setProjection(getProjectionStatus()), 600); }}
-              >
-                停止
-              </button>
-              <button type="button" className="btn-ghost" onClick={() => setProjection(getProjectionStatus())}>
-                刷新状态
-              </button>
+              >{t("stopAction")}</button>
+              <button type="button" className="btn-ghost" onClick={() => setProjection(getProjectionStatus())}>{t("refreshStatus")}</button>
             </div>
           </div>
 
@@ -435,14 +422,11 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
               <span>{t("health")}</span>
             </div>
             <p className="settings-card-note">
-              Android 14 起 Health Connect 内置；Android 13 及以下需先安装 Health Connect 应用。
-              授权后可使用 steps_today / steps_history。
+              {t("healthNote")}
             </p>
             {healthMsg && <p className="settings-card-note">{healthMsg}</p>}
             <div className="settings-card-actions">
-              <button type="button" className="btn-ghost" onClick={askHealth}>
-                授权步数读取
-              </button>
+              <button type="button" className="btn-ghost" onClick={askHealth}>{t("grantSteps")}</button>
             </div>
           </div>
 
@@ -450,17 +434,16 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
             <div className="settings-card-head">
               <span>{t("devtools")}</span>
               <span className={`status-pill ${devtools?.enabled ? "status-granted" : "status-not_granted"}`}>
-                {devtools?.enabled ? "已开启" : "未开启"}
+                {devtools?.enabled ? t("on") : t("off")}
               </span>
             </div>
             <p className="settings-card-note">
-              开启后 agent 可用 devtools_eval / devtools_console / devtools_screenshot 检查内嵌网页；
-              USB 连接电脑后可在 Chrome 的 chrome://inspect 查看这些页面。release 包默认关闭，开启为显式操作。
+              {t("devtoolsNote")}
             </p>
             {devtools?.error && <p className="settings-error">{devtools.error}</p>}
             {devtools && devtools.pages.length > 0 && (
               <p className="settings-card-note">
-                可调试页面 {devtools.pages.length} 个：{devtools.pages.slice(0, 4).map((p) => p.title || p.url).join(" · ")}
+                {t("debugPages")} {devtools.pages.length}：{devtools.pages.slice(0, 4).map((p) => p.title || p.url).join(" · ")}
                 {devtools.pages.length > 4 ? " …" : ""}
               </p>
             )}
@@ -474,11 +457,9 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
                   window.setTimeout(() => setDevtools(getDevToolsStatus()), 600);
                 }}
               >
-                {devtools?.enabled ? "关闭调试" : "开启调试"}
+                {devtools?.enabled ? t("disableDebug") : t("enableDebug")}
               </button>
-              <button type="button" className="btn-ghost" onClick={() => setDevtools(getDevToolsStatus())}>
-                刷新状态
-              </button>
+              <button type="button" className="btn-ghost" onClick={() => setDevtools(getDevToolsStatus())}>{t("refreshStatus")}</button>
             </div>
             {devtoolsMsg && (
               <p className={devtoolsMsg.startsWith("ERROR:") ? "settings-error" : "settings-card-note"}>{devtoolsMsg}</p>
@@ -487,12 +468,12 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
 
           <div className="settings-card">
             <div className="settings-card-head"><span>{t("scriptBackend")}</span><span>{termuxStatus}</span></div>
-            <p className="settings-card-note">运行 termux_setup 可安装用户空间；Termux App 回退需要 RUN_COMMAND 授权及 allow-external-apps=true。</p>
+            <p className="settings-card-note">{t("termuxNote")}</p>
             <div className="settings-card-actions">
               <button type="button" className="btn-primary" onClick={() => {
                 setTermuxMsg(grantTermuxViaShizuku());
                 setTermuxStatus(getTermuxStatus());
-              }}>Shizuku 代授权</button>
+              }}>{t("shizukuGrant")}</button>
             </div>
             {termuxMsg && <p className={termuxMsg.startsWith("ERROR:") ? "settings-error" : "settings-card-note"}>{termuxMsg}</p>}
           </div>

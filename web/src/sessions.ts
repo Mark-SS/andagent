@@ -1,3 +1,4 @@
+import { translate } from "./i18n";
 /**
  * Multi-session storage for the drawer: sessions are named PiMessage[]
  * transcripts. v1 legacy key ("andagent.messages.v1") is migrated into the
@@ -118,7 +119,7 @@ function loadLocalIndex(): SessionMeta[] {
   const legacy = safeParse<PiMessage[]>(localStorage.getItem(LEGACY_KEY));
   if (legacy && Array.isArray(legacy) && legacy.length > 0) {
     const firstUser = legacy.find((m) => m.role === "user");
-    const title = firstText(firstUser).slice(0, 24) || "历史对话";
+    const title = firstText(firstUser).slice(0, 24) || translate("pastChat");
     const meta: SessionMeta = { id: newId(), title, updatedAt: Date.now() };
     localStorage.setItem(SESSION_KEY(meta.id), JSON.stringify(legacy));
     localStorage.setItem(INDEX_KEY, JSON.stringify([meta]));
@@ -197,7 +198,7 @@ export const SessionStore = {
   save(id: string, messages: PiMessage[]): SessionMeta[] {
     const index = loadIndex();
     const firstUser = messages.find((m) => m.role === "user");
-    const autoTitle = firstText(firstUser).slice(0, 24) || "新对话";
+    const autoTitle = firstText(firstUser).slice(0, 24) || translate("newChat");
     const existing = index.find((s) => s.id === id);
     const total = sumMessageUsage(messages);
     const meta: SessionMeta = {

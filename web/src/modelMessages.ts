@@ -1,3 +1,4 @@
+import { translate } from "./i18n";
 /**
  * A model-facing projection of the transcript.
  *
@@ -11,10 +12,9 @@
  * Kept structurally typed on purpose: the transcript crosses pi-ai's message
  * union, and the UI/session layers only rely on `role` + `content`.
  */
-const OMITTED_VALUE = "[图片数据已省略·界面已展示]";
-const OMITTED_FENCE = "[图片围栏已省略·界面已展示]";
-const NOTE =
-  "结果中的图片/base64 已省略，界面已自动展示；只用文字概括结果，不要输出 image/photos 围栏，也不要粘贴图片数据。";
+const omittedValue = () => translate("omittedImage");
+const omittedFence = () => translate("omittedFence");
+const note = () => translate("imageOmittedNote");
 
 /** Per-message text ceiling; also catches runaway shell/file output. */
 const MAX_TEXT_CHARS = 12_000;
@@ -52,22 +52,22 @@ type Part = { type?: string; text?: string; arguments?: unknown; [key: string]: 
 
 function stripInline(text: string): string {
   return text
-    .replace(IMAGE_FENCE, OMITTED_FENCE)
-    .replace(DATA_IMAGE, OMITTED_VALUE)
-    .replace(LONG_RUN, (run) => (looksLikeBase64(run) ? OMITTED_VALUE : run));
+    .replace(IMAGE_FENCE, omittedFence())
+    .replace(DATA_IMAGE, omittedValue())
+    .replace(LONG_RUN, (run) => (looksLikeBase64(run) ? omittedValue() : run));
 }
 
 function clamp(text: string): string {
   if (text.length <= MAX_TEXT_CHARS) return text;
   return (
     text.slice(0, MAX_TEXT_CHARS) +
-    `\n…（结果已截断：原 ${text.length} 字符；需要更多细节请用工具缩小范围重新查询）`
+    `\n…(${translate("truncatedResult", { count: text.length })})`
   );
 }
 
 function stripJson(value: unknown, key?: string): unknown {
   if (typeof value === "string") {
-    return key && BASE64_KEYS.has(key) ? OMITTED_VALUE : stripInline(value);
+    return key && BASE64_KEYS.has(key) ? omittedValue() : stripInline(value);
   }
   if (Array.isArray(value)) return value.map((item) => stripJson(item));
   if (value && typeof value === "object") {
@@ -93,7 +93,7 @@ function compactText(text: string): string {
         typeof compacted === "object" &&
         !Array.isArray(compacted)
       ) {
-        (compacted as Record<string, unknown>)._note = NOTE;
+        (compacted as Record<string, unknown>)._note = note();
         json = JSON.stringify(compacted);
       }
       return clamp(json);
@@ -148,13 +148,13 @@ function textSize(message: AnyMessage): number {
 }
 
 function summarizeResult<T extends AnyMessage>(message: T): T {
-  const name = (message as unknown as { toolName?: string }).toolName ?? "工具";
+  const name = (message as unknown as { toolName?: string }).toolName ?? translate("toolCopy");
   return {
     ...message,
     content: [
       {
         type: "text",
-        text: `（较早的 ${name} 结果已省略以控制上下文长度；如需请重新调用该工具）`,
+        text: `(${translate("olderResultOmitted", { name })})`,
       },
     ],
   } as unknown as T;

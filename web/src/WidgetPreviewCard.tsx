@@ -1,3 +1,4 @@
+import { currentLanguage, translate, useI18n } from "./i18n";
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { execTool, hasBridge, widgetSave } from "./bridge";
 
@@ -91,11 +92,11 @@ function asFields(value: unknown): Record<string, string> {
 }
 
 function normNode(raw: unknown, spec: Spec, depth: number, path: string): WNode {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) fail(`${path} 不是节点对象`);
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) fail(`${path} ${translate("widgetNodeObject")}`);
   const r = raw as Record<string, unknown>;
   const type = String(r.type ?? "").toUpperCase() as NodeType;
   if (!["COLUMN", "ROW", "TEXT", "SPACER", "PROGRESS"].includes(type)) {
-    fail(`${path} 节点类型无效：${String(r.type ?? "未指定")}`);
+    fail(`${path} ${translate("widgetNodeTypeInvalid")}：${String(r.type ?? translate("widgetUnspecified"))}`);
   }
   const container = type === "COLUMN" || type === "ROW";
   const node: WNode = {
@@ -114,47 +115,47 @@ function normNode(raw: unknown, spec: Spec, depth: number, path: string): WNode 
     fallback: asStr(r.fallback),
     children: [],
   };
-  if (node.text.length > 400) fail("单段文字不能超过 400 字");
-  if (node.maxLines < 1 || node.maxLines > 6) fail("文字行数须为 1–6");
-  if (node.textSize < 10 || node.textSize > 48) fail("字号须为 10–48");
-  if (!COLOR_RE.test(node.color)) fail("文字颜色格式错误");
-  if (node.padding < 0 || node.padding > 24) fail("节点边距须为 0–24");
-  if (node.size < 0 || node.size > 64) fail("间距须为 0–64");
-  if (node.value < 0 || node.value > 100) fail("进度须为 0–100");
+  if (node.text.length > 400) fail(translate("widgetTextTooLong"));
+  if (node.maxLines < 1 || node.maxLines > 6) fail(translate("widgetMaxLines"));
+  if (node.textSize < 10 || node.textSize > 48) fail(translate("widgetFontSize"));
+  if (!COLOR_RE.test(node.color)) fail(translate("widgetTextColor"));
+  if (node.padding < 0 || node.padding > 24) fail(translate("widgetNodePadding"));
+  if (node.size < 0 || node.size > 64) fail(translate("widgetSpacing"));
+  if (node.value < 0 || node.value > 100) fail(translate("widgetProgressRange"));
   if (!["LITERAL", "DATE", "BATTERY", "COUNTDOWN", "DATA"].includes(node.binding)) {
-    fail(`${path} 绑定类型无效：${String(r.binding ?? "")}`);
+    fail(`${path} ${translate("widgetBindingInvalid")}：${String(r.binding ?? "")}`);
   }
   const rawChildren = Array.isArray(r.children) ? r.children : [];
-  if (!container && rawChildren.length > 0) fail("只有布局节点能包含子节点");
-  if (container && node.binding !== "LITERAL") fail("布局节点不能绑定数据");
-  if (type === "SPACER" && node.binding !== "LITERAL") fail("间距不能绑定数据");
+  if (!container && rawChildren.length > 0) fail(translate("widgetOnlyLayoutChildren"));
+  if (container && node.binding !== "LITERAL") fail(translate("widgetLayoutNoBinding"));
+  if (type === "SPACER" && node.binding !== "LITERAL") fail(translate("widgetSpacerNoBinding"));
   if (type === "PROGRESS" && !["LITERAL", "BATTERY", "DATA"].includes(node.binding)) {
-    fail("进度条仅支持数值、电量或数据源");
+    fail(translate("widgetProgressBinding"));
   }
   if (node.binding === "COUNTDOWN") {
-    if (!node.targetDate) fail("倒计时需要 targetDate");
+    if (!node.targetDate) fail(translate("widgetCountdownTarget"));
     if (!/^\d{4}-\d{2}-\d{2}$/.test(node.targetDate) || !Number.isFinite(Date.parse(`${node.targetDate}T00:00:00`))) {
-      fail("日期格式应为 YYYY-MM-DD");
+      fail(translate("widgetDateFormat"));
     }
   }
   if (node.binding === "DATA") {
-    if (type !== "TEXT" && type !== "PROGRESS") fail("只有文字或进度条能绑定数据源");
-    if (!node.source) fail("数据绑定需要 source");
-    if (!node.field) fail("数据绑定需要 field");
-    if (!SOURCE_KEY_RE.test(node.source)) fail("数据源名称格式错误");
-    if (!FIELD_KEY_RE.test(node.field)) fail("字段名格式错误");
-    if (!spec.data?.sources[node.source]) fail(`数据源 ${node.source} 未定义`);
-    if (node.fallback !== null && node.fallback.length > 400) fail("兜底文字不能超过 400 字");
+    if (type !== "TEXT" && type !== "PROGRESS") fail(translate("widgetDataNode"));
+    if (!node.source) fail(translate("widgetSourceRequired"));
+    if (!node.field) fail(translate("widgetFieldRequired"));
+    if (!SOURCE_KEY_RE.test(node.source)) fail(translate("widgetSourceNameInvalid"));
+    if (!FIELD_KEY_RE.test(node.field)) fail(translate("widgetFieldInvalid"));
+    if (!spec.data?.sources[node.source]) fail(`${translate("widgetSource")} ${node.source} ${translate("widgetUndefined")}`);
+    if (node.fallback !== null && node.fallback.length > 400) fail(translate("widgetFallbackTooLong"));
   } else {
-    if (node.source !== null || node.field !== null) fail("只有 DATA 绑定才能声明 source/field");
-    if (node.fallback !== null) fail("只有 DATA 绑定才能声明 fallback");
+    if (node.source !== null || node.field !== null) fail(translate("widgetSourceOnlyData"));
+    if (node.fallback !== null) fail(translate("widgetFallbackOnlyData"));
   }
   const click = asStr(r.click);
   if (click !== null) {
-    if (click.length > 2048) fail("点击链接不能超过 2048 个字符");
-    if (!CLICK_URI_RE.test(click)) fail("点击链接须为 scheme://… 形式");
+    if (click.length > 2048) fail(translate("widgetClickTooLong"));
+    if (!CLICK_URI_RE.test(click)) fail(translate("widgetClickFormat"));
     if (BLOCKED_SCHEMES.has(click.substring(0, click.indexOf(":")).toLowerCase())) {
-      fail(`不支持 ${click.substring(0, click.indexOf(":")).toLowerCase()}: 链接`);
+      fail(`${translate("widgetUnsupportedLink")} ${click.substring(0, click.indexOf(":")).toLowerCase()}:`);
     }
   }
   node.children = rawChildren.map((child, i) => normNode(child, spec, depth + 1, `${path}.children[${i}]`));
@@ -166,18 +167,18 @@ function normalize(code: string): Spec {
   try {
     parsed = JSON.parse(code);
   } catch (e) {
-    fail(`WidgetSpec JSON 解析失败：${e instanceof Error ? e.message : String(e)}`);
+    fail(`${translate("widgetJsonParseFailed")}：${e instanceof Error ? e.message : String(e)}`);
   }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) fail("WidgetSpec 必须是 JSON 对象");
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) fail(translate("widgetObjectRequired"));
   const r = parsed as Record<string, unknown>;
   const version = asInt(r.schemaVersion, 2);
-  if (version !== 1 && version !== 2) fail("暂不支持此配置版本");
+  if (version !== 1 && version !== 2) fail(translate("widgetVersionUnsupported"));
   const name = typeof r.name === "string" ? r.name : "";
-  if (!name.trim() || name.length > 60) fail("名称须为 1–60 个字符");
+  if (!name.trim() || name.length > 60) fail(translate("widgetNameLength"));
   const background = asStr(r.background, "#17212C") ?? "#17212C";
-  if (!COLOR_RE.test(background)) fail("背景须为 #RRGGBB 或 #AARRGGBB");
+  if (!COLOR_RE.test(background)) fail(translate("widgetBackgroundFormat"));
   const padding = asInt(r.padding, 16);
-  if (padding < 0 || padding > 32) fail("组件边距须为 0–32");
+  if (padding < 0 || padding > 32) fail(translate("widgetPadding"));
 
   const spec: Spec = {
     schemaVersion: 2, // v1 is migrated on read, like SpecCodec.migrate
@@ -193,17 +194,17 @@ function normalize(code: string): Spec {
     : undefined;
   let sources: Record<string, SourceSpec> = {};
   if (rawSources !== undefined && rawSources !== null) {
-    if (typeof rawSources !== "object" || Array.isArray(rawSources)) fail("data.sources 必须是对象");
+    if (typeof rawSources !== "object" || Array.isArray(rawSources)) fail(translate("widgetSourcesObject"));
     const entries = Object.entries(rawSources as Record<string, unknown>);
-    if (entries.length === 0) fail("data.sources 不能为空");
-    if (entries.length > 8) fail("最多支持 8 个数据源");
+    if (entries.length === 0) fail(translate("widgetSourcesEmpty"));
+    if (entries.length > 8) fail(translate("widgetSourcesLimit"));
     sources = {};
     for (const [key, raw] of entries) {
-      if (!SOURCE_KEY_RE.test(key)) fail("数据源名称须为小写字母开头的 1–32 位标识");
-      if (!raw || typeof raw !== "object" || Array.isArray(raw)) fail(`数据源 ${key} 不是对象`);
+      if (!SOURCE_KEY_RE.test(key)) fail(translate("widgetSourceKeyFormat"));
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) fail(`${translate("widgetSource")} ${key} ${translate("widgetNotObject")}`);
       const s = raw as Record<string, unknown>;
       const type = String(s.type ?? "").toUpperCase() as SourceType;
-      if (!["STATIC", "HTTP", "SCRIPT", "SYSTEM"].includes(type)) fail(`数据源 ${key} 类型无效：${String(s.type ?? "未指定")}`);
+      if (!["STATIC", "HTTP", "SCRIPT", "SYSTEM"].includes(type)) fail(`${translate("widgetSource")} ${key} ${translate("widgetTypeInvalid")}：${String(s.type ?? translate("widgetUnspecified"))}`);
       const source: SourceSpec = {
         type,
         value: asFields(s.value),
@@ -214,19 +215,19 @@ function normalize(code: string): Spec {
         fallback: asFields(s.fallback),
       };
       if (type === "STATIC") {
-        if (Object.keys(source.value).length === 0) fail("静态数据源需要 value");
-        if (source.url !== null || source.script !== null) fail("静态数据源不支持 url/pick/script");
+        if (Object.keys(source.value).length === 0) fail(translate("widgetStaticValue"));
+        if (source.url !== null || source.script !== null) fail(translate("widgetStaticFields"));
       } else if (type === "HTTP") {
-        if (!source.url) fail("HTTP 数据源需要 url");
+        if (!source.url) fail(translate("widgetHttpUrl"));
         if (!source.url.startsWith("https://") || source.url.length > 2048 || /\s/.test(source.url)) {
-          fail("HTTP 数据源仅支持 https 地址");
+          fail(translate("widgetHttpsOnly"));
         }
       } else if (type === "SCRIPT") {
-        if (!source.script || !source.script.trim()) fail("脚本数据源需要 script");
-        if (source.script.length > 16384) fail("脚本须为 1–16384 个字符");
+        if (!source.script || !source.script.trim()) fail(translate("widgetScriptRequired"));
+        if (source.script.length > 16384) fail(translate("widgetScriptLength"));
       } else if (type === "SYSTEM") {
         if (!source.system || !SYSTEM_PROVIDERS.has(source.system)) {
-          fail("系统数据源需要 system（BATTERY/CLOCK/NETWORK/LOCALE/STORAGE/DEVICE_INFO/BATTERY_DETAIL/STEPS_TODAY）");
+          fail(translate("widgetSystemRequired"));
         }
       }
       sources[key] = source;
@@ -234,12 +235,12 @@ function normalize(code: string): Spec {
     spec.data = { sources };
   }
 
-  const root = normNode(r.root ?? fail("缺少 root 节点"), spec, 1, "root");
-  if (root.type !== "COLUMN" && root.type !== "ROW") fail("根节点必须是 COLUMN 或 ROW");
+  const root = normNode(r.root ?? fail(translate("widgetRootMissing")), spec, 1, "root");
+  if (root.type !== "COLUMN" && root.type !== "ROW") fail(translate("widgetRootLayout"));
   let count = 0;
   const visit = (node: WNode, depth: number) => {
-    if (++count > 40) fail("最多支持 40 个节点");
-    if (depth > 6) fail("布局最多嵌套 6 层");
+    if (++count > 40) fail(translate("widgetNodeLimit"));
+    if (depth > 6) fail(translate("widgetDepthLimit"));
     node.children.forEach((child) => visit(child, depth + 1));
   };
   visit(root, 1);
@@ -319,7 +320,7 @@ function clockValues(): Record<string, string> {
     now: iso,
     date: `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`,
     time: `${p(now.getHours())}:${p(now.getMinutes())}`,
-    weekday: new Intl.DateTimeFormat("zh-CN", { weekday: "short" }).format(now),
+    weekday: new Intl.DateTimeFormat(currentLanguage() === "zh" ? "zh-CN" : "en-US", { weekday: "short" }).format(now),
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     epochSeconds: String(Math.floor(now.getTime() / 1000)),
   };
@@ -343,7 +344,7 @@ async function execFlat(name: string): Promise<Record<string, string>> {
   const result = await execTool(name, {});
   if (!result.ok || result.result.startsWith("ERROR:")) throw new Error(result.result);
   const parsed: unknown = JSON.parse(result.result);
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error(`${name} 未返回 JSON 对象`);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error(`${name} ${translate("widgetNoJsonObject")}`);
   return flatten(parsed as Record<string, unknown>);
 }
 
@@ -399,9 +400,9 @@ async function scriptValues(
   if (!result.ok || result.result.startsWith("ERROR:")) throw new Error(result.result);
   // js_eval JSON.stringify's the last expression → our returned string is encoded once more.
   const inner: unknown = JSON.parse(result.result);
-  if (typeof inner !== "string") throw new Error("脚本必须返回 JSON 对象");
+  if (typeof inner !== "string") throw new Error(translate("widgetScriptObject"));
   const decoded: unknown = JSON.parse(inner);
-  if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) throw new Error("脚本必须返回 JSON 对象");
+  if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) throw new Error(translate("widgetScriptObject"));
   return flatten(decoded as Record<string, unknown>);
 }
 
@@ -413,11 +414,11 @@ function bindText(node: WNode, battery: number | null, sources: Record<string, R
   switch (node.binding) {
     case "DATE": {
       const now = new Date();
-      const weekday = new Intl.DateTimeFormat("zh-CN", { weekday: "long" }).format(now);
-      return node.text + `${now.getMonth() + 1}月${now.getDate()}日 ${weekday}`;
+      const weekday = new Intl.DateTimeFormat(currentLanguage() === "zh" ? "zh-CN" : "en-US", { weekday: "long" }).format(now);
+      return node.text + `${now.getMonth() + 1}${translate("widgetMonth")}${now.getDate()}${translate("widgetDay")} ${weekday}`;
     }
     case "BATTERY":
-      return node.text + (battery !== null ? `${battery}%` : "电量未知");
+      return node.text + (battery !== null ? `${battery}%` : translate("widgetBatteryUnknown"));
     case "COUNTDOWN": {
       if (!node.targetDate) return node.text;
       const target = Date.parse(`${node.targetDate}T00:00:00`);
@@ -425,9 +426,9 @@ function bindText(node: WNode, battery: number | null, sources: Record<string, R
       const today = new Date();
       const midnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
       const days = Math.round((target - midnight) / 86_400_000);
-      if (days > 0) return node.text + `还有 ${days} 天`;
-      if (days === 0) return node.text + "就是今天";
-      return node.text + `已过去 ${-days} 天`;
+      if (days > 0) return node.text + `${translate("widgetDaysLeft")} ${days} ${translate("widgetDays")}`;
+      if (days === 0) return node.text + translate("widgetCountdownToday");
+      return node.text + translate("widgetDaysAgo", { count: -days });
     }
     case "DATA":
       return node.text + (sources[node.source ?? ""]?.[node.field ?? ""] ?? node.fallback ?? "");
@@ -523,6 +524,7 @@ function NodeView({
 /* ------------------------------------------------------------------ */
 
 export function WidgetPreviewCard({ code }: { code: string }) {
+  const { t, language } = useI18n();
   const parsed = useMemo(() => {
     try {
       const spec = normalize(code);
@@ -530,7 +532,7 @@ export function WidgetPreviewCard({ code }: { code: string }) {
     } catch (e) {
       return { spec: null, canonical: "", error: e instanceof Error ? e.message : String(e) };
     }
-  }, [code]);
+  }, [code, language]);
 
   const [sources, setSources] = useState<Record<string, Record<string, string>>>({});
   const [battery, setBattery] = useState<number | null>(null);
@@ -609,8 +611,8 @@ export function WidgetPreviewCard({ code }: { code: string }) {
     return (
       <div className="widget-preview-card">
         <div className="chart-head">
-          <span className="chart-badge">小组件预览</span>
-          <span className="chart-error-text">{parsed.error ?? "配置无效"}</span>
+          <span className="chart-badge">{t("widgetPreview")}</span>
+          <span className="chart-error-text">{parsed.error ?? t("invalidConfig")}</span>
         </div>
       </div>
     );
@@ -624,7 +626,7 @@ export function WidgetPreviewCard({ code }: { code: string }) {
       // widget_generate execTool name is intercepted for the LLM flow, so it
       // cannot perform a real save from JS.)
       const out = widgetSave(parsed.canonical);
-      setActionResult(out.startsWith("ERROR:") ? out : `已保存到组件库（id=${out}）`);
+      setActionResult(out.startsWith("ERROR:") ? out : `${t("savedWidget")} (id=${out})`);
     } catch (e) {
       setActionResult(`ERROR: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
@@ -646,30 +648,30 @@ export function WidgetPreviewCard({ code }: { code: string }) {
   return (
     <div className="widget-preview-card">
       <div className="chart-head">
-        <span className="chart-badge">小组件预览</span>
+        <span className="chart-badge">{t("widgetPreview")}</span>
         <span className="wp-name" title={spec.name}>{spec.name}</span>
       </div>
       <div className="wp-surface-wrap">
         <div className="wp-surface" style={{ background: cssColor(spec.background), padding: spec.padding }}>
           <NodeView node={spec.root} battery={battery} sources={sources} />
           <div className="wp-footer">
-            <span className="wp-status">更新 {updated}</span>
+            <span className="wp-status">{t("updated")} {updated}</span>
             <span className="wp-refresh" aria-hidden="true">↻</span>
           </div>
         </div>
       </div>
       {(hasHttp || !hasBridge()) && (
         <div className="wp-note">
-          {hasHttp && <div>HTTP 数据源预览显示示例/兜底值，网络数据需桌面刷新后可见。</div>}
-          {!hasBridge() && <div>浏览器预览模式：系统/脚本数据源与保存上桌仅能在 App 内使用。</div>}
+          {hasHttp && <div>{t("widgetHttpNote")}</div>}
+          {!hasBridge() && <div>{t("widgetBrowserNote")}</div>}
         </div>
       )}
       <div className="wp-actions">
         <button type="button" onClick={onSave} disabled={busy !== null}>
-          {busy === "save" ? "保存中…" : "保存到组件库"}
+          {busy === "save" ? t("saving") : t("saveWidget")}
         </button>
         <button type="button" className="wp-pin" onClick={() => void onPin()} disabled={busy !== null}>
-          {busy === "pin" ? "请求中…" : "保存并添加到桌面"}
+          {busy === "pin" ? t("requesting") : t("saveAndPin")}
         </button>
       </div>
       {actionResult && (

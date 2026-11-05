@@ -1,3 +1,4 @@
+import { useI18n } from "./i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 /**
@@ -72,6 +73,7 @@ function clampDimension(value: unknown, fallback: number): number {
 }
 
 export function CanvasCard({ code, data }: { code: string; data?: unknown }) {
+  const { t } = useI18n();
   const spec = useMemo(() => parseSpec(code), [code]);
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const [visible, setVisible] = useState(true);
@@ -79,36 +81,33 @@ export function CanvasCard({ code, data }: { code: string; data?: unknown }) {
 
   useEffect(() => {
     const frame = frameRef.current;
-    if (!frame || !spec) return;
-    const post = () => frame.contentWindow?.postMessage({ type: "canvas", spec: { ...spec, data } }, "*");
-    const timer = window.setInterval(() => {
-      if (frame.dataset.ready !== "1") return;
-      window.clearInterval(timer);
-      post();
-    }, 60);
-    const onLoad = () => { frame.dataset.ready = "1"; post(); };
-    frame.addEventListener("load", onLoad);
-    return () => {
-      window.clearInterval(timer);
-      frame.removeEventListener("load", onLoad);
-    };
+    if (!frame || !spec || frame.dataset.ready !== "1") return;
+    frame.contentWindow?.postMessage({ type: "canvas", spec: { ...spec, data } }, "*");
   }, [spec, data, visible]);
 
-  if (!spec) return <div className="rich-error">Canvas 数据格式错误</div>;
-  if (!visible) return <div className="canvas-card"><button type="button" className="webview-toggle" onClick={() => setVisible(true)}>显示画布</button></div>;
+  const onFrameLoad = () => {
+    const frame = frameRef.current;
+    if (!frame || !spec) return;
+    frame.dataset.ready = "1";
+    frame.contentWindow?.postMessage({ type: "canvas", spec: { ...spec, data } }, "*");
+  };
+
+  if (!spec) return <div className="rich-error">{t("canvasInvalid")}</div>;
+  if (!visible) return <div className="canvas-card"><button type="button" className="webview-toggle" onClick={() => setVisible(true)}>{t("showCanvas")}</button></div>;
 
   return (
     <div className={`canvas-card${fullscreen ? " fullscreen" : ""}`}>
       <div className="webview-bar">
         <span className="webview-uri">🎨 {spec.title ?? `Canvas ${spec.width}×${spec.height}`}</span>
-        <button type="button" onClick={() => setFullscreen((v) => !v)}>{fullscreen ? "退出全屏" : "全屏"}</button>
-        <button type="button" onClick={() => { setFullscreen(false); setVisible(false); }}>关闭</button>
+        <button type="button" onClick={() => setFullscreen((v) => !v)}>{fullscreen ? t("exitFullscreen") : t("fullscreen")}</button>
+        <button type="button" onClick={() => { setFullscreen(false); setVisible(false); }}>{t("close")}</button>
       </div>
       <iframe
         ref={frameRef}
-        title={spec.title ?? "Canvas 绘图"}
+        title={spec.title ?? t("canvasDrawing")}
         sandbox="allow-scripts"
         srcDoc={SANDBOX_DOC}
+        onLoad={onFrameLoad}
       />
     </div>
   );
