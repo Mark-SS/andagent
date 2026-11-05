@@ -13,6 +13,7 @@ import {
   uiStatus,
   uiToast,
   webReload,
+  UI_PROTO_ERROR,
 } from "./bridge";
 
 type NativeBridge = NonNullable<Window["AndroidBridge"]>;
@@ -96,5 +97,18 @@ describe("R20 UI bridge wrappers", () => {
     install({ uiStatus: () => "{}", uiScreenMetrics: () => "not json" });
     expect(uiStatus()).toBeNull();
     expect(uiScreenMetrics()).toBeNull();
+  });
+
+  it("treats protocol violations as failures (R20 review fix)", () => {
+    install({
+      uiToast: () => "OK",
+      uiShare: () => '{"action":"share"}',
+      uiKeyboard: () => '{"ok":false}',
+    });
+    expect(uiToast("hi").ok).toBe(false);
+    expect(uiShare("正文").ok).toBe(false);
+    const kb = uiKeyboard(true);
+    expect(kb.ok).toBe(false);
+    expect(kb.error).toBe(UI_PROTO_ERROR);
   });
 });

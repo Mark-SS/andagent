@@ -74,7 +74,7 @@ web 化重构（pi+assistant-ui）/ 日历闹钟剪贴板通知 / ECharts / Shiz
 | R17 | 文件管理补全：file_copy/move/delete/rename/mkdir/hash/info | ✅ +7 |
 | R18 | LUT 滤镜：.cube 解析+三线性插值+强度混合，内置 warm/cool/vintage/cinematic/bw 预置，接 R15 管线（image_edit op=lut） | ✅ |
 | R19 | 视频剪辑：ffmpeg-kit 静态链接（LGPL min 变体），video_clip/concat/filter 三工具 | BLOCKED(需要 ffmpeg-kit .aar 外部二进制，离线环境无法引入；待真机环境补齐) |
-| R20 | 平台桥接大扩展（八域 20+ 方法） | TODO（AgentBridge 已有 24 个 @JavascriptInterface 方法，缺简报中规划的新域） |
+| R20 | 平台桥接大扩展（八域 20+ 方法） | ✅ b127aeb + 收口 0.28.1（onMain 超时 CAS 竞态修复 / share 截断 truncated 标记 / parseUiResult 严格协议校验 / VIBRATE 去重） |
 | R21 | Shader 实时渲染围栏（WebGL2，Shadertoy 风格 iTime/iResolution） | ✅ 纯前端 |
 | R22 | 邮件发送：email_send（SMTP SSL/STARTTLS+AUTH+HTML+附件）/email_verify/email_draft | ✅ +3 |
 | R23 | Canvas 围栏（沙箱 iframe 2D 绘制，静态+动画） | ✅ 纯前端 |

@@ -164,8 +164,9 @@ class UiCommands(
     }
 
     fun share(text: String, subject: String): String {
-        val body = text.trim().take(20_000)
-        if (body.isEmpty()) return "ERROR: 分享内容为空"
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return "ERROR: 分享内容为空"
+        val body = trimmed.take(20_000)
         val title = subject.trim().take(200).ifBlank { "分享" }
         return onMain { a ->
             val send = Intent(Intent.ACTION_SEND).apply {
@@ -174,7 +175,8 @@ class UiCommands(
                 putExtra(Intent.EXTRA_SUBJECT, title)
             }
             a.startActivity(Intent.createChooser(send, title))
-            ok("share")
+            // Review fix: surface truncation instead of silently dropping text.
+            ok("share", "truncated" to (body.length < trimmed.length))
         }
     }
 
@@ -299,17 +301,42 @@ class UiCommands(
         }
         var result = "ERROR: UI 命令超时"
         val latch = CountDownLatch(1)
-        mainHandler.post {
+        // R20 review fix: exactly one of "started on main" / "timed out" wins
+        // via CAS on a single state flag — a task that begins after the 2s
+        // timeout must not run its side effects (share dialog / FLAG_SECURE /
+        // nav) behind the caller's back, and a caller must not report a
+        // timeout for a task that already began.
+        val state = java.util.concurrent.atomic.AtomicInteger(0) // 0=pending 1=started 2=cancelled
+        val task = Runnable {
+            if (!state.compareAndSet(0, 1)) { // lost the race: already cancelled
+                latch.countDown()
+                return@Runnable
+            }
             result = runCatching {
                 if (current.isFinishing || current.isDestroyed) "ERROR: Activity 已结束"
                 else block(current)
             }.getOrElse { "ERROR: ${it.message ?: it.javaClass.simpleName}" }
             latch.countDown()
         }
+        val posted = runCatching { mainHandler.post(task) }.getOrDefault(false)
+        if (!posted) return "ERROR: 无法投递 UI 任务"
         return if (runCatching { latch.await(2, TimeUnit.SECONDS) }.getOrDefault(false)) {
             result
-        } else {
+        } else if (state.compareAndSet(0, 2)) {
+            runCatching { mainHandler.removeCallbacks(task) }
             "ERROR: UI 命令超时"
+        } else {
+            // Task already started on main — side effects are in flight, so
+            // wait a little more and report the real outcome instead of a
+            // misleading timeout. Only read `result` after the latch fires
+            // (countDown happens-after the write, guaranteeing visibility);
+            // if the task is still running past the deadline, say so
+            // explicitly instead of guessing.
+            if (runCatching { latch.await(3, TimeUnit.SECONDS) }.getOrDefault(false)) {
+                result
+            } else {
+                "ERROR: UI 命令超时（任务已在主线程执行，副作用可能已发生）"
+            }
         }
     }
 }

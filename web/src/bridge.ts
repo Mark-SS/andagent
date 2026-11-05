@@ -276,7 +276,11 @@ export interface UiScreenMetrics {
 }
 
 const UI_BRIDGE_MISSING = "设备桥不可用";
+export const UI_PROTO_ERROR = "UI 命令返回格式异常";
 
+/** Only `{"ok":true,...}` objects count as success: Kotlin always returns a
+ *  JSON object on this channel, so anything else (plain ack, missing `ok`,
+ *  `ok:false` without a message) is a protocol violation, not a success. */
 function parseUiResult(raw: unknown): UiResult {
   if (typeof raw !== "string" || !raw) return { ok: false, error: UI_BRIDGE_MISSING };
   if (raw.startsWith("ERROR:")) return { ok: false, error: raw.slice(6).trim() || UI_BRIDGE_MISSING };
@@ -284,12 +288,16 @@ function parseUiResult(raw: unknown): UiResult {
     const parsed: unknown = JSON.parse(raw);
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
       const record = parsed as Record<string, unknown>;
-      return { ...record, ok: record.ok !== false } as UiResult;
+      if (record.ok !== true) {
+        const message = typeof record.error === "string" && record.error ? record.error : UI_PROTO_ERROR;
+        return { ok: false, error: message };
+      }
+      return { ...record } as UiResult;
     }
   } catch {
-    /* plain "OK" acknowledgement */
+    /* not JSON — falls through to the protocol-error branch */
   }
-  return { ok: true };
+  return { ok: false, error: UI_PROTO_ERROR };
 }
 
 function callUi(fn: (() => string) | undefined): UiResult {
