@@ -78,6 +78,6 @@ web 化重构（pi+assistant-ui）/ 日历闹钟剪贴板通知 / ECharts / Shiz
 | R23 | Canvas 围栏（沙箱 iframe 2D 绘制，静态+动画） | ✅ 纯前端 |
 | R24 | 存储底座：KV 工具族 + `andagent.kv` JS API + 前端会话迁移（见 10d；依赖 R10.7 `data/` 根与 R20 平台桥接） | TODO +6 |
 | R26 | 网络搜索：web_search（Bing HTML 主引擎 + DDG IA 摘要，零 key）+ web_read 网页正文；Bing fixture 单测 | ✅ +2 |
-| R28 | MediaProjection 截屏/录屏（进行中） | 路由改造 |
-| R29 | Mermaid+KaTeX+DB GUI 移动端适配（进行中） | 纯前端+dbgui |
-|  | **当前累计 139 工具（v0.17.0）** |  |
+| R28 | MediaProjection 截屏/录屏：consent trampoline + FGS(mediaProjection) + 路由投影→Shizuku→授权弹窗；screen_capture/screen_record/screen_record_stop 全接 `ensureCaptureChannel`；ProjectionRoutingTest 6 用例 | ✅ 16a00a5 + 收口提交 |
+| R29 | Mermaid+KaTeX 对话流渲染（MermaidCard 错误卡片 + remark-math/rehype-katex，vitest 2 用例）+ dbgui 移动端适配（@media≤719px 触控布局） | ✅ 16a00a5 + 收口提交 |
+|  | **当前累计 139 工具（v0.22.0，R28 MediaProjection 收口）** |  |
