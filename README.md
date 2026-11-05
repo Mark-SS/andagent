@@ -1,5 +1,7 @@
 # andagent
 
+[![CI](https://github.com/congduan/andagent/actions/workflows/ci.yml/badge.svg)](https://github.com/congduan/andagent/actions/workflows/ci.yml) [![Release](https://github.com/congduan/andagent/actions/workflows/release.yml/badge.svg)](https://github.com/congduan/andagent/actions/workflows/release.yml) [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 An on-device AI assistant for Android. It calls device capabilities directly from the conversation — files, media store, calendar, Bluetooth/Wi-Fi, sensors, NFC, screen, shell, databases — and renders the results inline as rich cards: charts, images, maps, audio/video, tables, and widget previews.
 
 - **Frontend**: `web/` — React 19 + `@assistant-ui/react` + `@mariozechner/pi-ai`, bundled with Vite and shipped inside the APK for offline use.
