@@ -21,7 +21,11 @@ internal class TermuxSession(
         .apply { environment().putAll(this@TermuxSession.environment) }.start()
     private val monitor = Object()
     private val output = ByteArrayOutputStream()
+    // R27: 对话流内嵌终端的增量输出缓冲——reader 持续收，terminalPoll() 拉走。
+    // 与 output（marker 批处理用）独立，互不复位。
+    private val terminalBytes = ByteArrayOutputStream()
     private val writer = process.outputStream.bufferedWriter()
+    private val writeLock = Object()
     @Volatile private var startupDiagnostics = ""
     @Volatile private var closed = false
 
@@ -38,10 +42,16 @@ internal class TermuxSession(
                     if (n < 0) break
                     synchronized(monitor) {
                         output.write(bytes, 0, n)
+                        terminalBytes.write(bytes, 0, n)
                         if (output.size() > 131_072) {
                             val tail = output.toByteArray().takeLast(65_536).toByteArray()
                             output.reset()
                             output.write(tail)
+                        }
+                        if (terminalBytes.size() > 131_072) {
+                            val tail = terminalBytes.toByteArray().takeLast(65_536).toByteArray()
+                            terminalBytes.reset()
+                            terminalBytes.write(tail)
                         }
                         monitor.notifyAll()
                     }
@@ -66,9 +76,11 @@ internal class TermuxSession(
             }
             output.reset()
         }
-        writer.write(command)
-        writer.write("\nprintf '$marker:%s\\n' \"\$?\"\n")
-        writer.flush()
+        synchronized(writeLock) {
+            writer.write(command)
+            writer.write("\nprintf '$marker:%s\\n' \"\$?\"\n")
+            writer.flush()
+        }
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSeconds.toLong())
         synchronized(monitor) {
             while (true) {
@@ -89,6 +101,56 @@ internal class TermuxSession(
                 }
                 TimeUnit.NANOSECONDS.timedWait(monitor, remaining)
             }
+        }
+    }
+
+    /**
+     * R27: 终端通道——不经 marker 等待，直接写入长驻 bash 的 stdin。
+     * command 可为「命令行」（terminalExec 附加 tty 弱 marker 后调这里）
+     * 或交互程序要的裸输入（terminalWrite）。与 execute() 的写入用 writeLock
+     * 串行，避免半行交错；输出侧残余竞态（agent 与终端同时执行时输出交错）
+     * 是共享会话的固有现象，可接受。
+     */
+    fun writeRaw(text: String) {
+        if (!alive()) error("shell 已退出")
+        synchronized(writeLock) {
+            writer.write(text)
+            writer.flush()
+        }
+    }
+
+    /**
+     * R27: 拉取自上次 poll 以来的终端增量输出（单次 ≤16KB，剩余留给下次）。
+     * UTF-8 末尾的不完整序列暂扣不发，等下一个 chunk 凑齐，避免轮询切片
+     * 把多字节字符撕成乱码。
+     */
+    fun terminalPoll(): String {
+        synchronized(monitor) {
+            val all = terminalBytes.toByteArray()
+            if (all.isEmpty()) return ""
+            var end = all.size
+            var skip = 0
+            while (skip < 4 && end - skip > 0) {
+                val b = all[end - skip - 1].toInt() and 0xFF
+                when {
+                    b < 0x80 -> break
+                    b and 0xC0 == 0x80 -> skip++
+                    else -> {
+                        val need = when {
+                            b and 0xE0 == 0xC0 -> 2
+                            b and 0xF0 == 0xE0 -> 3
+                            b and 0xF8 == 0xF0 -> 4
+                            else -> break
+                        }
+                        if (skip + 1 < need) end -= skip + 1
+                        break
+                    }
+                }
+            }
+            val text = String(all, 0, end, Charsets.UTF_8)
+            terminalBytes.reset()
+            if (end < all.size) terminalBytes.write(all, end, all.size - end)
+            return text.takeLast(16_384)
         }
     }
 

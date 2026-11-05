@@ -148,6 +148,65 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
           </label>
 
           <div className="settings-card">
+            <div className="settings-card-head"><span>语音（STT 转写 / TTS 合成）</span></div>
+            <label className="field">
+              <span>转写模型 ID</span>
+              <input
+                value={draft.transcribeModel ?? ""}
+                onChange={(e) => setDraft({ ...draft, transcribeModel: e.target.value })}
+                placeholder="whisper-1（默认）/ glm-asr / fun-asr…"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+              />
+              <em>🎤 语音输入走 baseUrl 的 /audio/transcriptions；报「模型不存在」就把服务方的模型 ID 填这里</em>
+            </label>
+            <label className="field">
+              <span>转写端点（可选，留空跟随 Base URL）</span>
+              <input
+                value={draft.transcribeBaseUrl ?? ""}
+                onChange={(e) => setDraft({ ...draft, transcribeBaseUrl: e.target.value })}
+                placeholder="https://other-stt.example.com/v1"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+              />
+            </label>
+            <label className="field">
+              <span>TTS 端点（可选，OpenAI 兼容 /audio/speech）</span>
+              <input
+                value={draft.ttsBaseUrl ?? ""}
+                onChange={(e) => setDraft({ ...draft, ttsBaseUrl: e.target.value })}
+                placeholder="https://tts.example.com/v1"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+              />
+            </label>
+            <label className="field">
+              <span>TTS 模型 / 音色</span>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  value={draft.ttsModel ?? ""}
+                  onChange={(e) => setDraft({ ...draft, ttsModel: e.target.value })}
+                  placeholder="tts-1"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                />
+                <input
+                  value={draft.ttsVoice ?? ""}
+                  onChange={(e) => setDraft({ ...draft, ttsVoice: e.target.value })}
+                  placeholder="alloy"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                />
+              </div>
+            </label>
+          </div>
+
+          <div className="settings-card">
             <div className="settings-card-head"><span>桌面小组件</span><span>{widgets.length} 个已保存</span></div>
             <p className="settings-card-note">可在对话中描述想要的组件，也可在此粘贴并编辑 WidgetSpec v2 JSON。</p>
             {widgets.map((widget) => <div key={widget.id} className="settings-card-actions">

@@ -145,6 +145,11 @@ class AgentBridge(
             put("apiKey", settings.apiKey)
             put("model", settings.model)
             put("systemPrompt", settings.systemPrompt)
+            put("transcribeModel", settings.transcribeModel)
+            put("transcribeBaseUrl", settings.transcribeBaseUrl)
+            put("ttsBaseUrl", settings.ttsBaseUrl)
+            put("ttsModel", settings.ttsModel)
+            put("ttsVoice", settings.ttsVoice)
         }.toString()
     }
 
@@ -155,6 +160,11 @@ class AgentBridge(
         obj["apiKey"]?.jsonPrimitive?.contentOrNull?.let { settings.apiKey = it }
         obj["model"]?.jsonPrimitive?.contentOrNull?.let { settings.model = it }
         obj["systemPrompt"]?.jsonPrimitive?.contentOrNull?.let { settings.systemPrompt = it }
+        obj["transcribeModel"]?.jsonPrimitive?.contentOrNull?.let { settings.transcribeModel = it }
+        obj["transcribeBaseUrl"]?.jsonPrimitive?.contentOrNull?.let { settings.transcribeBaseUrl = it }
+        obj["ttsBaseUrl"]?.jsonPrimitive?.contentOrNull?.let { settings.ttsBaseUrl = it }
+        obj["ttsModel"]?.jsonPrimitive?.contentOrNull?.let { settings.ttsModel = it }
+        obj["ttsVoice"]?.jsonPrimitive?.contentOrNull?.let { settings.ttsVoice = it }
     }
 
     /* --------------------------- permissions ---------------------------- */
