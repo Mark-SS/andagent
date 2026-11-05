@@ -29,7 +29,7 @@ function frame(){
   if(!spec)return;
   var t=(Date.now()-started)/1000;
   ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,canvas.width,canvas.height);
-  try{ new Function('ctx','t','w','h',spec.code)(ctx,t,canvas.width,canvas.height); }
+  try{ new Function('ctx','t','w','h','data',spec.code)(ctx,t,canvas.width,canvas.height,spec.data); }
   catch(e){ ctx.fillStyle='#ff9c9c';ctx.font='14px sans-serif';ctx.fillText(String(e),12,24); }
   ctx.restore();
   if(spec.animate)raf=requestAnimationFrame(frame);
@@ -71,7 +71,7 @@ function clampDimension(value: unknown, fallback: number): number {
   return Number.isFinite(n) ? Math.min(2048, Math.max(64, Math.round(n))) : fallback;
 }
 
-export function CanvasCard({ code }: { code: string }) {
+export function CanvasCard({ code, data }: { code: string; data?: unknown }) {
   const spec = useMemo(() => parseSpec(code), [code]);
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const [visible, setVisible] = useState(true);
@@ -80,7 +80,7 @@ export function CanvasCard({ code }: { code: string }) {
   useEffect(() => {
     const frame = frameRef.current;
     if (!frame || !spec) return;
-    const post = () => frame.contentWindow?.postMessage({ type: "canvas", spec }, "*");
+    const post = () => frame.contentWindow?.postMessage({ type: "canvas", spec: { ...spec, data } }, "*");
     const timer = window.setInterval(() => {
       if (frame.dataset.ready !== "1") return;
       window.clearInterval(timer);
@@ -92,7 +92,7 @@ export function CanvasCard({ code }: { code: string }) {
       window.clearInterval(timer);
       frame.removeEventListener("load", onLoad);
     };
-  }, [spec, visible]);
+  }, [spec, data, visible]);
 
   if (!spec) return <div className="rich-error">Canvas 数据格式错误</div>;
   if (!visible) return <div className="canvas-card"><button type="button" className="webview-toggle" onClick={() => setVisible(true)}>显示画布</button></div>;

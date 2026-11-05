@@ -17,7 +17,7 @@ import {
   type ProjectionStatus,
   type ShizukuStatus,
   cronList, cronToggle, cronDelete, cronPauseAll, cronExactAllowed, cronOpenExactSettings,
-  type CronTask,
+  type CronTask, skillManage,
 } from "./bridge";
 import { loadThemeMode, setTheme, type ThemeMode } from "./theme";
 
@@ -51,6 +51,13 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
   const [projectionMsg, setProjectionMsg] = useState<string | null>(null);
   const [devtools, setDevtools] = useState<DevToolsStatus | null>(() => (hasBridge() ? getDevToolsStatus() : null));
   const [devtoolsMsg, setDevtoolsMsg] = useState<string | null>(null);
+  const [skills, setSkills] = useState<Array<{name:string; description:string; enabled:boolean; toolCount:number; source:string}>>([]);
+  const [skillSource, setSkillSource] = useState("");
+  const [skillQuery, setSkillQuery] = useState("");
+  const [skillIndex, setSkillIndex] = useState("");
+  const [skillMsg, setSkillMsg] = useState("");
+  const refreshSkills = () => { try { setSkills(JSON.parse(skillManage("list"))); } catch { setSkills([]); } };
+  useEffect(refreshSkills, []);
 
   useEffect(() => {
     if (!hasBridge()) return;
@@ -250,6 +257,19 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
                 />
               </div>
             </label>
+          </div>
+
+          <div className="settings-card">
+            <div className="settings-card-head"><span>技能</span><span>{skills.length} 个</span></div>
+            {skills.map((skill) => <div key={skill.name} className="settings-card-actions">
+              <span title={skill.source}>{skill.name} · {skill.description} · {skill.toolCount} 工具</span>
+              <label><input type="checkbox" checked={skill.enabled} onChange={(e) => { setSkillMsg(skillManage("enable", skill.name, String(e.target.checked))); refreshSkills(); }} />启用</label>
+              <button type="button" className="btn-ghost" onClick={() => { if (window.confirm(`删除技能「${skill.name}」？`)) { setSkillMsg(skillManage("delete", skill.name, "true")); refreshSkills(); } }}>删除</button>
+            </div>)}
+            <div className="settings-card-actions"><input value={skillSource} onChange={(e) => setSkillSource(e.target.value)} placeholder="技能 URL 或本地路径" /><button type="button" className="btn-ghost" onClick={() => { setSkillMsg(skillManage("install", "", skillSource)); refreshSkills(); }}>安装</button></div>
+            <div className="settings-card-actions"><input value={skillQuery} onChange={(e) => setSkillQuery(e.target.value)} placeholder="搜索技能" /><button type="button" className="btn-ghost" onClick={() => setSkillMsg(skillManage("search", "", skillQuery))}>搜索</button><button type="button" className="btn-ghost" onClick={() => { setSkillMsg(skillManage("reload")); refreshSkills(); }}>扫描刷新</button></div>
+            <div className="settings-card-actions"><input value={skillIndex} onChange={(e) => setSkillIndex(e.target.value)} placeholder="自定义 JSON 索引 URL（可选）" /><button type="button" className="btn-ghost" onClick={() => setSkillMsg(skillManage("index", "", skillIndex))}>保存索引</button></div>
+            {skillMsg && <p className="settings-card-note">{skillMsg.slice(0, 1200)}</p>}
           </div>
 
           <div className="settings-card">

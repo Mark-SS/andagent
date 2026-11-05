@@ -14,6 +14,7 @@ import { PERMISSION_GUIDE } from "./permissionGuide";
 import { toModelMessages } from "./modelMessages";
 import { SessionStore, type SessionMeta } from "./sessions";
 import { EXTRA_TOOL_DEFS } from "./extraTools";
+import { extensionTools, skillPrompt } from "./bridge";
 import apiTools from "../../app/src/main/assets/api_tools.json";
 import { addUsage, emptyUsage, sumMessageUsage, type UsageSum } from "./usage";
 
@@ -568,6 +569,12 @@ const TOOL_DEFS = [
   { name: "db_exec", description: "执行参数化 SQL。值使用 ? 占位符和 params_json JSON 数组。DROP TABLE、无 WHERE DELETE 需 confirm=true。", parameters: { type: "object", properties: { name: { type: "string" }, sql: { type: "string" }, params_json: { type: "string" }, confirm: { type: "boolean" } }, required: ["name", "sql"] } },
   { name: "db_query", description: "只读 SELECT，返回最多 limit 行。值使用 ? 和 params_json JSON 数组。", parameters: { type: "object", properties: { name: { type: "string" }, sql: { type: "string" }, params_json: { type: "string" }, limit: { type: "integer" } }, required: ["name", "sql"] } },
   { name: "db_drop", description: "删除整个数据库，必须 confirm=true。", parameters: { type: "object", properties: { name: { type: "string" }, confirm: { type: "boolean" } }, required: ["name"] } },
+  { name: "kv_get", description: "读取 KV 键值（namespace 默认 default），返回值与过期时间；不存在时返回 found=false。", parameters: { type: "object", properties: { namespace: { type: "string", description: "命名空间，默认 default" }, key: { type: "string", description: "键名，仅字母数字._-，最长 64" } }, required: ["key"] } },
+  { name: "kv_set", description: "写入 KV 键值。value_json 为任意 JSON 值字符串；ttl_ms 为可选过期毫秒数；items_json 可传对象批量写入。", parameters: { type: "object", properties: { namespace: { type: "string", description: "命名空间，默认 default" }, key: { type: "string" }, value_json: { type: "string", description: "任意 JSON 值字符串，如 \"text\"、42、true、{\"a\":1}、[1,2]" }, ttl_ms: { type: "integer", description: "可选：过期毫秒数，正整数" }, items_json: { type: "string", description: "可选：{\"key\":值} JSON 对象批量写入；与 key/value_json 二选一" } }, required: [] } },
+  { name: "kv_delete", description: "删除 KV 键；键不存在时返回错误。", parameters: { type: "object", properties: { namespace: { type: "string" }, key: { type: "string" } }, required: ["key"] } },
+  { name: "kv_keys", description: "列出命名空间下的键名及剩余 TTL 秒数，可选 prefix 前缀过滤。", parameters: { type: "object", properties: { namespace: { type: "string" }, prefix: { type: "string", description: "可选：键名前缀" } }, required: [] } },
+  { name: "kv_namespaces", description: "列出所有 KV 命名空间及其键数量。", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "kv_clear", description: "清空整个命名空间的所有键，必须 confirm=true。", parameters: { type: "object", properties: { namespace: { type: "string", description: "要清空的命名空间" }, confirm: { type: "boolean" } }, required: ["namespace"] } },
   ...EXTRA_TOOL_DEFS,
   {
     name: "android_reflect",
@@ -609,6 +616,7 @@ const CHART_GUIDE = [
 
 const STORAGE_MEDIA_GUIDE = [
   "结构化存储：用户要记账、清单或笔记库时，先用 db_create 建库，再用 db_exec 建表，后续用参数化 INSERT 和 db_query SELECT。",
+  "轻量键值：用户要记住偏好、计数器或小型状态时，用 kv_set 写入，kv_get/kv_keys 读取；临时数据加 ttl_ms；清空命名空间用 kv_clear 且 confirm=true（最多 64 个命名空间、每命名空间 512 键、单值 64KB）。",
   "记账表例：CREATE TABLE records(id INTEGER PRIMARY KEY, date TEXT, item TEXT, amount REAL)。",
   "输出呈现：给用户音频或视频文件时，用 ```audio 或 ```video 围栏，内容为 JSON，例如 {\"uri\":\"/本地路径/file.mp4\",\"title\":\"文件名\"}；uri 可为本地文件路径或 https。",
 ].join("\n");
@@ -961,6 +969,7 @@ export class AgentEngine {
           {
             systemPrompt: [
               this.settings.systemPrompt.trim(),
+              skillPrompt(),
               "反射桥：android_reflect 仅能调用 AudioManager、MediaRouter、CameraManager/CameraCharacteristics、SensorManager、PowerManager、ActivityManager、ConnectivityManager、Build/SystemClock、Settings.System/Global/Secure、TelephonyManager、DisplayManager、PackageManager 的白名单方法。批量 api_* 工具见工具列表；优先用专门工具，反射用于长尾查询。",
               CHART_GUIDE,
               STORAGE_MEDIA_GUIDE,
@@ -971,7 +980,7 @@ export class AgentEngine {
               .join("\n\n"),
             // Compact projection: base64 tool payloads never reach the prompt.
             messages: toModelMessages(this.messages),
-            tools: TOOL_DEFS,
+            tools: [...TOOL_DEFS, ...extensionTools()],
           },
           {
             apiKey: this.settings.apiKey,

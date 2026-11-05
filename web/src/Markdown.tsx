@@ -16,13 +16,14 @@ import { PhotosCard, ImageCard, KvCard, TableCard, JsonTreeCard, GeoCard } from 
 import { CameraCard } from "./CameraCard";
 import { TerminalCard } from "./TerminalCard";
 import { CanvasCard } from "./CanvasCard";
+import { LiveCard } from "./LiveCard";
 import { ShaderCard } from "./ShaderCard";
 import { WidgetPreviewCard } from "./WidgetPreviewCard";
 
 function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighlighterProps) {
   const [copied, setCopied] = useState(false);
   const kind = (language ?? "").toLowerCase();
-  const isChart = ["chart", "photos", "image", "kv", "table", "json-tree", "geo", "audio", "video", "camera", "widget", "canvas", "shader", "terminal", "mermaid", "svg"].includes(kind);
+  const isChart = ["chart", "photos", "image", "kv", "table", "json-tree", "geo", "audio", "video", "camera", "widget", "canvas", "live", "shader", "terminal", "mermaid", "svg"].includes(kind);
 
   // 流式防护：围栏渲染组件（chart/mermaid/...）在代码流式到达时反复重挂载会
   // 闪烁。assistant-ui 不把「生成中」状态传进 markdown 组件，这里用
@@ -68,6 +69,7 @@ function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighligh
   if (kind === "table") return <TableCard code={code} />;
   if (kind === "json-tree") return <JsonTreeCard code={code} />;
   if (kind === "canvas") return <CanvasCard code={code} />;
+  if (kind === "live") return <LiveCard code={code} />;
   if (kind === "shader") return <ShaderCard code={code} />;
   if (kind === "geo") return <GeoCard code={code} />;
   if (kind === "camera") return <CameraCard code={code} />;

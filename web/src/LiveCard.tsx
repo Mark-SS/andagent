@@ -1,0 +1,77 @@
+import { useEffect, useMemo, useState } from "react";
+import { execTool } from "./bridge";
+import { CanvasCard } from "./CanvasCard";
+
+type LiveSpec = { name: string; code: string; interval_ms?: number; render?: string; width?: number; height?: number };
+type LiveState = { id: string; name: string; state: string; ticks: number; failures: number; error?: string; results: unknown[] };
+
+const DEFAULT_RENDER = `
+ctx.fillStyle='#0b0d11';ctx.fillRect(0,0,w,h);
+ctx.fillStyle='#7dd3fc';ctx.font='20px sans-serif';ctx.fillText('Live',20,32);
+ctx.fillStyle='#e5e7eb';ctx.font='16px monospace';
+var text=JSON.stringify(data===undefined?null:data,null,2);
+text.split('\\n').slice(0,14).forEach(function(line,i){ctx.fillText(line.slice(0,75),20,62+i*20);});
+`;
+
+export function LiveCard({ code }: { code: string }) {
+  const spec = useMemo(() => {
+    try {
+      const parsed = JSON.parse(code) as LiveSpec;
+      return typeof parsed.name === "string" && typeof parsed.code === "string" ? parsed : null;
+    } catch { return null; }
+  }, [code]);
+  const [id, setId] = useState<string | null>(null);
+  const [state, setState] = useState<LiveState | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!id) return;
+    let active = true;
+    const poll = async () => {
+      const result = await execTool("live_list", {});
+      if (!active || !result.ok) return;
+      try {
+        const loops = (JSON.parse(result.result) as { loops: LiveState[] }).loops;
+        const found = loops.find((loop) => loop.id === id);
+        if (found) setState(found);
+      } catch { /* show last valid frame */ }
+    };
+    void poll();
+    const timer = window.setInterval(() => void poll(), Math.max(250, spec?.interval_ms ?? 1000));
+    return () => { active = false; window.clearInterval(timer); };
+  }, [id, spec?.interval_ms]);
+
+  const action = async (name: string, args: object) => {
+    setBusy(true); setError("");
+    try {
+      const result = await execTool(name, args);
+      if (!result.ok || result.result.startsWith("ERROR:")) throw new Error(result.result);
+      const next = JSON.parse(result.result) as LiveState;
+      if (name === "live_start") setId(next.id);
+      setState(next);
+    } catch (e) { setError(String(e)); }
+    finally { setBusy(false); }
+  };
+
+  if (!spec) return <div className="rich-error">Live 数据格式错误</div>;
+  const data = state?.results?.at(-1);
+  const canvasCode = JSON.stringify({ width: spec.width ?? 640, height: spec.height ?? 360,
+    title: spec.name, code: spec.render ?? DEFAULT_RENDER });
+  return <div className="live-card">
+    <div className="webview-bar">
+      <span className="webview-uri">● {spec.name} {state ? `· ${state.state} · ${state.ticks} tick` : ""}</span>
+      {(!id || state?.state === "stopped") && <button type="button" disabled={busy} onClick={() => void action("live_start", {
+        name: spec.name, code: spec.code, interval_ms: spec.interval_ms ?? 1000, consumer: "dialog",
+      })}>{id ? "重新启动" : "启动循环"}</button>}
+      {id && state?.state !== "stopped" && <>
+        <button type="button" disabled={busy} onClick={() => void action("live_pause", { id, paused: state?.state !== "paused" })}>
+          {state?.state === "paused" ? "继续" : "暂停"}</button>
+        <button type="button" disabled={busy} onClick={() => void action("live_stop", { id })}>停止</button>
+      </>}
+    </div>
+    {error && <div className="rich-error">{error}</div>}
+    {state?.error && <div className="rich-error">{state.error}</div>}
+    <CanvasCard code={canvasCode} data={data} />
+  </div>;
+}

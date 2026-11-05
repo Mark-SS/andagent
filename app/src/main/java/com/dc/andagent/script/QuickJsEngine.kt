@@ -43,7 +43,7 @@ class QuickJsEngine(
         val source = sourceWithArgs(script, injectArgs)
         if (source.length > 100_000) return "ERROR: 脚本超过 100KB"
         val seconds = timeoutSeconds.coerceIn(1, 30)
-        val task = FutureTask(Callable { runScript(source, seconds) })
+        val task = FutureTask(Callable { runScript(source, seconds * 1000, null, null, null) })
         if (!handler.post(task)) return "ERROR: QuickJS 线程不可用"
         return try {
             task.get(seconds + 32L, TimeUnit.SECONDS)
@@ -52,6 +52,26 @@ class QuickJsEngine(
             "ERROR: QuickJS 执行超时或失败：${e.message ?: e.javaClass.simpleName}"
         }
     }
+
+    /** Run one live tick in a fresh QuickJS context. */
+    fun evalLive(script: String, onResult: (String) -> Unit): String {
+        if (script.length > 100_000) return "ERROR: 脚本超过 100KB"
+        val task = FutureTask(Callable { runScript(script, 500, null, null, null, onResult) })
+        if (!handler.post(task)) return "ERROR: QuickJS 线程不可用"
+        return try { task.get(1500, TimeUnit.MILLISECONDS) }
+        catch (e: Exception) { task.cancel(true); "ERROR: live tick 超时或失败：${e.message ?: e.javaClass.simpleName}" }
+    }
+
+    /** Execute one skill in a fresh QuickJS context with its declared tool allowlist. */
+    fun evalSkill(source: String, handler: String?, args: JsonObject?, allow: Set<String>): String {
+        if (source.length > 100_000) return "ERROR: 技能 JS 超过 100KB"
+        val task = FutureTask(Callable { runScript(source, 30000, allow, handler, args) })
+        if (!handlerThreadPost(task)) return "ERROR: QuickJS 线程不可用"
+        return try { task.get(62, TimeUnit.SECONDS) }
+        catch (e: Exception) { task.cancel(true); "ERROR: 技能执行失败：${e.message}" }
+    }
+
+    private fun handlerThreadPost(task: FutureTask<String>): Boolean = handler.post(task)
 
     fun check(script: String): String {
         if (script.length > 100_000) return "{\"valid\":false,\"error\":\"script exceeds 100KB\"}"
@@ -76,7 +96,8 @@ class QuickJsEngine(
         "{\"valid\":false,\"error\":${JsonPrimitive(e.message ?: e.javaClass.simpleName)}}"
     }
 
-    private fun runScript(script: String, seconds: Int): String = try {
+    private fun runScript(script: String, timeoutMs: Int, allow: Set<String>?, skillHandler: String?, skillArgs: JsonObject?, onResult: ((String) -> Unit)? = null): String = try {
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs.toLong())
         QuickJSLoader.init()
         System.loadLibrary("scriptinterrupt")
         QuickJSContext.create().use { context ->
@@ -90,14 +111,15 @@ class QuickJsEngine(
                 override fun warn(msg: String) { Log.w("QuickJsConsole", msg.take(1000)) }
                 override fun error(msg: String) { Log.e("QuickJsConsole", msg.take(1000)) }
             })
-            if (!installInterrupt(context, seconds * 1000))
+            if (!installInterrupt(context, timeoutMs))
                 return "ERROR: QuickJS 中断钩子加载失败，脚本未执行"
             try {
                 val api = context.createNewJSObject()
                 api.setProperty("tool", JSCallFunction { args ->
                     val name = args.getOrNull(0)?.toString().orEmpty()
                     val raw = args.getOrNull(1)?.toString() ?: "{}"
-                    if (name in setOf("js_eval", "script_run", "script_save", "script_check")) return@JSCallFunction "ERROR: 不允许递归执行 $name"
+                    if (name in setOf("js_eval", "script_run", "script_save", "script_check", "live_start", "live_stop", "live_pause")) return@JSCallFunction "ERROR: 不允许递归执行 $name"
+                    if (allow != null && name !in allow) return@JSCallFunction "ERROR: 技能未获工具权限 $name"
                     val tool = tools[name] ?: return@JSCallFunction "ERROR: 未知工具 $name"
                     val parsed: JsonObject = try { JsonFixer.parseObject(raw) }
                         catch (e: Exception) { return@JSCallFunction "ERROR: 工具参数不是 JSON 对象" }
@@ -105,7 +127,8 @@ class QuickJsEngine(
                         runCatching { runBlocking { tool.execute(parsed) } }
                             .getOrElse { "ERROR: ${it.message ?: it.javaClass.simpleName}" }
                     }
-                    try { future.get(30, TimeUnit.SECONDS) }
+                    val remaining = if (onResult == null) 30_000L else TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime()).coerceAtLeast(1L)
+                    try { future.get(remaining, TimeUnit.MILLISECONDS) }
                     catch (e: Exception) {
                         future.cancel(true)
                         "ERROR: 工具 $name 执行超时或失败：${e.message ?: e.javaClass.simpleName}"
@@ -132,6 +155,15 @@ class QuickJsEngine(
                     Log.i("QuickJsEngine", args.getOrNull(0)?.toString()?.take(1000) ?: "")
                     null
                 })
+                if (onResult != null) {
+                    val live = context.createNewJSObject()
+                    live.setProperty("_result", JSCallFunction { args ->
+                        onResult(args.getOrNull(0)?.toString() ?: "null")
+                        null
+                    })
+                    context.getGlobalObject().setProperty("live", live)
+                    context.evaluate("live.result = function(data) { live._result(JSON.stringify(data)); };", "andagent-live.js")
+                }
                 // R10.7: sandboxed script-owned storage under scripts/ and data/.
                 val fs = context.createNewJSObject()
                 fs.setProperty("read", JSCallFunction { args -> fsRead(args.getOrNull(0)?.toString()) })
@@ -155,9 +187,46 @@ class QuickJsEngine(
                       };
                     };
                 """.trimIndent(), "andagent-db.js")
+                // R51: namespace-aware KV store over the kv_* tools.
+                context.evaluate("""
+                    andagent.kv = (function() {
+                      var call = function(tool, args) {
+                        var result = andagent.tool(tool, JSON.stringify(args));
+                        try { return JSON.parse(result); } catch (_) { return result; }
+                      };
+                      return {
+                        get: function(ns, key) {
+                          var parsed = call('kv_get', {namespace: ns || 'default', key: key});
+                          return (parsed && parsed.found) ? parsed.value : null;
+                        },
+                        set: function(ns, key, value, ttlMs) {
+                          var args = {namespace: ns || 'default', key: key, value_json: JSON.stringify(value)};
+                          if (ttlMs !== undefined && ttlMs !== null) args.ttl_ms = ttlMs;
+                          return call('kv_set', args);
+                        },
+                        delete: function(ns, key) {
+                          return call('kv_delete', {namespace: ns || 'default', key: key});
+                        },
+                        keys: function(ns, prefix) {
+                          var args = {namespace: ns || 'default'};
+                          if (prefix) args.prefix = prefix;
+                          return call('kv_keys', args);
+                        },
+                        namespaces: function() { return call('kv_namespaces', {}); }
+                      };
+                    })();
+                """.trimIndent(), "andagent-kv.js")
                 // No Java Class object or reflection bridge is exposed to JS.
-                val program = "JSON.stringify((0,eval)(${JsonPrimitive(script)}))"
-                context.evaluate(program, "andagent-script.js")?.toString() ?: "null"
+                val program = if (allow == null) {
+                    "JSON.stringify((0,eval)(${JsonPrimitive(script)}))"
+                } else {
+                    val invocation = if (skillHandler == null)
+                        "exports.tools.map(function(t) { return {name:t.name,description:t.description,params:t.params || {type:'object',properties:{}}}; })"
+                    else "exports.tools.find(function(t) { return t.name === ${JsonPrimitive(skillHandler)}; }).handler(${skillArgs ?: JsonObject(emptyMap())})"
+                    "(function(){var exports={}; (0,eval)(${JsonPrimitive("var exports = globalThis.__skillExports;\n" + script)}); return JSON.stringify($invocation);})()".replace("var exports={};", "var exports={}; globalThis.__skillExports=exports;")
+                }
+                val output = context.evaluate(program, "andagent-script.js")?.toString() ?: "null"
+                if (onResult != null && System.nanoTime() >= deadline) "ERROR: live tick 超过 500ms" else output
             } finally {
                 clearInterrupt(context)
             }

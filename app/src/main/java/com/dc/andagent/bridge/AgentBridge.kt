@@ -56,6 +56,7 @@ class AgentBridge(
     private val webViewProvider: () -> WebView?,
     private val settings: SettingsStore,
     private val tools: Map<String, Tool>,
+    private val skillRegistry: com.dc.andagent.tools.SkillRegistry? = null,
     private val permissions: PermissionBroker,
     private val appContext: Context? = null,
     private val appVersion: String = "",
@@ -454,6 +455,29 @@ class AgentBridge(
         WidgetApi.delete(requireNotNull(appContext), id)
         "已删除"
     }.getOrElse { "ERROR: ${it.message ?: it.javaClass.simpleName}" }
+
+    @JavascriptInterface
+    fun extensionTools(): String = kotlinx.serialization.json.JsonArray(tools.values.filter { it.name.startsWith("skill_") }.map { tool ->
+        buildJsonObject { put("name", tool.name); put("description", tool.description); put("parameters", tool.parameters) }
+    }).toString()
+
+    @JavascriptInterface
+    fun skillPrompt(): String = skillRegistry?.prompt().orEmpty()
+
+    @JavascriptInterface
+    fun skillManage(action: String, name: String, value: String): String = runCatching {
+        val registry = requireNotNull(skillRegistry)
+        when (action) {
+            "list" -> registry.list()
+            "reload" -> registry.reload()
+            "enable" -> registry.enable(name, value == "true")
+            "delete" -> registry.delete(name, value == "true")
+            "install" -> registry.install(value)
+            "search" -> registry.search(value)
+            "index" -> { registry.setIndex(value); "OK" }
+            else -> "ERROR: 未知操作"
+        }
+    }.getOrElse { "ERROR: ${it.message}" }
 
     /* ------------------------------ tools ------------------------------- */
 

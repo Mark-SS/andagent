@@ -41,12 +41,19 @@ import com.dc.andagent.shell.setDevToolsDebugging
 import com.dc.andagent.shell.ShizukuShell
 import com.dc.andagent.shell.TermuxEnv
 import com.dc.andagent.script.QuickJsEngine
+import com.dc.andagent.live.LiveLoopRunner
+import com.dc.andagent.live.LiveOverlayHost
+import com.dc.andagent.tools.LiveTool
+import com.dc.andagent.tools.LIVE_TOOLS
+import com.dc.andagent.tools.KvStore
 import com.dc.andagent.script.JsEvalTool
 import com.dc.andagent.tools.IntentTool
 import com.dc.andagent.tools.INTENT_TOOLS
 import com.dc.andagent.tools.ScriptFsTool
 import com.dc.andagent.tools.CronTool
 import com.dc.andagent.tools.SqliteTool
+import com.dc.andagent.tools.KvTool
+import com.dc.andagent.tools.KV_TOOLS
 import com.dc.andagent.tools.DbGuiTool
 import com.dc.andagent.tools.TermuxTool
 import com.dc.andagent.tools.ScreenCaptureTool
@@ -166,6 +173,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var permissionBroker: PermissionBroker
     private lateinit var shizuku: ShizukuShell
     private lateinit var quickJsEngine: QuickJsEngine
+    private lateinit var liveQuickJsEngine: QuickJsEngine
+    private lateinit var liveLoopRunner: LiveLoopRunner
+    private lateinit var liveOverlayHost: LiveOverlayHost
     private val scriptToolExecutor = java.util.concurrent.Executors.newFixedThreadPool(2)
 
     private val healthPermissionResult = AtomicReference<Set<String>?>(null)
@@ -278,8 +288,27 @@ class MainActivity : ComponentActivity() {
         nfcSession = NfcSession(this) { message ->
             if (::bridge.isInitialized) bridge.emitNotice(message)
         }
-        val tools: MutableMap<String, Tool> = mutableMapOf()
+        val tools: MutableMap<String, Tool> = java.util.concurrent.ConcurrentHashMap()
         quickJsEngine = QuickJsEngine(tools, scriptToolExecutor, appContext)
+        liveQuickJsEngine = QuickJsEngine(tools, scriptToolExecutor, appContext)
+        liveOverlayHost = LiveOverlayHost(this)
+        val liveKv = KvStore(appContext)
+        liveLoopRunner = LiveLoopRunner(liveQuickJsEngine::evalLive, { id, consumer, value ->
+            when (consumer) {
+                "kv" -> liveKv.set("live", id, value)
+                "overlay" -> liveOverlayHost.update(id, value)
+            }
+        }, { message ->
+            if (::bridge.isInitialized) bridge.emitNotice(message)
+            runCatching {
+                val manager = appContext.getSystemService(android.app.NotificationManager::class.java)
+                manager.createNotificationChannel(android.app.NotificationChannel("andagent_live", "实时循环", android.app.NotificationManager.IMPORTANCE_DEFAULT))
+                manager.notify(4300, androidx.core.app.NotificationCompat.Builder(appContext, "andagent_live")
+                    .setSmallIcon(R.drawable.ic_stat_andagent).setContentTitle("实时循环已停止")
+                    .setContentText(message).setAutoCancel(true).build())
+            }
+        }, liveOverlayHost::remove)
+        tools.putAll(LIVE_TOOLS.associateWith { LiveTool(liveLoopRunner, it, liveOverlayHost::prepare) })
         tools.putAll(mapOf(
             "get_time" to GetTimeTool(),
             "nfc_status" to NfcTool(nfcSession, "nfc_status"),
@@ -400,6 +429,8 @@ class MainActivity : ComponentActivity() {
             "pptx_create" to DocumentCreateTool(appContext, permissionBroker, "pptx"),
             "xlsx_create" to DocumentCreateTool(appContext, permissionBroker, "xlsx"),
         ))
+        // R51: Android KV 持久化底座（namespace + key，JSON 值 + 可选 TTL）。
+        tools.putAll(KV_TOOLS.associateWith { KvTool(appContext, it) })
         // R12/R13 system APIs + R14 automation.
         tools.putAll(SYSTEM_API_TOOLS.associateWith { SystemApiTool(appContext, permissionBroker, shizuku, it) })
         tools.putAll(AUTOMATION_TOOLS.associateWith { AutomationTool(appContext, permissionBroker, shizuku, it) })
@@ -417,6 +448,11 @@ class MainActivity : ComponentActivity() {
         tools["android_reflect"] = AndroidReflectTool(RestrictedReflectExecutor(appContext))
         ApiToolFactory.register(appContext, tools)
 
+        val skillRegistry = com.dc.andagent.tools.SkillRegistry(appContext, tools, quickJsEngine)
+        val skillNames = listOf("skill_install", "skill_list", "skill_reload", "skill_enable", "skill_delete", "skill_search", "skill_index_set", "skill_info")
+        skillNames.forEach { tools[it] = com.dc.andagent.tools.SkillTool(skillRegistry, it) }
+        skillRegistry.reload()
+
         WidgetToolRuntime.attach(tools, quickJsEngine)
 
         bridge = AgentBridge(
@@ -424,6 +460,7 @@ class MainActivity : ComponentActivity() {
             appContext = appContext,
             settings = settingsStore,
             tools = tools,
+            skillRegistry = skillRegistry,
             permissions = permissionBroker,
             appVersion = BuildConfig.VERSION_NAME,
             shizukuStatus = { shizuku.statusJson() },
@@ -694,6 +731,9 @@ class MainActivity : ComponentActivity() {
         embeddedDialog?.dismiss()
         if (::nfcSession.isInitialized) nfcSession.close()
         bridge.shutdown()
+        if (::liveLoopRunner.isInitialized) liveLoopRunner.shutdown()
+        if (::liveQuickJsEngine.isInitialized) liveQuickJsEngine.shutdown()
+        if (::liveOverlayHost.isInitialized) liveOverlayHost.close()
         com.dc.andagent.shell.DevToolsClient.shutdown()
         if (::quickJsEngine.isInitialized) { WidgetToolRuntime.detach(quickJsEngine); quickJsEngine.shutdown() }
         scriptToolExecutor.shutdownNow()

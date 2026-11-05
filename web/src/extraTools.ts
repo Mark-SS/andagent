@@ -6,6 +6,10 @@ import type { Tool as PiTool } from "@mariozechner/pi-ai";
  * FILE_OPS_TOOLS / ZIP_TOOLS / EMAIL_TOOLS / STORE_TOOLS plus NFC/Termux).
  */
 export const EXTRA_TOOL_DEFS = [
+  { name: "live_start", description: "循环执行 JS。循环体内用 andagent.tool(name, JSON.stringify(args)) 获取设备数据，andagent.kv.get/set 跨 tick 保存状态，live.result(data) 提交本轮结果。每 tick 最多 500ms；结果最多 16KB。", parameters: { type: "object", properties: { name: { type: "string" }, code: { type: "string" }, interval_ms: { type: "integer", description: "默认 1000，最小 200" }, consumer: { type: "string", enum: ["dialog", "overlay", "kv"] } }, required: ["name", "code"] } },
+  { name: "live_stop", description: "停止指定实时循环，当前 tick 完成后退出。", parameters: { type: "object", properties: { id: { type: "string" } }, required: ["id"] } },
+  { name: "live_list", description: "列出实时循环的状态与最近 10 次结果。", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "live_pause", description: "暂停或恢复指定实时循环。", parameters: { type: "object", properties: { id: { type: "string" }, paused: { type: "boolean" } }, required: ["id", "paused"] } },
   { name: "camera_overlay_show", description: "在其他 app 上层显示原生相机预览浮窗；首次需要悬浮窗和相机授权。", parameters: { type: "object", properties: { camera: { type: "string", enum: ["back", "front"] }, width_dp: { type: "integer" }, height_dp: { type: "integer" } }, required: [] } },
   { name: "camera_overlay_update", description: "调整相机浮窗摄像头、尺寸或位置。", parameters: { type: "object", properties: { camera: { type: "string", enum: ["back", "front"] }, width_dp: { type: "integer" }, height_dp: { type: "integer" }, x: { type: "integer" }, y: { type: "integer" } }, required: [] } },
   { name: "camera_overlay_hide", description: "关闭相机浮窗并释放相机。", parameters: { type: "object", properties: {}, required: [] } },

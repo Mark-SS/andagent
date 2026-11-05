@@ -44,6 +44,7 @@ export const DEFAULT_SYSTEM_PROMPT = [
   "- 屏幕与自动化：screen_record / screen_record_stop / screen_record_list / screen_record_h264 / screen_capture / input_tap / input_swipe / input_text",
   "- 脚本与包管理：termux_setup / shell_exec / pkg_install / js_eval / script_check / json_fix（JS 脚本可用 andagent.tool 调用设备工具）",
   "- 可复用脚本：script_save 保存 → script_run 随时执行（支持 args_json 传参）→ script_list 查看；修改前用 script_read。适合周期性任务、数据变换管道、自动化流程。脚本内可用 andagent.tool() 调设备工具。",
+  "- 实时循环：live_start 让你写的 JS 按 interval_ms 循环跑，循环体内用 andagent.tool(name, JSON.stringify(args)) 取任意数据（传感器/位置/电池/反射查 API 等），用 andagent.kv.get(namespace,key) / set(namespace,key,value) 保存跨 tick 状态，用 live.result(data) 提交本轮结果；live_pause 暂停/恢复，live_stop 停止，live_list 查看。要在对话内交互展示时输出 ```live 围栏，内容为 {\"name\":\"名称\",\"code\":\"JS 循环体\",\"interval_ms\":1000,\"render\":\"可选 canvas 绘图 JS，接收 ctx,t,w,h,data\"}，用户点击启动循环。",
   "- 定时任务：cron_create（5 段 cron 或 daily 09:00 / weekly mon 09:00 / every 30m）创建；kind=script 跑已保存 JS 脚本，shell 跑命令，notify 发通知；cron_list / cron_toggle / cron_delete / cron_run_now 管理。设备重启后恢复，Android 12+ 需在设置授予『闹钟和提醒』。",
   "- 系统导航：open_settings（27 类设置页直达）/ app_list / get_time / device_info",
   "- 反射桥：android_reflect 可查 AudioManager、MediaRouter、CameraManager/CameraCharacteristics、SensorManager、PowerManager、ActivityManager、ConnectivityManager、Build/SystemClock、Settings.System/Global/Secure、TelephonyManager、DisplayManager、PackageManager 白名单 API；批量声明的 api_* 工具见工具列表。优先用专门工具，反射做长尾查询。",
@@ -108,6 +109,9 @@ interface AndroidBridge {
   llmFetchStart(id: string, url: string, headersJson: string, body: string): void;
   llmCancel(id: string): void;
   toolExec(id: string, name: string, argsJson: string): void;
+  extensionTools?(): string;
+  skillPrompt?(): string;
+  skillManage?(action: string, name: string, value: string): string;
   transcribeAudio(id: string, filePath: string, language: string): void;
   saveAudioBase64(id: string, base64: string): string;
   requestPermissions(namesJson: string): void;
@@ -143,6 +147,15 @@ declare global {
 
 function bridge(): AndroidBridge | undefined {
   return window.AndroidBridge;
+}
+
+export function extensionTools(): Array<{ name: string; description: string; parameters: Record<string, unknown> }> {
+  try { return JSON.parse(bridge()?.extensionTools?.() ?? "[]"); } catch { return []; }
+}
+export function skillPrompt(): string { return bridge()?.skillPrompt?.() ?? ""; }
+export function skillManage(action: string, name = "", value = ""): string {
+  try { return bridge()?.skillManage?.(action, name, value) ?? "ERROR: 技能管理桥不可用"; }
+  catch (e) { return `ERROR: ${String(e)}`; }
 }
 
 export function hasBridge(): boolean {
