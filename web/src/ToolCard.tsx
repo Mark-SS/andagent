@@ -24,6 +24,11 @@ const META: Record<string, ToolMeta> = {
   nfc_read: { label: "读取 NFC", icon: "📶" },
   nfc_write_text: { label: "写入 NFC 文本", icon: "📶", destructive: true },
   nfc_write_uri: { label: "写入 NFC 链接", icon: "📶", destructive: true },
+  nfc_mf_dump: { label: "MIFARE 扇区 dump", icon: "📶" },
+  nfc_mf_write_block: { label: "MIFARE 写块", icon: "📶", destructive: true },
+  nfc_ul_read: { label: "Ultralight 读页", icon: "📶" },
+  nfc_ul_write_page: { label: "Ultralight 写页", icon: "📶", destructive: true },
+  nfc_keys_manage: { label: "NFC key 库", icon: "🔑" },
   web_embed: { label: "内嵌浏览器", icon: "🌐" },
   device_info: { label: "设备信息", icon: "📱" },
   storage_scan: { label: "存储扫描", icon: "💾" },
@@ -201,7 +206,7 @@ export function ToolCard(props: ToolCallMessagePartProps) {
     try { const result = JSON.parse(raw) as { sourceThumbnailBase64?: string }; if (result.sourceThumbnailBase64) beforeImage = `data:image/png;base64,${result.sourceThumbnailBase64}`; } catch { /* no image */ }
   }
 
-  const preview = running ? (props.toolName.startsWith("nfc_") && props.toolName !== "nfc_status" ? "请贴近 NFC 卡片，最多等待 60 秒…" : "正在执行…") : summarize(raw);
+  const preview = running ? (props.toolName.startsWith("nfc_") && !["nfc_status", "nfc_hce_status", "nfc_keys_manage"].includes(props.toolName) ? "请贴近 NFC 卡片，最多等待 60 秒…" : "正在执行…") : summarize(raw);
   const parsed = useMemo(() => { try { return formatted.json ? JSON.parse(raw) : null; } catch { return null; } }, [raw, formatted.json]);
   const media = !running && !failed && ["file_download", "mic_record", "screen_record_h264", "screen_record", "screen_record_stop"].includes(props.toolName) ? mediaFromResult(raw) : null;
   const webUri = props.toolName === "web_embed" && parsed?.type === "webview" && typeof parsed.uri === "string" ? parsed.uri : null;

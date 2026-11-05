@@ -38,7 +38,7 @@ The WebView loads `https://appassets.androidplatform.net/assets/web/index.html` 
 | SQLite | 8 | `db_create/exec/query/...`, `db_gui` |
 | Document generation | 3 | `docx_create`, `pptx_create`, `xlsx_create` |
 | Home-screen widgets | 2 | `widget_generate`, `widget_save_and_pin` |
-| NFC | 4 | `nfc_status/read/write_text/write_uri` |
+| NFC | 11 | `nfc_status/read/write_text/write_uri/write_raw/hce_status` (NDEF+HCE), `nfc_mf_dump`, `nfc_mf_write_block`, `nfc_ul_read`, `nfc_ul_write_page`, `nfc_keys_manage` (MIFARE Classic/Ultralight 深度读写) |
 | Embedded web page in chat | 1 | `web_embed` |
 
 Other features:

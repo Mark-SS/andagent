@@ -8,6 +8,7 @@ import android.widget.Button
 import android.nfc.NfcAdapter
 import com.dc.andagent.tools.NfcSession
 import com.dc.andagent.tools.NfcTool
+import com.dc.andagent.tools.NfcMifareTool
 import com.dc.andagent.tools.WebEmbedTool
 import android.content.Intent
 import android.content.pm.ApplicationInfo
@@ -239,6 +240,12 @@ class MainActivity : ComponentActivity() {
             "nfc_write_uri" to NfcTool(nfcSession, "nfc_write_uri"),
             "nfc_write_raw" to NfcTool(nfcSession, "nfc_write_raw"),
             "nfc_hce_status" to NfcTool(nfcSession, "nfc_hce_status"),
+            // R38: MIFARE Classic/Ultralight deep read-write (Android TagTechnology API).
+            "nfc_mf_dump" to NfcMifareTool(nfcSession, appContext, "nfc_mf_dump"),
+            "nfc_mf_write_block" to NfcMifareTool(nfcSession, appContext, "nfc_mf_write_block"),
+            "nfc_ul_read" to NfcMifareTool(nfcSession, appContext, "nfc_ul_read"),
+            "nfc_ul_write_page" to NfcMifareTool(nfcSession, appContext, "nfc_ul_write_page"),
+            "nfc_keys_manage" to NfcMifareTool(nfcSession, appContext, "nfc_keys_manage"),
             "web_embed" to WebEmbedTool(),
             "device_info" to DeviceInfoTool(appContext),
             "storage_scan" to StorageScanTool(appContext),

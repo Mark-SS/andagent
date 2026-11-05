@@ -9,6 +9,7 @@ val buildWeb by tasks.registering(Exec::class) {
     group = "build"
     description = "Build the assistant-ui WebView bundle with npm + Vite"
     workingDir = rootProject.file("web")
+    environment("NODE_OPTIONS", "--max-old-space-size=4096")
     // Keep the committed assets as a fallback when node/npm is unavailable.
     commandLine(
         "bash", "-c",
@@ -60,8 +61,8 @@ android {
         applicationId = "com.dc.andagent"
         minSdk = 26
         targetSdk = 28
-        versionCode = 21
-        versionName = "0.23.0"
+        versionCode = 22
+        versionName = "0.24.0"
     }
 
     buildFeatures {

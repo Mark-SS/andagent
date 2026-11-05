@@ -590,7 +590,6 @@ const STORAGE_MEDIA_GUIDE = [
   "结构化存储：用户要记账、清单或笔记库时，先用 db_create 建库，再用 db_exec 建表，后续用参数化 INSERT 和 db_query SELECT。",
   "记账表例：CREATE TABLE records(id INTEGER PRIMARY KEY, date TEXT, item TEXT, amount REAL)。",
   "输出呈现：给用户音频或视频文件时，用 ```audio 或 ```video 围栏，内容为 JSON，例如 {\"uri\":\"/本地路径/file.mp4\",\"title\":\"文件名\"}；uri 可为本地文件路径或 https。",
-  "娱乐：用户想玩红白机游戏时输出 ```nes 围栏（内容为 {} 或 {\"title\":\"游戏\"}），引导用户在卡片里选择自己的 .nes ROM；支持触屏、键盘、保存状态和读档。",
 ].join("\n");
 
 /** Always appended, so prompts saved before this fix cannot re-enable base64 fences. */
