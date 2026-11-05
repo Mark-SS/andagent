@@ -136,6 +136,8 @@ declare global {
   interface Window {
     AndroidBridge?: AndroidBridge;
     __andagent?: { receive: (payload: string) => void };
+    /** R39+：LLM 流式进行中标记——CodeBlock 据此延迟重围栏渲染防闪烁。 */
+    __andagentStreaming?: boolean;
   }
 }
 

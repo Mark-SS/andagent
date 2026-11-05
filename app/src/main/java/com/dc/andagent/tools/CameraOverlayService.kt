@@ -81,6 +81,22 @@ class CameraOverlayService : Service() {
             putExtra("camera", spec.camera); putExtra("width", spec.widthDp); putExtra("height", spec.heightDp)
             putExtra("x", spec.x); putExtra("y", spec.y)
         }
+
+        /**
+         * 无悬浮窗权限时的应用内模式：相机管线照常运行（Camera2 打开+preview
+         * session），但渲染目标不是 WindowManager 浮窗，而是宿主传入的应用内
+         * content FrameLayout（decorView 叠加）。inAppContent 非空时 onStartCommand
+         * 走应用内挂载分支。
+         */
+        @Volatile var inAppContent: FrameLayout? = null
+            private set
+        /** internal spec 由服务内部调用（同模块可见性），public 修饰仅为 Kotlin 对象成员默认。 */
+        internal fun startInApp(activity: android.app.Activity, content: FrameLayout, spec: CameraOverlaySpec) {
+            inAppContent = content
+            val ctx = activity.applicationContext
+            android.util.Log.i("CameraOverlay", "in-app overlay mode start (${spec.camera})")
+            ctx.startService(intent(ctx, spec))
+        }
     }
 
     private val main = Handler(Looper.getMainLooper())
@@ -117,8 +133,14 @@ class CameraOverlayService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == HIDE) { stopSelf(); return START_NOT_STICKY }
         if (!::cameraHandler.isInitialized) { stopSelf(); return START_NOT_STICKY }
-        if (!Settings.canDrawOverlays(this) || ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+        // 应用内模式：无悬浮窗权限也继续（渲染挂在宿主 content，不走 WindowManager）。
+        val inApp = inAppContent != null
+        if (!inApp && (!Settings.canDrawOverlays(this) || ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED)) {
             fail("悬浮窗或相机权限已撤销")
+            return START_NOT_STICKY
+        }
+        if (inApp && ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            fail("相机权限未授予")
             return START_NOT_STICKY
         }
         val requested = runCatching { CameraOverlaySpec(
@@ -129,10 +151,29 @@ class CameraOverlayService : Service() {
         val cameraChanged = requested.camera != spec.camera
         spec = requested
         runCatching {
-            if (root == null) createOverlay() else updateLayout()
+            if (inApp) {
+                // 应用内模式：TextureView 挂到宿主 content（decorView 叠加），不经 WindowManager。
+                val host = inAppContent ?: error("应用内宿主已丢失")
+                if (root == null) {
+                    root = buildInAppOverlay(host)
+                } else updateLayout()
+            } else {
+                if (root == null) createOverlay() else updateLayout()
+            }
             if (cameraChanged || device == null) openWhenReady()
         }.onFailure { fail("浮窗创建失败: ${it.message ?: it.javaClass.simpleName}") }
         return START_NOT_STICKY
+    }
+
+    /** 应用内模式：TextureView 挂到宿主 content（decorView 叠加），不经 WindowManager。 */
+    private fun buildInAppOverlay(host: FrameLayout): FrameLayout {
+        val frame = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
+        val preview = TextureView(this)
+        frame.addView(preview, FrameLayout.LayoutParams(-1, -1))
+        texture = preview
+        root = frame
+        // createOverlay 里 layout 的参数由 WindowManager 用；应用内模式无 updateLayout 意义。
+        return frame
     }
 
     private fun startCameraForeground() {
@@ -250,7 +291,7 @@ class CameraOverlayService : Service() {
     }
 }
 
-class CameraOverlayTool(private val context: Context, private val permissions: PermissionBroker, override val name: String) : Tool {
+class CameraOverlayTool(private val context: Context, private val permissions: PermissionBroker, override val name: String, private val activityProvider: () -> android.app.Activity? = { null }) : Tool {
     override val description = when (name) {
         "camera_overlay_show" -> "在其他应用上层打开原生相机预览浮窗；需悬浮窗和相机授权。"
         "camera_overlay_update" -> "调整相机预览浮窗位置、尺寸或前后摄。"
@@ -274,6 +315,19 @@ class CameraOverlayTool(private val context: Context, private val permissions: P
         if (overlayError != null) {
             runCatching { context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
                 .setData(android.net.Uri.fromParts("package", context.packageName, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            // 无悬浮窗权限：降级为应用内伪浮窗（decorView 叠加，仅本 app 内可见）。
+            // 相机预览仍真实渲染（TextureView 在 app 内），授权真实浮窗后可无缝升级。
+            val activity = activityProvider()
+            if (activity != null) {
+                com.dc.andagent.tools.InAppOverlayHost.show(
+                    activity, "相机预览（应用内浮窗·授权后升级系统级）", spec.widthDp, spec.heightDp, spec.x, spec.y,
+                ) { content ->
+                    // 相机渲染由 CameraOverlayService 的相机管线挂到 content；
+                    // 这里启动服务但让服务以应用内模式挂载（无 WindowManager）。
+                    CameraOverlayService.startInApp(activity, content, spec)
+                }
+                return "OK: 无悬浮窗权限，已以应用内伪浮窗显示相机预览（仅本应用内可见）。授权悬浮窗后自动升级系统级浮窗。"
+            }
             return overlayError
         }
         if (!permissions.ensure(listOf(Manifest.permission.CAMERA))) return "ERROR: 相机权限未授予"

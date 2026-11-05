@@ -24,6 +24,7 @@ import java.lang.reflect.Modifier
 /** One-way, explicitly scoped reflection. No caller-supplied class is loaded. */
 object ReflectPolicy {
     val classes: Map<String, Class<*>> = linkedMapOf(
+        // ---- v1 原有域 ----
         "android.media.AudioManager" to AudioManager::class.java,
         "android.media.MediaRouter" to MediaRouter::class.java,
         "android.hardware.camera2.CameraManager" to CameraManager::class.java,
@@ -40,24 +41,54 @@ object ReflectPolicy {
         "android.telephony.TelephonyManager" to TelephonyManager::class.java,
         "android.hardware.display.DisplayManager" to DisplayManager::class.java,
         "android.content.pm.PackageManager" to PackageManager::class.java,
+        // ---- v2 扩充域（只读/低危优先；写操作仍走专门工具）----
+        "android.os.Vibrator" to android.os.Vibrator::class.java,
+        "android.os.BatteryManager" to android.os.BatteryManager::class.java,
+        "android.app.AlarmManager" to android.app.AlarmManager::class.java,
+        "android.app.NotificationManager" to android.app.NotificationManager::class.java,
+        "android.app.usage.StorageStatsManager" to android.app.usage.StorageStatsManager::class.java,
+        "android.bluetooth.BluetoothManager" to android.bluetooth.BluetoothManager::class.java,
+        "android.net.wifi.WifiManager" to android.net.wifi.WifiManager::class.java,
+        "android.location.LocationManager" to android.location.LocationManager::class.java,
+        "android.media.MediaCodecList" to android.media.MediaCodecList::class.java,
+        "android.media.AudioDeviceInfo" to android.media.AudioDeviceInfo::class.java,
+        "android.telephony.SubscriptionManager" to android.telephony.SubscriptionManager::class.java,
+        "android.hardware.usb.UsbManager" to android.hardware.usb.UsbManager::class.java,
+        "android.content.res.Resources" to android.content.res.Resources::class.java,
+        "android.view.WindowManager" to android.view.WindowManager::class.java,
     )
     private val methods = mapOf(
-        "android.media.AudioManager" to setOf("getStreamVolume", "getStreamMaxVolume", "getStreamMinVolume", "getRingerMode", "isMusicActive", "getDevices", "isSpeakerphoneOn", "setStreamVolume"),
+        "android.media.AudioManager" to setOf("getStreamVolume", "getStreamMaxVolume", "getStreamMinVolume", "getRingerMode", "isMusicActive", "getDevices", "isSpeakerphoneOn", "setStreamVolume", "getParameters", "isBluetoothScoOn", "getMode", "isWiredHeadsetOn"),
         "android.media.MediaRouter" to setOf("getRouteCount", "getRouteAt", "getSelectedRoute"),
-        "android.hardware.camera2.CameraManager" to setOf("getCameraIdList", "getCameraCharacteristics", "setTorchMode"),
-        "android.hardware.camera2.CameraCharacteristics" to setOf("getKeys"),
-        "android.hardware.SensorManager" to setOf("getSensorList", "getDefaultSensor"),
-        "android.os.PowerManager" to setOf("isInteractive", "isPowerSaveMode", "isDeviceIdleMode"),
-        "android.app.ActivityManager" to setOf("getRunningAppProcesses", "getMemoryInfo"),
-        "android.net.ConnectivityManager" to setOf("getActiveNetwork", "getNetworkCapabilities", "getActiveNetworkInfo"),
+        "android.hardware.camera2.CameraManager" to setOf("getCameraIdList", "getCameraCharacteristics", "setTorchMode", "getConcurrentCameraIds"),
+        "android.hardware.camera2.CameraCharacteristics" to setOf("getKeys", "get"),
+        "android.hardware.SensorManager" to setOf("getSensorList", "getDefaultSensor", "getDynamicSensorList"),
+        "android.os.PowerManager" to setOf("isInteractive", "isPowerSaveMode", "isDeviceIdleMode", "isIgnoringBatteryOptimizations", "getBatteryRemainingTime", "isSustainedPerformanceModeSupported"),
+        "android.app.ActivityManager" to setOf("getRunningAppProcesses", "getMemoryInfo", "getDeviceConfigurationInfo", "isLowRamDevice", "isRunningInTestHarness"),
+        "android.net.ConnectivityManager" to setOf("getActiveNetwork", "getNetworkCapabilities", "getActiveNetworkInfo", "getAllNetworks", "getNetworkInfo"),
         "android.os.Build" to emptySet(),
-        "android.os.SystemClock" to setOf("elapsedRealtime", "uptimeMillis", "elapsedRealtimeNanos", "currentThreadTimeMillis"),
+        "android.os.SystemClock" to setOf("elapsedRealtime", "uptimeMillis", "elapsedRealtimeNanos", "currentThreadTimeMillis", "currentGnssTimeMillis"),
         "android.provider.Settings\$System" to setOf("getString", "getInt", "getLong", "getFloat"),
         "android.provider.Settings\$Global" to setOf("getString", "getInt", "getLong", "getFloat"),
         "android.provider.Settings\$Secure" to setOf("getString", "getInt", "getLong", "getFloat"),
-        "android.telephony.TelephonyManager" to setOf("getSimState", "getNetworkType", "getDataNetworkType", "getVoiceNetworkType", "getNetworkOperatorName", "getSimOperatorName", "isNetworkRoaming"),
+        "android.telephony.TelephonyManager" to setOf("getSimState", "getNetworkType", "getDataNetworkType", "getVoiceNetworkType", "getNetworkOperatorName", "getSimOperatorName", "isNetworkRoaming", "getPhoneType", "getSimCount", "isDataEnabled", "getNetworkSpecifier"),
         "android.hardware.display.DisplayManager" to setOf("getDisplays", "getDisplay"),
-        "android.content.pm.PackageManager" to setOf("getPackageInfo", "getInstalledPackages"),
+        "android.content.pm.PackageManager" to setOf("getPackageInfo", "getInstalledPackages", "getInstalledApplications", "getApplicationInfo", "getLaunchIntentForPackage", "canPackageQuery"),
+        // ---- v2 扩充域方法 ----
+        "android.os.Vibrator" to setOf("hasVibrator", "hasAmplitudeControl", "getDefaultVibrationEffect"),
+        "android.os.BatteryManager" to setOf("getIntProperty", "getLongProperty", "isCharging", "getChargeTimeRemaining"),
+        "android.app.AlarmManager" to setOf("getNextAlarmClock", "canScheduleExactAlarms"),
+        "android.app.NotificationManager" to setOf("getCurrentInterruptionFilter", "isNotificationPolicyAccessGranted", "getNotificationChannels", "areNotificationsEnabled"),
+        "android.app.usage.StorageStatsManager" to setOf("queryStatsForUid", "queryStatsForPackage"),
+        "android.bluetooth.BluetoothManager" to setOf("getAdapter", "getConnectedDevices"),
+        "android.net.wifi.WifiManager" to setOf("isWifiEnabled", "getConnectionInfo", "isStaApConcurrencySupported", "isEasyConnectSupported"),
+        "android.location.LocationManager" to setOf("isProviderEnabled", "getAllProviders", "getProvider", "isLocationEnabled", "getLastKnownLocation"),
+        "android.media.MediaCodecList" to setOf("getCodecInfos", "findDecoderForFormat"),
+        "android.media.AudioDeviceInfo" to setOf("getType", "getProductName", "isSource", "isSink"),
+        "android.telephony.SubscriptionManager" to setOf("getActiveSubscriptionInfoCount", "getActiveSubscriptionInfoList", "isNetworkRoaming"),
+        "android.hardware.usb.UsbManager" to setOf("getDeviceList", "hasPermission", "isUsbAccessorySupported"),
+        "android.content.res.Resources" to setOf("getDisplayMetrics", "getConfiguration"),
+        "android.view.WindowManager" to setOf("getDefaultDisplay"),
     )
     private val forbidden = Regex("(?i)(imei|meid|deviceid|subscriberid|serialnumber|^serial$|runtime|exec|^put|password|androidid|iccid|imsi|line1number|voicemailnumber)")
     fun classAllowed(name: String) = classes.keys.any { name.startsWith(it) && (name.length == it.length || name[it.length] == '$') } && classes.containsKey(name)
@@ -98,13 +129,21 @@ object ReflectAdapter {
     }
 }
 
+/** Settings keys that may be read through the reflection bridge. */
+private val SETTINGS_WHITELIST = setOf(
+    "screen_brightness", "screen_off_timeout", "accelerometer_rotation",
+    "sound_effects_enabled", "font_scale", "time_12_24", "airplane_mode_on",
+    "bluetooth_on", "ambient_light_sensor_enabled",
+)
+
 class RestrictedReflectExecutor(private val context: Context) {
     fun invoke(clazz: String, method: String, args: JsonArray = JsonArray(emptyList()), static: Boolean = false): String {
         ReflectPolicy.check(clazz, method)
         require(args.size <= 8) { "参数最多 8 个" }
         if (clazz.startsWith("android.provider.Settings\$")) {
-            require(args.none { it is JsonPrimitive && Regex("(?i)(android_id|imei|meid|subscriber_id|serial_number|device_id|advertising_id)").containsMatchIn(it.content) }) {
-                "设备唯一标识设置项不可通过反射读取"
+            val key = args.filterIsInstance<JsonPrimitive>().lastOrNull { it.isString }?.content
+            require(key != null && key in SETTINGS_WHITELIST) {
+                "Settings 键不在白名单：${key ?: "(缺少键参数)"}；允许：${SETTINGS_WHITELIST.joinToString()}"
             }
         }
         if (clazz == "android.app.ActivityManager" && method == "getMemoryInfo" && !static && args.isEmpty()) {

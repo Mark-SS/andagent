@@ -1,7 +1,7 @@
 package com.dc.andagent.tools
 
 import android.Manifest
-import android.content.ContentValues
+import android.content.ContentProviderOperation
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -296,37 +296,42 @@ class R35Tool(
             return openContactInsert(display, phone, email, note)
         }
         val resolver = context.contentResolver
-        val raw = ContentValues().apply {
-            put(ContactsContract.RawContacts.ACCOUNT_TYPE, null as String?)
-            put(ContactsContract.RawContacts.ACCOUNT_NAME, null as String?)
+        // Atomic write: RawContact + data rows in one applyBatch, so a mid-way
+        // failure leaves no half-built contact behind.
+        val batch = mutableListOf<ContentProviderOperation>()
+        batch += ContentProviderOperation.newInsert(ContactsContract.RawContacts.CONTENT_URI)
+            .withValue(ContactsContract.RawContacts.ACCOUNT_TYPE, null as String?)
+            .withValue(ContactsContract.RawContacts.ACCOUNT_NAME, null as String?)
+            .build()
+        fun dataInsert(mime: String, block: ContentProviderOperation.Builder.() -> Unit) {
+            batch += ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, 0)
+                .withValue(ContactsContract.Data.MIMETYPE, mime)
+                .apply(block)
+                .build()
         }
-        val rawUri = resolver.insert(ContactsContract.RawContacts.CONTENT_URI, raw)
-            ?: return "ERROR: 创建联系人失败（系统通讯录拒绝写入）"
+        dataInsert(ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE) {
+            withValue(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, display)
+        }
+        if (phone != null) dataInsert(ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE) {
+            withValue(ContactsContract.CommonDataKinds.Phone.NUMBER, phone)
+            withValue(ContactsContract.CommonDataKinds.Phone.TYPE, ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE)
+        }
+        if (email != null) dataInsert(ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE) {
+            withValue(ContactsContract.CommonDataKinds.Email.ADDRESS, email)
+            withValue(ContactsContract.CommonDataKinds.Email.TYPE, ContactsContract.CommonDataKinds.Email.TYPE_OTHER)
+        }
+        if (note != null) dataInsert(ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE) {
+            withValue(ContactsContract.CommonDataKinds.Note.NOTE, note)
+        }
+        val results = runCatching { resolver.applyBatch(ContactsContract.AUTHORITY, ArrayList(batch)) }
+            .getOrElse {
+                return "ERROR: 创建联系人失败（系统通讯录拒绝写入）：${it.message ?: it.javaClass.simpleName}"
+            }
+        val rawUri = results.firstOrNull()?.uri
+            ?: return "ERROR: 创建联系人失败（未返回联系人记录）"
         val rawId = rawUri.lastPathSegment?.toLongOrNull()
             ?: return "ERROR: 创建联系人失败（无法取得联系人 id）"
-
-        fun insertData(mime: String, block: ContentValues.() -> Unit) {
-            val values = ContentValues().apply {
-                put(ContactsContract.Data.RAW_CONTACT_ID, rawId)
-                put(ContactsContract.Data.MIMETYPE, mime)
-                block()
-            }
-            resolver.insert(ContactsContract.Data.CONTENT_URI, values)
-        }
-        insertData(ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE) {
-            put(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, display)
-        }
-        if (phone != null) insertData(ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE) {
-            put(ContactsContract.CommonDataKinds.Phone.NUMBER, phone)
-            put(ContactsContract.CommonDataKinds.Phone.TYPE, ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE)
-        }
-        if (email != null) insertData(ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE) {
-            put(ContactsContract.CommonDataKinds.Email.ADDRESS, email)
-            put(ContactsContract.CommonDataKinds.Email.TYPE, ContactsContract.CommonDataKinds.Email.TYPE_OTHER)
-        }
-        if (note != null) insertData(ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE) {
-            put(ContactsContract.CommonDataKinds.Note.NOTE, note)
-        }
         return buildJsonObject {
             put("written", true)
             put("name", display)
@@ -592,8 +597,8 @@ class R35Tool(
             }
             override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
         }
-        manager.registerListener(listener, sensor, 1_000_000 / hz, 0, handler)
         try {
+            manager.registerListener(listener, sensor, 1_000_000 / hz, 0, handler)
             delay(durationMs)
         } finally {
             manager.unregisterListener(listener)
@@ -652,7 +657,15 @@ class R35Tool(
             else "ERROR: 加密失败：${it.message ?: it.javaClass.simpleName}"
         }
         dest.parentFile?.let { if (!it.exists() && !it.mkdirs()) return "ERROR: 无法创建输出目录：${it.path}" }
-        dest.writeBytes(output)
+        // Write to a sibling temp file then rename, so a failure mid-write can
+        // never leave the target truncated.
+        val tmp = File(dest.parentFile, dest.name + ".tmp_" + System.currentTimeMillis())
+        try {
+            tmp.writeBytes(output)
+            if (!tmp.renameTo(dest)) tmp.copyTo(dest, overwrite = true)
+        } finally {
+            tmp.delete()
+        }
         return buildJsonObject {
             put("op", op)
             put("source", src.absolutePath)
@@ -663,8 +676,19 @@ class R35Tool(
     }
 
     private fun isSafePath(file: File): Boolean {
-        val blocked = listOf("/system", "/vendor", "/proc", "/dev", "/sys", "/apex", "/data/data")
-        val own = "/data/user/0/com.dc.andagent"
-        return blocked.none { file.path.startsWith(it) } || file.path.startsWith(own)
+        val blocked = listOf(
+            "/system", "/vendor", "/proc", "/dev", "/sys", "/apex",
+            "/data", "/mnt", "/etc", "/firmware", "/persist", "/odm", "/product",
+        )
+        val p = file.path.trimEnd('/')
+        if (file.path == "/") return false
+        val ownDirs = listOfNotNull(
+            runCatching { context.filesDir.canonicalPath }.getOrNull(),
+            runCatching { context.cacheDir.canonicalPath }.getOrNull(),
+            runCatching { context.getExternalFilesDir(null)?.canonicalPath }.getOrNull(),
+            runCatching { context.getDatabasePath("x").parentFile?.canonicalPath }.getOrNull(),
+        ).filter { it.isNotEmpty() }
+        if (ownDirs.any { p == it || p.startsWith(it + "/") }) return true
+        return blocked.none { p == it || p.startsWith("$it/") }
     }
 }

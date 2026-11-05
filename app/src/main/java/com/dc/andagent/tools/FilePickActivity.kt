@@ -17,9 +17,15 @@ class FilePickActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 重建路径（系统回收后用户返回）：旧请求已死，新发起的 startActivityForResult
+        // 不会再有结果回链——直接按取消结束，让工具线程走 timeout/取消语义。
+        if (savedInstanceState != null) {
+            finishWith(intent?.getStringExtra("requestId") ?: "", emptyList())
+            return
+        }
         val intent = getIntent()?.getParcelableExtra<Intent>("pickerIntent")
         if (intent == null) {
-            finishWith("requestId", emptyList())
+            finishWith(getIntent()?.getStringExtra("requestId") ?: "", emptyList())
             return
         }
         try {

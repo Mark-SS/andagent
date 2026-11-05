@@ -1,6 +1,7 @@
 package com.dc.andagent.tools
 
 import android.Manifest
+import android.app.Activity
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -76,6 +77,7 @@ class OpenFolderTool(private val context: Context) : Tool {
 class FilePickTool(
     private val context: Context,
     private val resultBridge: FilePickResultBridge,
+    private val activityProvider: () -> Activity? = { null },
 ) : Tool {
     override val name = "file_pick"
     override val description =
@@ -102,9 +104,19 @@ class FilePickTool(
         val pickIntent = Intent(context, FilePickActivity::class.java).apply {
             putExtra("requestId", id)
             putExtra("pickerIntent", intent)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            // NEW_TASK 把 trampoline 放进独立任务栈——部分 ROM 从独立栈的
+            // startActivityForResult 回来 resultCode 恒 CANCELED。单任务栈顶
+            // 启动（无 NEW_TASK）保证结果回链完整；context 是 app 上下文时仍需
+            // NEW_TASK，此时由 Activity 重建防护兜底。
         }
-        context.startActivity(pickIntent)
+        val launchContext: Context = activityProvider() ?: context
+        if (launchContext is Activity) {
+            // 从 Activity 上下文发起：同栈启动，结果回链最可靠。
+            pickIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        } else {
+            pickIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        launchContext.startActivity(pickIntent)
 
         val ok = latch.await(120, java.util.concurrent.TimeUnit.SECONDS)
         FilePickResultBridge.pending.remove(id)

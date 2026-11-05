@@ -23,6 +23,19 @@ function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighligh
   const kind = (language ?? "").toLowerCase();
   const isChart = ["chart", "photos", "image", "kv", "table", "json-tree", "geo", "audio", "video", "camera", "widget", "canvas", "shader", "terminal", "mermaid", "svg"].includes(kind);
 
+  // 流式防护：围栏渲染组件（chart/mermaid/...）在代码流式到达时反复重挂载会
+  // 闪烁。assistant-ui 不把「生成中」状态传进 markdown 组件，这里用
+  // window.__andagentStreaming（App.tsx 在流开始/结束时置位）判断：流式中
+  // 重围栏只渲染占位，流结束全量重渲染为真正卡片。
+  const [streaming, setStreaming] = useState(() => !!(window as AnyWindow).__andagentStreaming);
+  useEffect(() => {
+    const onFlag = (e: Event) => setStreaming((e as CustomEvent<boolean>).detail);
+    window.addEventListener("andagent-streaming", onFlag as EventListener);
+    return () => window.removeEventListener("andagent-streaming", onFlag as EventListener);
+  }, []);
+  // 未闭合的围栏（代码里仍含流式残片特征）也视作生成中。
+  const liveFence = streaming && isChart;
+
   const html = useMemo(() => {
     if (isChart) return "";
     try {
@@ -34,6 +47,15 @@ function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighligh
       return code.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]!);
     }
   }, [code, language, isChart]);
+
+  // 流式中重围栏只渲染占位（防闪烁）；流结束后走正常卡片分支。
+  if (liveFence) {
+    return (
+      <div className="fence-placeholder" data-kind={kind}>
+        <span className="fence-placeholder-label">{kind} 生成中…</span>
+      </div>
+    );
+  }
 
   // ```chart fences carry ECharts option JSON, not source code.
   if (kind === "chart") return <ChartCard code={code} />;

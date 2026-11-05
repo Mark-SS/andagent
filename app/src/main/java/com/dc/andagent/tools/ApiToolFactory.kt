@@ -65,6 +65,8 @@ class GenericApiTool(private val spec: ApiSpec, private val executor: Restricted
         }
     }, spec.params.map { it.name })
     override suspend fun execute(args: JsonObject): String {
+        if (spec.destructive && args.boolArg("confirm") != true)
+            throw IllegalArgumentException("此操作有状态副作用，请显式传 confirm=true")
         if (spec.permission != null && context.checkSelfPermission(spec.permission) != PackageManager.PERMISSION_GRANTED) {
             throw SecurityException("缺少权限：${spec.permission}")
         }

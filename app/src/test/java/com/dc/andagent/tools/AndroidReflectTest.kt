@@ -52,11 +52,16 @@ class AndroidReflectTest {
         val result = executor.invoke("android.provider.Settings\$System", "getString", JsonArray(listOf(JsonPrimitive("screen_brightness"))), true)
         assertTrue(result == "null" || result.startsWith("\""))
     }
-    @Test fun rejectsUniqueIdentifierSettingKey() {
+    @Test fun rejectsNonWhitelistedSettingKey() {
         val executor = RestrictedReflectExecutor(RuntimeEnvironment.getApplication())
         assertThrows(IllegalArgumentException::class.java) {
-            executor.invoke("android.provider.Settings\$Secure", "getString", JsonArray(listOf(JsonPrimitive("android_id"))), true)
+            executor.invoke("android.provider.Settings\$Secure", "getString", JsonArray(listOf(JsonPrimitive("some_random_key"))), true)
         }
+    }
+    @Test fun acceptsWhitelistedSettingKey() {
+        val executor = RestrictedReflectExecutor(RuntimeEnvironment.getApplication())
+        val result = executor.invoke("android.provider.Settings\$Secure", "getString", JsonArray(listOf(JsonPrimitive("screen_brightness"))), true)
+        assertTrue(result == "null" || result.startsWith("\""))
     }
     private fun spec(name: String = "api_test", method: String = "getStreamVolume") = buildJsonObject {
         put("name", name); put("domain", "audio"); put("description", "test")

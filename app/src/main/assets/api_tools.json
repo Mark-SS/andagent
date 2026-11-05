@@ -127,7 +127,7 @@
       }
     ],
     "permission": null,
-    "destructive": false,
+    "destructive": true,
     "static": false
   },
   {
@@ -207,7 +207,7 @@
       {
         "name": "key",
         "type": "string",
-        "description": "传入 screen_brightness；也可查询其他 Settings.System 键"
+        "description": "传入 screen_brightness（反射桥仅放行白名单键）"
       }
     ],
     "permission": null,
@@ -225,7 +225,7 @@
       {
         "name": "key",
         "type": "string",
-        "description": "传入 screen_off_timeout；也可查询其他 Settings.System 键"
+        "description": "传入 screen_off_timeout（反射桥仅放行白名单键）"
       }
     ],
     "permission": null,
@@ -243,7 +243,7 @@
       {
         "name": "key",
         "type": "string",
-        "description": "传入 accelerometer_rotation；也可查询其他 Settings.System 键"
+        "description": "传入 accelerometer_rotation（反射桥仅放行白名单键）"
       }
     ],
     "permission": null,
@@ -261,7 +261,7 @@
       {
         "name": "key",
         "type": "string",
-        "description": "传入 sound_effects_enabled；也可查询其他 Settings.System 键"
+        "description": "传入 sound_effects_enabled（反射桥仅放行白名单键）"
       }
     ],
     "permission": null,
