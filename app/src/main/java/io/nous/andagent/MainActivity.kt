@@ -116,6 +116,7 @@ import io.nous.andagent.tools.EMAIL_TOOLS
 import io.nous.andagent.tools.StoreTool
 import io.nous.andagent.tools.STORE_TOOLS
 import io.nous.andagent.tools.DevToolsTool
+import io.nous.andagent.tools.WebSearchTool
 import io.nous.andagent.tools.DEVTOOLS_TOOLS
 import io.nous.andagent.tools.WifiInfoTool
 import io.nous.andagent.ui.SettingsStore
@@ -327,6 +328,7 @@ class MainActivity : ComponentActivity() {
         tools.putAll(EMAIL_TOOLS.associateWith { EmailTool(appContext, it) })
         tools.putAll(STORE_TOOLS.associateWith { StoreTool(shizuku, it) })
         tools.putAll(DEVTOOLS_TOOLS.associateWith { DevToolsTool(appContext, it) })
+        tools.putAll(listOf("web_search", "web_read").associateWith { WebSearchTool(it) })
 
         WidgetToolRuntime.attach(tools, quickJsEngine)
 

@@ -6,6 +6,8 @@ import type { Tool as PiTool } from "@mariozechner/pi-ai";
  * FILE_OPS_TOOLS / ZIP_TOOLS / EMAIL_TOOLS / STORE_TOOLS plus NFC/Termux).
  */
 export const EXTRA_TOOL_DEFS = [
+  { name: "web_search", description: "无需 API key 搜索互联网。Bing 网页搜索为主，DuckDuckGo 即时答案补充；返回标题、链接、摘要及来源。时效性问题先搜索。", parameters: { type: "object", properties: { query: { type: "string" }, limit: { type: "integer" }, mkt: { type: "string" } }, required: ["query"] } },
+  { name: "web_read", description: "读取 HTTPS 网页正文，去除脚本、样式和标签；最多返回 max_chars 字符。", parameters: { type: "object", properties: { url: { type: "string" }, max_chars: { type: "integer" } }, required: ["url"] } },
   { name: "nfc_write_raw", description: "写入自定义 NDEF 记录：kind=mime/external/raw；payload 支持 base64: 或 hex: 前缀；mime 用 type 指定 MIME，external 用 domain:type。会覆盖卡片原内容，写入前先告知用户。", parameters: { type: "object", properties: { kind: { type: "string" }, payload: { type: "string" }, type: { type: "string" } }, required: ["payload"] } },
   { name: "nfc_hce_status", description: "查询设备是否支持 HCE 卡模拟及 AndAgent 注册的 AID。", parameters: { type: "object", properties: {}, required: [] } },
   { name: "apt_status", description: "检测内嵌 Termux 的 apt/dpkg 是否可用；ELF 编译期 PREFIX 未重定位时明确标记不可用。", parameters: { type: "object", properties: {}, required: [] } },
