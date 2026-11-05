@@ -61,8 +61,8 @@ android {
         applicationId = "com.dc.andagent"
         minSdk = 26
         targetSdk = 28
-        versionCode = 26
-        versionName = "0.24.4"
+        versionCode = 27
+        versionName = "0.24.5"
     }
 
     buildFeatures {
@@ -117,4 +117,9 @@ dependencies {
     // Same 16 KB page-aligned QuickJS Android artifact used by widget-chat-android.
     implementation(files("libs/quickjs-wrapper-android-3.2.0.jar"))
     implementation("wang.harlon.quickjs:wrapper-java:3.2.0")
+
+    // R35: pure-Java QR encode/decode (ZXing core, Apache-2.0, vendored jar).
+    // Chosen over ML Kit barcode scanning: no GMS, no Play Services model
+    // download, zero permissions, fully offline. See app/libs/README.md.
+    implementation(files("libs/zxing-core-3.5.3.jar"))
 }

@@ -80,4 +80,5 @@ web 化重构（pi+assistant-ui）/ 日历闹钟剪贴板通知 / ECharts / Shiz
 | R26 | 网络搜索：web_search（Bing HTML 主引擎 + DDG IA 摘要，零 key）+ web_read 网页正文；Bing fixture 单测 | ✅ +2 |
 | R28 | MediaProjection 截屏/录屏：consent trampoline + FGS(mediaProjection) + 路由投影→Shizuku→授权弹窗；screen_capture/screen_record/screen_record_stop 全接 `ensureCaptureChannel`；ProjectionRoutingTest 6 用例 | ✅ 16a00a5 + 收口提交 |
 | R29 | Mermaid+KaTeX 对话流渲染（MermaidCard 错误卡片 + remark-math/rehype-katex，vitest 2 用例）+ dbgui 移动端适配（@media≤719px 触控布局） | ✅ 16a00a5 + 收口提交 |
+| R35 | 能力补口八件套：联系人新建 / 通话记录只读 / 应用卸载禁用 / APK 提取 / 二维码生成识别 / 传感器录制 / 文件加密。ZXing core 3.5.3 纯 Java jar 本地 vendored（零权限、全离线、无 GMS）；file_encrypt 用 AES-256-GCM + PBKDF2；app_uninstall 包名注入守卫 + 系统组件/自身保护名单 | ✅ +8 | R35Tools.kt；R35CodecTest 覆盖 AppGuard/SensorCsv/QrCodec roundtrip/FileCrypto roundtrip；web Schema 已对齐；构建绿，真机未测 |
 |  | **当前累计 139 工具（v0.22.0，R28 MediaProjection 收口）** |  |
