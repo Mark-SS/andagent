@@ -75,12 +75,19 @@ class AgentBridge(
     private val projectionStatusJson: () -> String = { "{\"channel\":\"none\",\"ready\":false}" },
     private val projectionRequest: () -> String = { "{\"requested\":false,\"message\":\"屏幕捕获授权不可用\"}" },
     private val projectionStop: () -> String = { "ERROR: 屏幕捕获通道不可用" },
+    // R39: 主题切换——WebView 把解析后的深浅色回报给原生层（背景/状态栏同步）。
+    private val themeChange: (Boolean) -> Unit = {},
     private val embeddedWebviewOpen: (String) -> String = { "ERROR: 浏览器不可用" },
     private val dbGuiOpen: (String) -> String = { "ERROR: 数据库浏览器不可用" },
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val toolExecutor = Executors.newFixedThreadPool(2)
     private val calls = ConcurrentHashMap<String, Call>()
+    // R39: 工具任务注册表——cancelTool(reqId) 中断正在执行的工具调用。
+    private val toolFutures = ConcurrentHashMap<String, java.util.concurrent.Future<*>>()
+    // R39: 最近一次 shell_exec 的完整结果（终端卡片「查看 agent 输出」用）。
+    @Volatile
+    private var lastShellExecResult: String = ""
 
     @Volatile
     private var released = false
@@ -527,9 +534,33 @@ class AgentBridge(
         }
     }
 
+    /** R39: WebView 回报解析后的主题（true=夜间），原生侧同步背景与系统栏。 */
+    @JavascriptInterface
+    fun reportTheme(isDark: Boolean) {
+        runCatching { themeChange(isDark) }
+    }
+
+    /** R39: 最近一次 shell_exec 的完整结果；空串表示尚未执行过。 */
+    @JavascriptInterface
+    fun lastShellResult(): String = lastShellExecResult
+
+    /**
+     * R39: 中断正在执行的工具调用。future.cancel(true) 打断工具线程——
+     * TermuxSession 的 timedWait / TermuxAppBackend 的 latch.await 等阻塞点
+     * 会立即抛 InterruptedException；但已在后台运行的子进程与 QuickJS
+     * 原生循环不受影响（详见战报限制节）。
+     */
+    @JavascriptInterface
+    fun cancelTool(reqId: String) {
+        val future = toolFutures.remove(reqId) ?: return
+        if (future.cancel(true)) {
+            emitToolResult(reqId, false, "ERROR: 已被用户中断")
+        }
+    }
+
     @JavascriptInterface
     fun toolExec(reqId: String, name: String, argsJson: String) {
-        toolExecutor.execute {
+        val future = toolExecutor.submit {
             if (name == "widget_save_and_pin") {
                 val result = runCatching {
                     val args = JsonFixer.parseObject(argsJson)
@@ -539,23 +570,38 @@ class AgentBridge(
                     "已保存组件 $id。${WidgetApi.pin(context, id)}"
                 }.getOrElse { "ERROR: ${it.message ?: it.javaClass.simpleName}" }
                 emitToolResult(reqId, !result.startsWith("ERROR:"), result)
-                return@execute
+                return@submit
             }
             val tool = tools[name]
             if (tool == null) {
                 emitToolResult(reqId, false, "ERROR: unknown tool '$name'")
-                return@execute
+                return@submit
             }
             val args = runCatching {
                 JsonFixer.parseObject(argsJson.ifBlank { "{}" })
             }.getOrElse {
                 emitToolResult(reqId, false, "ERROR: bad arguments JSON: ${it.message}")
-                return@execute
+                return@submit
             }
             val result = runCatching { runBlocking { tool.execute(args) } }
+                .recoverCatching { e ->
+                    if (e is java.util.concurrent.CancellationException ||
+                        e is InterruptedException
+                    ) {
+                        "ERROR: 已被用户中断"
+                    } else {
+                        throw e
+                    }
+                }
                 .getOrElse { "ERROR: ${it.message ?: it.javaClass.simpleName}" }
+            if (name == "shell_exec") {
+                lastShellExecResult = (args["cmd"]?.jsonPrimitive?.contentOrNull?.let { "$ $it\n" } ?: "") + result
+            }
             emitToolResult(reqId, !result.startsWith("ERROR:"), mediaPreviewResult(name, result))
         }
+        toolFutures[reqId] = future
+        // 先注册再查完成态，堵住「任务瞬间跑完 + cancel 永远 miss」的窗口。
+        if (future.isDone) toolFutures.remove(reqId, future)
     }
 
     private fun mediaPreviewResult(toolName: String, raw: String): String {
@@ -694,6 +740,7 @@ class AgentBridge(
         released = true
         calls.values.forEach { it.cancel() }
         calls.clear()
+        toolFutures.clear()
         toolExecutor.shutdownNow()
         http.dispatcher.executorService.shutdown()
         http.connectionPool.evictAll()

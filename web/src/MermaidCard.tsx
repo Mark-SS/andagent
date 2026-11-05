@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useId } from "react";
+import { resolvedTheme } from "./theme";
 
 type MermaidModule = typeof import("mermaid");
 
@@ -7,10 +8,7 @@ let mermaidPromise: Promise<MermaidModule> | null = null;
 /** Lazy-load mermaid on first use so it stays out of the main bundle. */
 function loadMermaid(): Promise<MermaidModule> {
   if (!mermaidPromise) {
-    mermaidPromise = import("mermaid").then((mod) => {
-      mod.default.initialize({ startOnLoad: false, theme: "dark", securityLevel: "strict" });
-      return mod;
-    });
+    mermaidPromise = import("mermaid").then((mod) => mod);
   }
   return mermaidPromise;
 }
@@ -19,14 +17,22 @@ function loadMermaid(): Promise<MermaidModule> {
  * ```mermaid fenced code blocks: parse + render to SVG via mermaid.render.
  * Parse/render failures show an error card with the original message so the
  * agent can read it back and fix the diagram in the next turn.
+ * Re-renders with the matching mermaid theme when the app theme changes.
  */
 export function MermaidCard({ code }: { code: string }) {
   const [svg, setSvg] = useState("");
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState(false);
+  const [themeTick, setThemeTick] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const reactId = useId().replace(/[^a-zA-Z0-9]/g, "");
   const renderSeq = useRef(0);
+
+  useEffect(() => {
+    const listener = () => setThemeTick((t) => t + 1);
+    window.addEventListener("andagent:themechange", listener);
+    return () => window.removeEventListener("andagent:themechange", listener);
+  }, []);
 
   useEffect(() => {
     const seq = ++renderSeq.current;
@@ -34,6 +40,12 @@ export function MermaidCard({ code }: { code: string }) {
     (async () => {
       try {
         const { default: mermaid } = await loadMermaid();
+        // Re-initialize per render: the theme follows the app theme.
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: resolvedTheme() === "light" ? "default" : "dark",
+          securityLevel: "strict",
+        });
         const { svg: rendered } = await mermaid.render(`mermaid-${reactId}-${seq}`, code);
         if (!cancelled && seq === renderSeq.current) {
           setSvg(rendered);
@@ -49,7 +61,7 @@ export function MermaidCard({ code }: { code: string }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [code, reactId]);
+  }, [code, reactId, themeTick]);
 
   if (error) {
     return <div className="mermaid-card mermaid-error">

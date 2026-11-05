@@ -10,6 +10,7 @@ import hljs from "highlight.js";
 import { ChartCard } from "./ChartCard";
 import { MermaidCard } from "./MermaidCard";
 import { MediaCard } from "./MediaCard";
+import { SvgCard } from "./SvgCard";
 import { PhotosCard, ImageCard, KvCard, TableCard, JsonTreeCard, GeoCard } from "./RichCards";
 import { CameraCard } from "./CameraCard";
 import { TerminalCard } from "./TerminalCard";
@@ -20,7 +21,7 @@ import { WidgetPreviewCard } from "./WidgetPreviewCard";
 function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighlighterProps) {
   const [copied, setCopied] = useState(false);
   const kind = (language ?? "").toLowerCase();
-  const isChart = ["chart", "photos", "image", "kv", "table", "json-tree", "geo", "audio", "video", "camera", "widget", "canvas", "shader", "terminal", "mermaid"].includes(kind);
+  const isChart = ["chart", "photos", "image", "kv", "table", "json-tree", "geo", "audio", "video", "camera", "widget", "canvas", "shader", "terminal", "mermaid", "svg"].includes(kind);
 
   const html = useMemo(() => {
     if (isChart) return "";
@@ -37,6 +38,7 @@ function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighligh
   // ```chart fences carry ECharts option JSON, not source code.
   if (kind === "chart") return <ChartCard code={code} />;
   if (kind === "mermaid") return <MermaidCard code={code} />;
+  if (kind === "svg") return <SvgCard code={code} />;
   if (kind === "photos") return <PhotosCard code={code} />;
   if (kind === "image") return <ImageCard code={code} />;
   if (kind === "kv") return <KvCard code={code} />;

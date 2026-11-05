@@ -17,6 +17,10 @@ export const EXTRA_TOOL_DEFS = [
   { name: "nfc_keys_manage", description: "管理 MIFARE Classic 自定义 key 库（持久化，dump 时自动并入尝试集）。action=list（默认）列内置默认集与自定义集；add/remove 配 key_hex（12 位 hex）；import 配 keys_text 导入 MIFARE Classic Tool(.keys/.dump) 或 Proxmark3 字典文本。内置默认 key 不可移除。合规：仅自有卡/授权测试。", parameters: { type: "object", properties: { action: { type: "string" }, key_hex: { type: "string" }, keys_text: { type: "string" } }, required: [] } },
   { name: "apt_status", description: "检测内嵌 Termux 的 apt/dpkg 是否可用；ELF 编译期 PREFIX 未重定位时明确标记不可用。", parameters: { type: "object", properties: {}, required: [] } },
 
+  { name: "clipboard_write_rich", description: "写入富内容到系统剪贴板：kind=text|html|uri|image。html 传 HTML 字符串（Android 10 以下降级纯文本）；uri 传链接；image 传图片 base64（png/jpg），粘贴到聊天/文档可直接插入图片。", parameters: { type: "object", properties: { kind: { type: "string", enum: ["text", "html", "uri", "image"] }, data: { type: "string" }, label: { type: "string", description: "可选：剪贴板标签" } }, required: ["kind", "data"] } },
+  { name: "clipboard_read_rich", description: "读取剪贴板全部内容类型：MIME 列表、纯文本、HTML、URI（粘贴的图片返回 content:// 与 MIME/大小）与预览。", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "clipboard_clear", description: "清空系统剪贴板。Android 10 起仅默认输入法可真清空；前台应用自动用空 clip 覆盖替代，原内容不可再粘贴。", parameters: { type: "object", properties: {}, required: [] } },
+
   { name: "telephony_info", description: "读取移动网络状态：运营商、SIM 状态、网络类型、漫游、国家码；不读取 IMEI/手机号。", parameters: { type: "object", properties: {}, required: [] } },
   { name: "data_usage", description: "读取设备累计流量：总/移动网络/本应用收发字节数。", parameters: { type: "object", properties: {}, required: [] } },
   { name: "audio_state", description: "读取铃声模式、各音量流当前值与最大值、是否播放音乐。", parameters: { type: "object", properties: {}, required: [] } },

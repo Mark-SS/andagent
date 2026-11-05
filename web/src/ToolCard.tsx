@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ToolCallMessagePartProps } from "@assistant-ui/react";
+import { cancelToolByCallId } from "./bridge";
 import { WebViewCard } from "./WebViewCard";
 import { MediaCard, mediaFromResult } from "./MediaCard";
 import { PhotosCard } from "./RichCards";
@@ -192,6 +193,7 @@ export function ToolCard(props: ToolCallMessagePartProps) {
 
   const meta = META[props.toolName] ?? { label: props.toolName, icon: "⚙️" };
   const raw = String(props.result ?? "");
+  const interrupted = raw.includes("已被用户中断");
   const formatted = useMemo(() => formatResult(raw), [raw]);
   const lines = formatted.text.split("\n");
   const canFold = lines.length > COLLAPSE_LINES;
@@ -230,6 +232,8 @@ export function ToolCard(props: ToolCallMessagePartProps) {
             <>
               <span className="dot-pulse" /> 执行中
             </>
+          ) : interrupted ? (
+            "已被用户中断"
           ) : failed ? (
             "失败"
           ) : (
@@ -244,6 +248,18 @@ export function ToolCard(props: ToolCallMessagePartProps) {
       </button>
 
       {running && notice && <div className="tool-confirm">{notice}</div>}
+
+      {running && (
+        <div className="tool-cancel-row">
+          <button
+            type="button"
+            className="tool-stop"
+            onClick={() => cancelToolByCallId(props.toolCallId)}
+          >
+            停止
+          </button>
+        </div>
+      )}
 
       {written && !failed && !running && (
         <div className="tool-confirm">

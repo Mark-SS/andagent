@@ -35,7 +35,7 @@ export const DEFAULT_SYSTEM_PROMPT = [
   "- 设备状态：device_info / battery_detail / sensor_list / sensor_read / location_get / location_status / steps_today / steps_history",
   "- 文件与相册：storage_scan / album_stats / file_download / file_search / file_read / file_write / file_list / file_pick / image_save / image_info / image_preview / image_edit / image_collage / open_folder",
   "- 日历与提醒：calendar_list / calendar_events / calendar_add / calendar_delete / alarm_set / timer_set",
-  "- 通讯：phone_call / sms_send / clipboard_read / clipboard_write / notify_send / contact 查询暂不支持",
+  "- 通讯：phone_call / sms_send / clipboard_read / clipboard_write / clipboard_write_rich（HTML/URI/图片）/ clipboard_read_rich（全类型+预览）/ clipboard_clear / notify_send / contact 查询暂不支持",
   "- 网络与连接：wifi_info / wifi_toggle / wifi_connect / wifi_connect_strong / wifi_saved_list / wifi_forget / bt_scan / bt_paired_list / bt_connect / bt_connect_direct / bt_toggle",
   "- 屏幕与自动化：screen_record / screen_record_stop / screen_record_list / screen_record_h264 / screen_capture / input_tap / input_swipe / input_text",
   "- 脚本与包管理：termux_setup / shell_exec / pkg_install / js_eval / script_check / json_fix（JS 脚本可用 andagent.tool 调用设备工具）",
@@ -122,6 +122,9 @@ interface AndroidBridge {
   projectionStatus(): string;
   projectionRequest(): string;
   projectionStop(): string;
+  reportTheme?(isDark: boolean): void;
+  cancelTool?(reqId: string): void;
+  lastShellResult?(): string;
 }
 
 declare global {
@@ -182,13 +185,30 @@ type ToolPending = {
 };
 
 const toolPending = new Map<string, ToolPending>();
+const toolReqByCallId = new Map<string, string>();
 let seq = 0;
+
+/** R39: 中断一个正在执行的工具调用（通过模型侧 toolCallId 找到原生 reqId）。 */
+export function cancelToolByCallId(callId: string): void {
+  const reqId = toolReqByCallId.get(callId);
+  if (!reqId) return;
+  toolReqByCallId.delete(callId);
+  try {
+    bridge()?.cancelTool?.(reqId);
+  } catch {
+    /* bridge method missing on older APKs */
+  }
+}
 
 /**
  * Execute a device tool in Kotlin. The bridge call is async; the result arrives
  * through window.__andagent.receive({type:"tool.result", ...}).
  */
-export function execTool(name: string, args: unknown): Promise<{ ok: boolean; result: string }> {
+export function execTool(
+  name: string,
+  args: unknown,
+  callId?: string,
+): Promise<{ ok: boolean; result: string }> {
   if (name === "widget_generate") {
     return Promise.resolve({ ok: true, result: "请根据 spec_description 生成符合 WidgetSpec v2 的完整 JSON，然后调用 widget_save_and_pin({spec_json: JSON.stringify(spec)})。" });
   }
@@ -200,6 +220,7 @@ export function execTool(name: string, args: unknown): Promise<{ ok: boolean; re
     });
   }
   const id = `tool-${Date.now()}-${++seq}`;
+  if (callId) toolReqByCallId.set(callId, id);
   return new Promise((resolve) => {
     const timer = window.setTimeout(() => {
       toolPending.delete(id);
@@ -543,6 +564,7 @@ function handleEvent(payload: string): void {
     if (!pending) return;
     window.clearTimeout(pending.timer);
     toolPending.delete(id);
+    for (const [callId, reqId] of toolReqByCallId) if (reqId === id) toolReqByCallId.delete(callId);
     pending.resolve({
       ok: !!event.ok,
       result: typeof event.result === "string" ? event.result : String(event.result ?? ""),
@@ -774,6 +796,12 @@ export function termuxTerminalWrite(input: string): string {
 /** 增量输出；空串 = 无新增（会话未启动也返回空，不算错误）。 */
 export function termuxTerminalPoll(): string {
   try { return bridge()?.termuxTerminalPoll(`tty-${Date.now()}-${++seq}`) ?? ""; }
+  catch { return ""; }
+}
+
+/** R39: 最近一次 shell_exec 的完整结果（终端卡片「查看 agent 输出」用）。 */
+export function lastShellResult(): string {
+  try { return bridge()?.lastShellResult?.() ?? ""; }
   catch { return ""; }
 }
 

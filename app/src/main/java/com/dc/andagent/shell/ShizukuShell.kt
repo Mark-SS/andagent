@@ -145,12 +145,29 @@ class ShizukuShell(private val context: Context) {
                 } else {
                     Shizuku.requestPermission(REQUEST_CODE)
                 }
-            }.onFailure { lastRequestError.set(it.message ?: it.javaClass.simpleName) }
+            }.onFailure { lastRequestError.set(readableRequestError(it)) }
         }
         return buildJsonObject {
             put("requested", true)
             put("message", "已发起 Shizuku 授权请求，请在弹窗中点击允许")
         }.toString()
+    }
+
+    /**
+     * R39: 把请求授权失败的底层异常映射为可读中文。Shizuku binder 报错常带
+     * 无意义的 Java 底层串（如 "stack size ..."），直接透传会让用户看不懂。
+     */
+    private fun readableRequestError(t: Throwable): String = when (t) {
+        is java.io.IOException ->
+            "与 Shizuku 服务通信失败（I/O 异常）。请确认 Shizuku 正在运行，必要时重启 Shizuku 服务后重试"
+        is IllegalArgumentException ->
+            "Shizuku 授权请求参数无效（服务版本可能不兼容）。请升级 Shizuku 到最新版本后重试"
+        is SecurityException ->
+            "Shizuku 拒绝了本次授权请求。请在 Shizuku App 中确认本应用未被加入拒绝列表"
+        is IllegalStateException ->
+            "Shizuku 服务状态异常。请打开 Shizuku App 确认服务已启动，再回到本页重试"
+        else ->
+            "授权失败（${t.javaClass.simpleName}）。请查看 Shizuku App 日志定位具体原因"
     }
 
     /* ---------------------------- execution ---------------------------- */

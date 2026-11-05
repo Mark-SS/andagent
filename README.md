@@ -7,7 +7,7 @@ An on-device AI assistant for Android. It calls device capabilities directly fro
 - **Frontend**: `web/` — React 19 + `@assistant-ui/react` + `@mariozechner/pi-ai`, bundled with Vite and shipped inside the APK for offline use.
 - **Native layer**: `app/` — a Kotlin full-screen WebView shell, the tool registry, and permission / system-API bridging.
 - **Model**: any OpenAI-compatible endpoint. Requests are proxied through native OkHttp (to bypass WebView CORS) and streamed back over SSE; a single turn allows up to 200 tool rounds.
-- **Version**: `0.16.0` (versionCode 14), `applicationId = com.dc.andagent`. `app/build.gradle.kts` is authoritative.
+- **Version**: `0.24.2` (versionCode 24), `applicationId = com.dc.andagent`. `app/build.gradle.kts` is authoritative.
 
 ## How it works
 
@@ -22,24 +22,30 @@ The WebView loads `https://appassets.androidplatform.net/assets/web/index.html` 
 
 ## Capabilities
 
-`MainActivity.kt` registers 88 tools (v0.16.0). Each implements the `Tool` interface in `tools/Tool.kt` (JSON Schema parameters plus a `destructive` marker):
+`MainActivity.kt` registers 162 tools (v0.24.2). Each implements the `Tool` interface in `tools/Tool.kt` (JSON Schema parameters plus a `destructive` marker):
 
 | Domain | Count | Representative tools |
 |---|---|---|
-| Device / system info | 10 | `get_time`, `device_info`, `battery_detail`, `clipboard_read/write`, `notify_send`, `app_list`, `open_uri` |
-| Files / media store / image editing | 16 | `file_list/read/write/search/download`, `album_photos`, `image_edit/preview/collage`, `image_save` |
-| Calendar / alarms / timers | 6 | `calendar_list/events/add/delete`, `alarm_set`, `timer_set` |
-| Calls / location / recording | 5 | `phone_call`, `sms_send`, `location_get`, `mic_record` |
-| Bluetooth / Wi-Fi | 10 | `bt_scan/connect/toggle`, `wifi_connect/saved_list/forget/toggle` |
+| Device / system info | 31 | `get_time`, `device_info`, `battery_detail`, `clipboard_read/write`, `notify_send`, `app_list`, `open_uri`, `telephony_info`, `audio_state`, `torch`, `hotspot` |
+| Files / media store / image editing | 28 | `file_list/read/write/search/download`, `file_copy/move/delete`, `album_photos`, `image_edit/preview/collage`, `saf_tree_*`, `storage_scan` |
+| Calendar / alarms / timers / cron | 14 | `calendar_list/events/add/delete`, `alarm_set`, `timer_set`, `countdown`, `cron_create/list/toggle/delete/run_now` |
+| Calls / location / recording / contacts / SMS | 8 | `phone_call`, `sms_send/read`, `location_get`, `mic_record`, `contacts_search`, `provider_query` |
+| Bluetooth / Wi-Fi | 11 | `bt_scan/connect/toggle`, `wifi_connect/saved_list/forget/toggle`, `wifi_info` |
 | Sensors / health | 4 | `sensor_list/read`, `steps_today/history` |
-| Screen / input (Shizuku) | 8 | `screen_capture`, `screen_record*`, `input_tap/swipe/text` |
-| Termux / shell | 3 | `termux_setup`, `shell_exec`, `pkg_install` |
+| Screen / input (Shizuku) | 9 | `screen_capture`, `screen_record*`, `screenshot_quick`, `input_tap/swipe/text` |
+| Termux / shell | 4 | `termux_setup`, `shell_exec`, `pkg_install`, `apt_status` |
 | QuickJS scripting | 8 | `js_eval`, `script_save/run/list/...`, `json_fix` |
 | SQLite | 8 | `db_create/exec/query/...`, `db_gui` |
 | Document generation | 3 | `docx_create`, `pptx_create`, `xlsx_create` |
 | Home-screen widgets | 2 | `widget_generate`, `widget_save_and_pin` |
 | NFC | 11 | `nfc_status/read/write_text/write_uri/write_raw/hce_status` (NDEF+HCE), `nfc_mf_dump`, `nfc_mf_write_block`, `nfc_ul_read`, `nfc_ul_write_page`, `nfc_keys_manage` (MIFARE Classic/Ultralight 深度读写) |
 | Embedded web page in chat | 1 | `web_embed` |
+| ZIP archives | 5 | `zip_create/list/extract/add/test` |
+| Email (SMTP) | 3 | `email_send`, `email_verify`, `email_draft` |
+| F-Droid / APK install | 3 | `fdroid_search`, `fdroid_download`, `app_install` |
+| Web search / read | 2 | `web_search`, `web_read` |
+| Intents | 3 | `intent_send`, `intent_resolve`, `intent_broadcast` |
+| WebView DevTools | 5 | `devtools_status/debugging/eval/console/screenshot` |
 
 Other features:
 
@@ -152,7 +158,7 @@ Caveats: `targetSdk = 28` retains the legacy storage/permission model and is not
 app/
   build.gradle.kts                 # Android config, buildWeb / downloadBootstrap tasks
   src/main/java/com/dc/andagent/
-    MainActivity.kt                # WebView shell; the single registry of 88 tools
+    MainActivity.kt                # WebView shell; the single registry of 159 tools
     bridge/                        # AgentBridge / DbGuiBridge / PermissionBroker
     tools/                         # Tool implementations (30+ files)
     script/                        # QuickJS engine, JS API, js_eval

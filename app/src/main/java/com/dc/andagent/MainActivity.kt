@@ -71,11 +71,13 @@ import com.dc.andagent.tools.CalendarEventsTool
 import com.dc.andagent.tools.CalendarListTool
 import com.dc.andagent.tools.ClipboardReadTool
 import com.dc.andagent.tools.ClipboardWriteTool
+import com.dc.andagent.tools.ClipboardWriteRichTool
+import com.dc.andagent.tools.ClipboardReadRichTool
+import com.dc.andagent.tools.ClipboardClearTool
 import com.dc.andagent.tools.DeviceInfoTool
 import com.dc.andagent.tools.FileDownloadTool
 import com.dc.andagent.tools.FileListTool
 import com.dc.andagent.tools.FileReadTool
-import com.dc.andagent.tools.FileReadB64Tool
 import com.dc.andagent.tools.FileSearchTool
 import com.dc.andagent.tools.DocumentCreateTool
 import com.dc.andagent.tools.FileWriteTool
@@ -276,6 +278,10 @@ class MainActivity : ComponentActivity() {
             "bt_connect_direct" to ShellConnectivityTool(shizuku, "bt_connect_direct", btConnect),
             "clipboard_write" to ClipboardWriteTool(appContext),
             "clipboard_read" to ClipboardReadTool(appContext),
+            // R39: 富剪贴板（HTML/URI/图片/清空）。
+            "clipboard_write_rich" to ClipboardWriteRichTool(appContext),
+            "clipboard_read_rich" to ClipboardReadRichTool(appContext),
+            "clipboard_clear" to ClipboardClearTool(appContext),
             "notify_send" to NotifySendTool(appContext, permissionBroker),
             "app_list" to AppListTool(appContext),
             // R3a: Shizuku-backed screen recording
@@ -292,7 +298,6 @@ class MainActivity : ComponentActivity() {
             "file_search" to FileSearchTool(appContext, permissionBroker),
             "file_write" to FileWriteTool(appContext, permissionBroker),
             "file_read" to FileReadTool(appContext),
-            "file_read_b64" to FileReadB64Tool(appContext),
             "file_list" to FileListTool(appContext, permissionBroker),
             // R3a: sensors + health
             "sensor_list" to SensorListTool(appContext),
@@ -379,6 +384,7 @@ class MainActivity : ComponentActivity() {
             },
             embeddedWebviewOpen = { uri -> openEmbeddedWebview(uri) },
             dbGuiOpen = { name -> dbGuiOpen(name) },
+            themeChange = { dark -> runOnUiThread { applyUiTheme(dark) } },
             termuxGrant = {
                 if (!shizuku.isGranted()) "ERROR: 请先启动 Shizuku 并在设置页授权 AndAgent"
                 else {
@@ -467,12 +473,7 @@ class MainActivity : ComponentActivity() {
         }
 
         setContentView(webView)
-        window.statusBarColor = Color.parseColor("#0b0d11")
-        window.navigationBarColor = Color.parseColor("#0b0d11")
-        WindowCompat.getInsetsController(window, window.decorView).apply {
-            isAppearanceLightStatusBars = false
-            isAppearanceLightNavigationBars = false
-        }
+        applyUiTheme(isDarkThemeStored())
 
         webView.loadUrl("https://appassets.androidplatform.net/assets/web/index.html")
         requestMediaPermissions()
@@ -480,6 +481,30 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onResume() { super.onResume(); if (::nfcSession.isInitialized) nfcSession.onResume() }
+
+    /**
+     * R39: 主题同步——WebView 在 applyTheme()/setTheme() 时经 bridge 回报
+     * 解析后的深浅色；这里持久化到 SP 并刷新 WebView 背景、系统栏与导航条，
+     * 避免下次冷启动闪错色。夜间为默认。
+     */
+    private fun isDarkThemeStored(): Boolean =
+        getSharedPreferences("ui", MODE_PRIVATE).getBoolean("dark", true)
+
+    private fun applyUiTheme(dark: Boolean) {
+        getSharedPreferences("ui", MODE_PRIVATE).edit().putBoolean("dark", dark).apply()
+        val bg = Color.parseColor(if (dark) "#0b0d11" else "#f5f7fa")
+        if (::webView.isInitialized) webView.setBackgroundColor(bg)
+        window.statusBarColor = bg
+        window.navigationBarColor = bg
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = !dark
+            isAppearanceLightNavigationBars = !dark
+        }
+    }
+
+    /** R39: 弹窗内嵌 WebView 用当前主题色做底色（防白闪）。 */
+    private fun themeBackgroundColor(): Int =
+        Color.parseColor(if (isDarkThemeStored()) "#0b0d11" else "#f5f7fa")
 
     override fun onPause() { if (::nfcSession.isInitialized) nfcSession.onPause(); super.onPause() }
 
@@ -533,6 +558,7 @@ class MainActivity : ComponentActivity() {
                 settings.domStorageEnabled = true
                 settings.allowFileAccess = false
                 settings.allowContentAccess = false
+                setBackgroundColor(themeBackgroundColor())
                 webViewClient = object : WebViewClient() {
                     override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? = localMedia.intercept(request) ?: assetLoader.shouldInterceptRequest(request.url)
                     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean = request.url.scheme != "https" && request.url.scheme != "appassets"
@@ -576,6 +602,7 @@ class MainActivity : ComponentActivity() {
                 settings.domStorageEnabled = true
                 settings.allowFileAccess = false
                 settings.allowContentAccess = false
+                setBackgroundColor(themeBackgroundColor())
                 addJavascriptInterface(DbGuiBridge(this@MainActivity, name) { runOnUiThread { dialog.dismiss() } }, "DbGuiBridge")
                 webViewClient = object : WebViewClient() {
                     override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =

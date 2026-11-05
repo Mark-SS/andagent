@@ -16,11 +16,16 @@ import {
   type DevToolsStatus,
   type ProjectionStatus,
   type ShizukuStatus,
-  widgetList, widgetSave, widgetPin, widgetRefresh, widgetDelete,
-  type SavedWidget,
   cronList, cronToggle, cronDelete, cronPauseAll, cronExactAllowed, cronOpenExactSettings,
   type CronTask,
 } from "./bridge";
+import { loadThemeMode, setTheme, type ThemeMode } from "./theme";
+
+const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
+  { value: "system", label: "跟随系统" },
+  { value: "light", label: "日间" },
+  { value: "dark", label: "夜间" },
+];
 
 interface Props {
   settings: Settings;
@@ -31,20 +36,16 @@ interface Props {
 export function SettingsPanel({ settings, onClose, onSave }: Props) {
   const [draft, setDraft] = useState<Settings>(settings);
   const [error, setError] = useState<string | null>(null);
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => loadThemeMode());
   const [shizuku, setShizuku] = useState<ShizukuStatus>(() => getShizukuStatus());
   const [shizukuMsg, setShizukuMsg] = useState<string | null>(null);
   const [termuxStatus, setTermuxStatus] = useState(() => getTermuxStatus());
   const [termuxMsg, setTermuxMsg] = useState<string | null>(null);
-  const [widgets, setWidgets] = useState<SavedWidget[]>(() => widgetList());
-  const [widgetId, setWidgetId] = useState("");
-  const [widgetJson, setWidgetJson] = useState("");
-  const [widgetMsg, setWidgetMsg] = useState("");
   const [cronTasks, setCronTasks] = useState<CronTask[]>(() => cronList());
   const [cronMsg, setCronMsg] = useState("");
   const [cronDetail, setCronDetail] = useState("");
   const [exactAllowed, setExactAllowed] = useState(() => cronExactAllowed());
   const refreshCron = () => { setCronTasks(cronList()); setExactAllowed(cronExactAllowed()); };
-  const refreshWidgets = () => setWidgets(widgetList());
   const [healthMsg, setHealthMsg] = useState<string | null>(null);
   const [projection, setProjection] = useState<ProjectionStatus>(() => getProjectionStatus());
   const [projectionMsg, setProjectionMsg] = useState<string | null>(null);
@@ -124,6 +125,25 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
         </header>
 
         <div className="settings-body">
+          <div className="settings-card">
+            <div className="settings-card-head"><span>外观</span></div>
+            <div className="theme-segmented" role="radiogroup" aria-label="外观模式">
+              {THEME_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={themeMode === option.value}
+                  className={themeMode === option.value ? "active" : ""}
+                  onClick={() => { setTheme(option.value); setThemeMode(option.value); }}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <p className="settings-card-note">夜间为默认；跟随系统时自动随系统深浅色切换。</p>
+          </div>
+
           <label className="field">
             <span>Base URL</span>
             <input
@@ -252,26 +272,6 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
               <button type="button" className="btn-ghost" onClick={refreshCron}>刷新</button>
             </div>
             {cronMsg && <p className={cronMsg.startsWith("ERROR:") ? "settings-error" : "settings-card-note"}>{cronMsg}</p>}
-          </div>
-
-          <div className="settings-card">
-            <div className="settings-card-head"><span>桌面小组件</span><span>{widgets.length} 个已保存</span></div>
-            <p className="settings-card-note">可在对话中描述想要的组件，也可在此粘贴并编辑 WidgetSpec v2 JSON。</p>
-            {widgets.map((widget) => <div key={widget.id} className="settings-card-actions">
-              <strong>{widget.name}</strong>
-              <button type="button" className="btn-ghost" onClick={() => { setWidgetId(widget.id); setWidgetJson(widget.specJson); }}>编辑</button>
-              <button type="button" className="btn-ghost" onClick={() => setWidgetMsg(widgetPin(widget.id))}>添加到桌面</button>
-              <button type="button" className="btn-ghost" onClick={() => setWidgetMsg(widgetRefresh(widget.id))}>刷新</button>
-              <button type="button" className="btn-ghost" onClick={() => { setWidgetMsg(widgetDelete(widget.id)); refreshWidgets(); if (widgetId === widget.id) { setWidgetId(""); setWidgetJson(""); } }}>删除</button>
-            </div>)}
-            <label className="field"><span>WidgetSpec JSON {widgetId ? "· 编辑" : "· 新建"}</span>
-              <textarea rows={8} value={widgetJson} onChange={(e) => setWidgetJson(e.target.value)} spellCheck={false} placeholder={'{"schemaVersion":2,"name":"我的组件","root":{"type":"COLUMN","children":[{"type":"TEXT","text":"你好"}]}}'} />
-            </label>
-            <div className="settings-card-actions">
-              <button type="button" className="btn-primary" onClick={() => { const result = widgetSave(widgetJson, widgetId); setWidgetMsg(result.startsWith("ERROR:") ? result : `已保存 ${result}`); if (!result.startsWith("ERROR:")) { setWidgetId(result); refreshWidgets(); } }}>保存 JSON</button>
-              <button type="button" className="btn-ghost" onClick={() => { setWidgetId(""); setWidgetJson(""); }}>新建</button>
-            </div>
-            {widgetMsg && <p className={widgetMsg.startsWith("ERROR:") ? "settings-error" : "settings-card-note"}>{widgetMsg}</p>}
           </div>
 
           <div className="settings-card">

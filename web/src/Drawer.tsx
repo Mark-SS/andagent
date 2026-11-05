@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { SessionMeta } from "./sessions";
+import { resolvedTheme, toggleTheme } from "./theme";
 
 /**
  * Android-style navigation drawer: slides in from the left, scrim backdrop,
@@ -28,6 +29,14 @@ export function Drawer({
   onExport: (id: string) => void;
 }) {
   const [visible, setVisible] = useState(open);
+  const [theme, setThemeState] = useState(() => resolvedTheme());
+
+  // Re-render the sun/moon shortcut when the theme changes.
+  useEffect(() => {
+    const listener = () => setThemeState(resolvedTheme());
+    window.addEventListener("andagent:themechange", listener);
+    return () => window.removeEventListener("andagent:themechange", listener);
+  }, []);
 
   // Keep the element mounted during the close transition.
   useEffect(() => {
@@ -49,6 +58,15 @@ export function Drawer({
             <strong>AndAgent</strong>
             <div className="drawer-sub">会话 · v{version}</div>
           </div>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label={theme === "dark" ? "切换到日间模式" : "切换到夜间模式"}
+            title={theme === "dark" ? "日间模式" : "夜间模式"}
+            onClick={toggleTheme}
+          >
+            {theme === "dark" ? "☀️" : "🌙"}
+          </button>
         </div>
 
         <button type="button" className="drawer-new" onClick={onNew}>

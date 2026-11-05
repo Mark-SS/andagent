@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { termuxTerminalExec, termuxTerminalPoll } from "./bridge";
+import { lastShellResult, termuxTerminalExec, termuxTerminalPoll } from "./bridge";
 
 /**
  * ```terminal fence: an in-conversation interactive terminal (R27).
@@ -45,6 +45,7 @@ export function TerminalCard({ code }: { code: string }) {
   const [dead, setDead] = useState("");
   const [closed, setClosed] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const [showAgentOutput, setShowAgentOutput] = useState(false);
   const pinned = useRef(true); // 用户上滚时暂停自动滚底
   const scrollRef = useRef<HTMLPreElement>(null);
 
@@ -144,10 +145,20 @@ export function TerminalCard({ code }: { code: string }) {
     <div className={`terminal-card${fullscreen ? " fullscreen" : ""}${closed ? " closed" : ""}`}>
       <div className="terminal-bar">
         <span className="terminal-title">⌨️ {title}</span>
+        <button type="button" onClick={() => setShowAgentOutput(true)}>助手输出</button>
         <button type="button" onClick={() => setFullscreen((v) => !v)}>{fullscreen ? "退出全屏" : "全屏"}</button>
         <button type="button" onClick={() => { setLines([]); pinned.current = true; }}>清屏</button>
         <button type="button" onClick={() => { setClosed((v) => !v); }}>{closed ? "重新打开" : "关闭"}</button>
       </div>
+      {showAgentOutput && (
+        <div className="image-lightbox" role="dialog" aria-modal="true" aria-label="shell_exec 输出" onClick={() => setShowAgentOutput(false)}>
+          <button type="button" onClick={() => setShowAgentOutput(false)} aria-label="关闭输出">×</button>
+          <div className="mermaid-lightbox-body" onClick={(e) => e.stopPropagation()}>
+            <div className="tool-label">最近一次 shell_exec 的完整结果</div>
+            <pre className="tool-pre" style={{ maxHeight: "70vh" }}>{lastShellResult() || "（助手还没有执行过 shell 命令）"}</pre>
+          </div>
+        </div>
+      )}
       {closed
         ? <div className="terminal-idle">终端已关闭（bash 会话保留，与助手共享）；点「重新打开」继续</div>
         : body}

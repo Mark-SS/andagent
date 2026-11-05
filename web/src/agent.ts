@@ -971,7 +971,7 @@ export class AgentEngine {
         }
 
         for (const call of toolCalls) {
-          const result = await execTool(call.name, call.arguments ?? {});
+          const result = await execTool(call.name, call.arguments ?? {}, call.id);
           if (controller.signal.aborted) return;
           const toolResult: ToolResultMessage = {
             role: "toolResult",
