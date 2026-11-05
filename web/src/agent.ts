@@ -1149,22 +1149,32 @@ export class AgentEngine {
     }
   }
 
+  /**
+   * 中断收尾：保留流式期间已出现的全部内容（文本 + 思考过程 + 已发起的工具
+   * 卡片），而不是只存文本——用户点停止不应隐藏已经看到的内容。
+   * R53 前 partialThinking/partialTools 直接丢弃，思考块消失。
+   */
   private finishAborted(partialText: string): void {
     this.error = null;
     const text = partialText.trim();
-    if (text) {
-      const aborted: AssistantMessage = {
-        role: "assistant",
-        content: [{ type: "text", text }],
-        api: "openai-completions",
-        provider: "custom",
-        model: this.settings.model,
-        usage: ZERO_USAGE,
-        stopReason: "aborted",
-        errorMessage: "用户已停止生成",
-        timestamp: Date.now(),
-      };
-      this.messages = [...this.messages, aborted];
-    }
+    const draft = this.draft;
+    const thinking = (draft?.thinking ?? "").trim();
+    const tools = draft?.tools ?? [];
+    if (!text && !thinking && tools.length === 0) return;
+    const content: AssistantMessage["content"] = [];
+    if (thinking) content.push({ type: "thinking", thinking } as AssistantMessage["content"][number]);
+    if (text) content.push({ type: "text", text });
+    const aborted: AssistantMessage = {
+      role: "assistant",
+      content,
+      api: "openai-completions",
+      provider: "custom",
+      model: this.settings.model,
+      usage: ZERO_USAGE,
+      stopReason: "aborted",
+      errorMessage: "用户已停止生成",
+      timestamp: Date.now(),
+    };
+    this.messages = [...this.messages, aborted];
   }
 }
