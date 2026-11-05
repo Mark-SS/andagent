@@ -26,7 +26,7 @@
 | 10a | **对话流音频/视频播放**：```audio/```video 围栏 + MediaCard 组件 + 工具结果按扩展名内嵌播放器 + WebViewAssetLoader /local/ 媒体映射 | ✅ | 含 Range/206 与路径穿越防护 |
 | 10b | **SQLite 数据库工具**（建库/建表/CRUD/查询 + andagent.db JS API） | ✅ | db_* 七工具 + andagent.db() + db_gui |
 | 10c | **外部数据访问**：ContentProvider（联系人/日历/短信 provider 统一读）、FileProvider（分享文件给其他 app）、SAF DocumentsTree 持久授权、MediaStore 全集合（音/视/文）查询 | ✅ | contacts_search / sms_read / provider_query（只读） / file_share（FileProvider） / saf_tree_pick/list/read/write（持久授权） / media_library（audio/video/files） |
-| 10d | **Android 存储底座 / 通用 KV 存储**：用平台存储能力为工具、QuickJS 脚本、前端提供统一的键值持久化（明细见下节） | DOING | `andagent_kv`（SharedPreferences / DataStore）+ `kv_*` 工具 + `andagent.kv` JS API + 前端桥三侧对齐；会话从 localStorage 迁移 |
+| 10d | **Android 存储底座 / 通用 KV 存储**：用平台存储能力为工具、QuickJS 脚本、前端提供统一的键值持久化（明细见下节） | ✅ | `andagent_kv`（SharedPreferences / DataStore）+ `kv_*` 工具 + `andagent.kv` JS API + 前端桥三侧对齐；会话从 localStorage 迁移；10d-6 评估结论为「维持 SharedPreferences」（R56） |
 
 ### 10d 存储底座明细（Android 存储技术 → KV 及配套能力）
 
@@ -39,7 +39,7 @@
 | 10d-3 | QuickJS JS API | ✅ | `andagent.kv.get/set/keys/delete`，与 R10.7 `andagent.fs` 的 `data/` 根（当前仅 `scripts/` 已落地）联动；脚本自有状态不再靠文件拼字符串，沿用 `QuickJsEngine` 注入方式与 canonicalFile 防越界校验。已落地 QuickJsEngine 注入（R51） |
 | 10d-4 | 前端统一持久化 | ✅ | `AndroidBridge.kvGet/kvSet`（或复用 `toolExec`）+ `web/src/bridge.ts` 类型声明；`sessions.ts` 会话从 localStorage 迁到原生 KV（WebView DOM storage 被清会丢会话），浏览器预览模式保留 localStorage 回退；`getSettings/saveSettings` 固定字段通道不动，API key 不进 web assets。R53：`bridge/AgentBridge.kt` 增 `kvCall`（KV_TOOLS 白名单）+ `web/src/bridge.ts` `kvCall/hasKvBridge` + `sessions.ts` KV 适配（namespace=sessions，key=index/s_<id>）；浏览器预览回退 localStorage，单值超 64KB 时整组镜像 localStorage 并 warn（R53 750c0e4） |
 | 10d-5 | 迁移 / 安全 / 备份 | ✅ | 一次性迁移旧 localStorage 会话与自定义 prefs 键；敏感键用 Keystore / EncryptedSharedPreferences 或独立命名空间；按命名空间导出/导入 JSON 备份，厘清 Android Auto Backup 与 `filesDir` / `databases/` 边界；`WidgetStore` / `DataCache` 的 AtomicFile 结构化数据保持原样。R54：localStorage→KV 复制迁移（源键保留、删除双清）+ kv_export/kv_import（merge/replace，replace 需 confirm=true，all 上限 512KB）（750c0e4 及后续捆绑提交）。R55：`secure` 命名空间 AndroidKeyStore AES-256-GCM 落盘加密（enc1: 前缀，密钥创建进程级锁防竞态，legacy 明文读时原地迁移），kv_export all 永不含 secure、显式导出需 include_secure=true、kv_import 一律拒绝 secure 记录；键名仍明文落盘（`kv_keys` 工具输出本身含键名，混淆磁盘键名收益有限，记为已知边界）。 KvStoreTest 17 用例全绿 |
-| 10d-6 | 其他 Android 存储技术评估 | TODO | DataStore(Proto) 替代 SharedPreferences、MMKV（评估额外 .so 体积与 arm64 依赖）、Room（关系型场景已由 `db_*` 覆盖，暂不引入）；Scoped Storage / MediaStore / SAF / ContentProvider / FileProvider 归入 10c，共享路径与 KV 命名空间隔离 |
+| 10d-6 | 其他 Android 存储技术评估 | ✅ | DataStore(Proto) 替代 SharedPreferences、MMKV（评估额外 .so 体积与 arm64 依赖）、Room（关系型场景已由 `db_*` 覆盖，暂不引入）；Scoped Storage / MediaStore / SAF / ContentProvider / FileProvider 归入 10c，共享路径与 KV 命名空间隔离。R56：`docs/storage-evaluation.md` 实测三候选体积并给出证据化结论——**全部不引入，维持 SharedPreferences**。DataStore 1.1.1 五模块 dex 890,972 B（Proto + protobuf-javalite 合计 1,541,768 B），suspend/Flow 与 `AgentBridge.kvCall` 同步桥冲突且 TTL/配额/命名空间/secure/备份五件事全需重造，迁移单向不可回滚；MMKV 2.4.3 仅 arm64-v8a/x86_64（本项目 4 ABI，32 位会 `UnsatisfiedLinkError`），arm64 `libmmkv.so` 1,147,888 B，1.3.17 保留 4 ABI 且 arm64 仅 589,272 B，加密为裸密钥 AES-CFB 无法复用 Keystore；Room 2.6.1 runtime dex 221,340 B + 5,315,997 B 注解处理器（需新增 KSP，本机 `-Xmx1536m`），且模型生成的 SQL 在编译期不存在、编译期校验收益归零。文档另附 7 条「何时需要重新评估」触发条件（多进程 / Flow 需求 / 单值 >64KB / 上架 Play Store / 键数逼近上限 / 跨进程并发写 / 密钥轮换）。无生产代码改动、无新增依赖（50839ee） |
 
 ## 🟡 P2 — 增强/补全
 | # | 事项 | 状态 | 备注 |
