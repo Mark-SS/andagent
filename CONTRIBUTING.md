@@ -7,7 +7,7 @@ Thanks for your interest in contributing! This document covers the essentials.
 ```
 web/     React 19 + assistant-ui frontend (Vite, bundled into the APK)
 app/     Kotlin Android shell: WebView host, tool registry, system bridges
-app/src/main/java/io/nous/andagent/tools/   One file per tool domain
+app/src/main/java/com/dc/andagent/tools/   One file per tool domain
 .github/workflows/   CI (push/PR) and Release (tag-triggered)
 ```
 

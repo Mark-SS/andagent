@@ -40,6 +40,7 @@ export const DEFAULT_SYSTEM_PROMPT = [
   "- 屏幕与自动化：screen_record / screen_record_stop / screen_record_list / screen_record_h264 / screen_capture / input_tap / input_swipe / input_text",
   "- 脚本与包管理：termux_setup / shell_exec / pkg_install / js_eval / script_check / json_fix（JS 脚本可用 andagent.tool 调用设备工具）",
   "- 可复用脚本：script_save 保存 → script_run 随时执行（支持 args_json 传参）→ script_list 查看；修改前用 script_read。适合周期性任务、数据变换管道、自动化流程。脚本内可用 andagent.tool() 调设备工具。",
+  "- 定时任务：cron_create（5 段 cron 或 daily 09:00 / weekly mon 09:00 / every 30m）创建；kind=script 跑已保存 JS 脚本，shell 跑命令，notify 发通知；cron_list / cron_toggle / cron_delete / cron_run_now 管理。设备重启后恢复，Android 12+ 需在设置授予『闹钟和提醒』。",
   "- 系统导航：open_settings（27 类设置页直达）/ app_list / get_time / device_info",
   "- 通用 Intent：intent_send 可发任意 action（拍照 IMAGE_CAPTURE / 分享 SEND / 选择器 PICK 等），不确定接收方先用 intent_resolve 探查；发给第三方 app 的标准 scheme 跳转优先 open_uri，特殊 action 才用 intent_send；自定义广播用 intent_broadcast（系统保护广播被拦截）。",
   "- 桌面小组件：widget_generate 先规划 WidgetSpec v2 JSON，widget_save_and_pin 保存并请求添加；数据可绑定系统或 QuickJS 工具",
@@ -93,6 +94,12 @@ interface AndroidBridge {
   widgetPin(id: string): string;
   widgetRefresh(id: string): string;
   widgetDelete(id: string): string;
+  cronList(): string;
+  cronToggle(id: string, enabled: boolean): string;
+  cronDelete(id: string): string;
+  cronPauseAll(): string;
+  cronExactAllowed(): boolean;
+  cronOpenExactSettings(): string;
   llmFetchStart(id: string, url: string, headersJson: string, body: string): void;
   llmCancel(id: string): void;
   toolExec(id: string, name: string, argsJson: string): void;
@@ -828,6 +835,16 @@ export function widgetSave(specJson: string, id = ""): string { return bridge()?
 export function widgetPin(id: string): string { return bridge()?.widgetPin(id) ?? "ERROR: 设备桥不可用"; }
 export function widgetRefresh(id: string): string { return bridge()?.widgetRefresh(id) ?? "ERROR: 设备桥不可用"; }
 export function widgetDelete(id: string): string { return bridge()?.widgetDelete(id) ?? "ERROR: 设备桥不可用"; }
+
+export type CronTask = { id: string; name: string; schedule: string; kind: string; enabled: boolean; lastRun?: number; nextRun?: number; lastResult: string };
+export function cronList(): CronTask[] {
+  try { return JSON.parse(bridge()?.cronList() ?? "[]") as CronTask[]; } catch { return []; }
+}
+export function cronToggle(id: string, enabled: boolean): string { return bridge()?.cronToggle(id, enabled) ?? "ERROR: 设备桥不可用"; }
+export function cronDelete(id: string): string { return bridge()?.cronDelete(id) ?? "ERROR: 设备桥不可用"; }
+export function cronPauseAll(): string { return bridge()?.cronPauseAll() ?? "ERROR: 设备桥不可用"; }
+export function cronExactAllowed(): boolean { return bridge()?.cronExactAllowed() ?? false; }
+export function cronOpenExactSettings(): string { return bridge()?.cronOpenExactSettings() ?? "ERROR: 设备桥不可用"; }
 
 /** Pull deep links queued natively (covers links arriving before mount). */
 export function consumeDeeplink(): DeeplinkDetail[] {

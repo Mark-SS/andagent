@@ -5,7 +5,7 @@ from zipfile import ZipFile
 
 source, destination = sys.argv[1:3]
 old_paths = (b"/data/data/com.termux", b"/data/user/0/com.termux")
-new_path = b"/data/user/0/io.nous.andagent"
+new_path = b"/data/user/0/com.dc.andagent"
 with ZipFile(source) as original, ZipFile(destination, "w") as rewritten:
     for entry in original.infolist():
         content = original.read(entry)

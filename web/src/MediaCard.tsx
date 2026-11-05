@@ -5,7 +5,7 @@ export type MediaKind = "audio" | "video";
 export function mediaSource(uri: string): string | null {
   if (/^https:\/\//i.test(uri)) return uri;
   if (/^\/local\//.test(uri)) return `https://appassets.androidplatform.net${uri}`;
-  const marker = "/Android/data/io.nous.andagent/files/";
+  const marker = "/Android/data/com.dc.andagent/files/";
   const pos = uri.indexOf(marker);
   if (pos < 0) return null;
   const relative = uri.slice(pos + marker.length);

@@ -7,7 +7,7 @@ An on-device AI assistant for Android. It calls device capabilities directly fro
 - **Frontend**: `web/` — React 19 + `@assistant-ui/react` + `@mariozechner/pi-ai`, bundled with Vite and shipped inside the APK for offline use.
 - **Native layer**: `app/` — a Kotlin full-screen WebView shell, the tool registry, and permission / system-API bridging.
 - **Model**: any OpenAI-compatible endpoint. Requests are proxied through native OkHttp (to bypass WebView CORS) and streamed back over SSE; a single turn allows up to 200 tool rounds.
-- **Version**: `0.16.0` (versionCode 14), `applicationId = io.nous.andagent`. `app/build.gradle.kts` is authoritative.
+- **Version**: `0.16.0` (versionCode 14), `applicationId = com.dc.andagent`. `app/build.gradle.kts` is authoritative.
 
 ## How it works
 
@@ -107,7 +107,7 @@ No endpoint, model ID or API key is compiled into the app. Put them in
 adb push config.json /sdcard/Download/config.json
 # Android 11+ can deny direct reads of the public Downloads dir. Keep an
 # identical copy in the app's private external files dir (no permission needed):
-adb push config.json /sdcard/Android/data/io.nous.andagent/files/config.json
+adb push config.json /sdcard/Android/data/com.dc.andagent/files/config.json
 ```
 
 `SettingsStore` looks for `config.json` on startup and whenever the WebView
@@ -151,7 +151,7 @@ Caveats: `targetSdk = 28` retains the legacy storage/permission model and is not
 ```
 app/
   build.gradle.kts                 # Android config, buildWeb / downloadBootstrap tasks
-  src/main/java/io/nous/andagent/
+  src/main/java/com/dc/andagent/
     MainActivity.kt                # WebView shell; the single registry of 88 tools
     bridge/                        # AgentBridge / DbGuiBridge / PermissionBroker
     tools/                         # Tool implementations (30+ files)
@@ -178,7 +178,7 @@ ROADMAP-TODO.md                    # Progress, backlog, and milestones
 
 ### Adding a tool
 
-1. Implement `Tool` in `app/src/main/java/io/nous/andagent/tools/` (`name` / `description` / `parameters` / `destructive` / `execute`).
+1. Implement `Tool` in `app/src/main/java/com/dc/andagent/tools/` (`name` / `description` / `parameters` / `destructive` / `execute`).
 2. Register it in the `tools.putAll(mapOf(...))` block in `MainActivity.kt`.
 3. Add the matching JSON Schema in `web/src/agent.ts` — **both sides must stay in sync**, otherwise the model cannot see or call the tool.
 4. If a new permission is required, update `AndroidManifest.xml` and request it through `PermissionBroker.ensure(...)`.
@@ -190,7 +190,7 @@ Bridge protocol: JS → Kotlin via `window.AndroidBridge.*` (`toolExec`, `llmFet
 `termux_setup` installs `app/src/main/assets/bootstrap/bootstrap-aarch64.zip` into the
 app-private `files/usr` directory. The archive was derived from the official bootstrap
 by rewriting text file paths only: `/data/data/com.termux` →
-`/data/user/0/io.nous.andagent`. ELF binaries are byte-for-byte unchanged.
+`/data/user/0/com.dc.andagent`. ELF binaries are byte-for-byte unchanged.
 Current archive SHA-256: `62a92f2f6c9433f721232b24f11be2d09b76149608122694364a6957f2d69809`.
 Original official archive SHA-256: `5a1429b6c68ee3bdc17b5fd6e47ba42933ec924cd7283fe74992574e1d5badae`.
 

@@ -18,6 +18,8 @@ import {
   type ShizukuStatus,
   widgetList, widgetSave, widgetPin, widgetRefresh, widgetDelete,
   type SavedWidget,
+  cronList, cronToggle, cronDelete, cronPauseAll, cronExactAllowed, cronOpenExactSettings,
+  type CronTask,
 } from "./bridge";
 
 interface Props {
@@ -37,6 +39,11 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
   const [widgetId, setWidgetId] = useState("");
   const [widgetJson, setWidgetJson] = useState("");
   const [widgetMsg, setWidgetMsg] = useState("");
+  const [cronTasks, setCronTasks] = useState<CronTask[]>(() => cronList());
+  const [cronMsg, setCronMsg] = useState("");
+  const [cronDetail, setCronDetail] = useState("");
+  const [exactAllowed, setExactAllowed] = useState(() => cronExactAllowed());
+  const refreshCron = () => { setCronTasks(cronList()); setExactAllowed(cronExactAllowed()); };
   const refreshWidgets = () => setWidgets(widgetList());
   const [healthMsg, setHealthMsg] = useState<string | null>(null);
   const [projection, setProjection] = useState<ProjectionStatus>(() => getProjectionStatus());
@@ -223,6 +230,28 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
                 />
               </div>
             </label>
+          </div>
+
+          <div className="settings-card">
+            <div className="settings-card-head"><span>定时任务</span><span>{cronTasks.length} 个任务</span></div>
+            <p className="settings-card-note">可在对话中创建定时任务。极端省电模式下，系统可能延迟几分钟触发。</p>
+            {!exactAllowed && hasBridge() && <div className="settings-card-actions">
+              <span>精确闹钟权限未授予</span>
+              <button type="button" className="btn-ghost" onClick={() => { setCronMsg(cronOpenExactSettings()); window.setTimeout(refreshCron, 1000); }}>打开「闹钟和提醒」设置</button>
+            </div>}
+            {cronTasks.map((task) => <div key={task.id}>
+              <div className="settings-card-actions">
+                <button type="button" className="btn-ghost" onClick={() => setCronDetail(cronDetail === task.id ? "" : task.id)}>{task.name} · {task.schedule} · {task.kind}</button>
+                <label><input type="checkbox" checked={task.enabled} onChange={(e) => { setCronMsg(cronToggle(task.id, e.target.checked)); refreshCron(); }} /> 启用</label>
+                <button type="button" className="btn-ghost" onClick={() => { if (window.confirm(`删除定时任务「${task.name}」？`)) { setCronMsg(cronDelete(task.id)); refreshCron(); } }}>删除</button>
+              </div>
+              {cronDetail === task.id && <p className="settings-card-note">上次：{task.lastRun ? new Date(task.lastRun).toLocaleString() : "尚未运行"} · 下次：{task.nextRun ? new Date(task.nextRun).toLocaleString() : "已暂停"}<br />上次结果：{task.lastResult || "无"}</p>}
+            </div>)}
+            <div className="settings-card-actions">
+              <button type="button" className="btn-ghost" onClick={() => { setCronMsg(cronPauseAll()); refreshCron(); }}>全部暂停</button>
+              <button type="button" className="btn-ghost" onClick={refreshCron}>刷新</button>
+            </div>
+            {cronMsg && <p className={cronMsg.startsWith("ERROR:") ? "settings-error" : "settings-card-note"}>{cronMsg}</p>}
           </div>
 
           <div className="settings-card">

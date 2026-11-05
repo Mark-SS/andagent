@@ -23,6 +23,8 @@
 
     <!-- Local notifications (runtime on Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <!-- R28: MediaProjection screen capture — foreground service holding the projection -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
@@ -90,6 +92,13 @@
         android:allowBackup="false"
         android:usesCleartextTraffic="true">
 
+        <receiver android:name=".cron.CronReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
         <!-- Termux RUN_COMMAND result callback (receiver: Android 12+ forbids
              background startService, Termux posts results while backgrounded) -->
         <activity
@@ -114,7 +123,7 @@
             android:name=".shell.TermuxResultReceiver"
             android:exported="false">
             <intent-filter>
-                <action android:name="io.nous.andagent.TERMUX_RESULT" />
+                <action android:name="com.dc.andagent.TERMUX_RESULT" />
             </intent-filter>
         </receiver>
 
@@ -194,7 +203,7 @@
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
-                <action android:name="io.nous.andagent.widget.REFRESH" />
+                <action android:name="com.dc.andagent.widget.REFRESH" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_info" />
         </receiver>
