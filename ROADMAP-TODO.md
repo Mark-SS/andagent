@@ -77,4 +77,5 @@ web 化重构（pi+assistant-ui）/ 日历闹钟剪贴板通知 / ECharts / Shiz
 | R22 | 邮件发送：email_send（SMTP SSL/STARTTLS+AUTH+HTML+附件）/email_verify/email_draft | ✅ +3 |
 | R23 | Canvas 围栏（沙箱 iframe 2D 绘制，静态+动画） | ✅ 纯前端 |
 | R24 | 存储底座：KV 工具族 + `andagent.kv` JS API + 前端会话迁移（见 10d；依赖 R10.7 `data/` 根与 R20 平台桥接） | TODO +6 |
+| R26 | 网络搜索：web_search（Bing HTML 主引擎 + DDG IA 摘要，零 key）+ web_read 网页正文；Bing fixture 单测 | DOING +2 |
 |  | **当前累计 139 工具（v0.17.0）** |  |
