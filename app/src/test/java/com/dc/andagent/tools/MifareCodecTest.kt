@@ -33,7 +33,8 @@ class MifareCodecTest {
     }
 
     @Test fun dumpLineFormat() {
-        assertEquals("0066  |..f|", formatDumpLine(byteArrayOf(0x00, 0x66)))
+        // 0x00 → '.'（非打印占位），0x66 → 'f'；2 字节 → 2 列 ASCII。
+        assertEquals("0066  |.f|", formatDumpLine(byteArrayOf(0x00, 0x66)))
     }
 
     @Test fun manufacturerBlockOnlySector0Block0() {
@@ -51,7 +52,7 @@ class MifareCodecTest {
     @Test fun mctKeysParsePlainDictionary() {
         val text = """
             # comment line
-            FFFFFFFFFFFFFF
+            FFFFFFFFFFFF
             a0a1a2a3a4a5
 
             // another comment
@@ -70,7 +71,8 @@ class MifareCodecTest {
     }
 
     @Test fun mctKeysParseIgnoresShortAndLongTokens() {
-        assertEquals(emptyList<String>(), MctKeys.parse("1234 abcd notakeyhere FFFFFFFFFFFFF"))
+        // 短 token（1234/abcd）与非 hex 词跳过；行尾 12F 是合法 key，正常收集。
+        assertEquals(listOf("FFFFFFFFFFFF"), MctKeys.parse("1234 abcd notakeyhere FFFFFFFFFFFF"))
     }
 
     @Test fun mctKeysDeduplicatesPreservingOrder() {
