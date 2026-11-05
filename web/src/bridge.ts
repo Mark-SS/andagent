@@ -41,6 +41,7 @@ export const DEFAULT_SYSTEM_PROMPT = [
   "- 脚本与包管理：termux_setup / shell_exec / pkg_install / js_eval / script_check / json_fix（JS 脚本可用 andagent.tool 调用设备工具）",
   "- 可复用脚本：script_save 保存 → script_run 随时执行（支持 args_json 传参）→ script_list 查看；修改前用 script_read。适合周期性任务、数据变换管道、自动化流程。脚本内可用 andagent.tool() 调设备工具。",
   "- 系统导航：open_settings（27 类设置页直达）/ app_list / get_time / device_info",
+  "- 通用 Intent：intent_send 可发任意 action（拍照 IMAGE_CAPTURE / 分享 SEND / 选择器 PICK 等），不确定接收方先用 intent_resolve 探查；发给第三方 app 的标准 scheme 跳转优先 open_uri，特殊 action 才用 intent_send；自定义广播用 intent_broadcast（系统保护广播被拦截）。",
   "- 桌面小组件：widget_generate 先规划 WidgetSpec v2 JSON，widget_save_and_pin 保存并请求添加；数据可绑定系统或 QuickJS 工具",
   "",
   "## 工作纪律",
@@ -58,6 +59,7 @@ export const DEFAULT_SYSTEM_PROMPT = [
   "- 生成小组件后，把 WidgetSpec JSON 放入 ```widget 围栏让用户在对话内预览效果，确认后再 widget_save_and_pin。",
   "- 位置结果用 ```geo 块，内容为 {\"lat\":数字,\"lng\":数字,\"label\":字符串} 的 JSON；键值状态用 ```kv 块，内容为 JSON 对象或每行 label: value。",
   "- 用户想自己动手执行命令时，输出 ```terminal 围栏（内容为 {} 或 {\"title\":标题}）打开交互终端：终端跑在与你相同的 Termux 会话里，cd/env 状态互通；用户在终端里的操作结果也会留在会话输出中，必要时可用 shell_exec 查看会话状态辅助判断。",
+  "- 用户想玩红白机游戏时，输出 ```nes 围栏（内容为 {} 或 {\"title\":标题）打开模拟器，引导用户选择自己的 .nes ROM；卡片支持触屏、键盘、保存状态和读档。",
   "- 相册结果用文字或表格列出文件名；长输出（shell_exec、file_read）给出摘要 + 关键行，不整段粘贴。",
 ].join("\n");
 
@@ -110,6 +112,9 @@ interface AndroidBridge {
   shizukuStatus(): string;
   shizukuRequest(): string;
   healthPermissionRequest(): string;
+  projectionStatus(): string;
+  projectionRequest(): string;
+  projectionStop(): string;
 }
 
 declare global {
@@ -327,6 +332,52 @@ export function requestHealthPermission(): PermissionRequestAck {
     return JSON.parse(b.healthPermissionRequest()) as PermissionRequestAck;
   } catch (e) {
     return { requested: false, message: `发起健康数据授权失败：${String(e)}` };
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Screen capture (R28: MediaProjection, no Shizuku needed)            */
+/* ------------------------------------------------------------------ */
+
+export type ProjectionChannel = "projection" | "shizuku" | "none";
+
+export interface ProjectionStatus {
+  channel: ProjectionChannel;
+  ready: boolean;
+  recording: boolean;
+  androidSdk?: number;
+  error?: string;
+}
+
+export function getProjectionStatus(): ProjectionStatus {
+  const b = bridge();
+  if (!b) {
+    return { channel: "none", ready: false, recording: false, error: "浏览器预览模式：屏幕捕获仅能在 App 内使用" };
+  }
+  try {
+    return JSON.parse(b.projectionStatus()) as ProjectionStatus;
+  } catch (e) {
+    return { channel: "none", ready: false, recording: false, error: `读取屏幕捕获状态失败：${String(e)}` };
+  }
+}
+
+export function requestProjectionConsent(): PermissionRequestAck {
+  const b = bridge();
+  if (!b) return { requested: false, message: "浏览器预览模式：屏幕捕获仅能在 App 内使用" };
+  try {
+    return JSON.parse(b.projectionRequest()) as PermissionRequestAck;
+  } catch (e) {
+    return { requested: false, message: `发起屏幕捕获授权失败：${String(e)}` };
+  }
+}
+
+export function stopProjection(): string {
+  const b = bridge();
+  if (!b) return "ERROR: 浏览器预览模式：屏幕捕获仅能在 App 内使用";
+  try {
+    return b.projectionStop();
+  } catch (e) {
+    return `ERROR: 停止屏幕捕获失败：${String(e)}`;
   }
 }
 

@@ -28,6 +28,7 @@ import { Drawer } from "./Drawer";
 import { conversationMarkdown } from "./exportConversation";
 import { MarkdownText } from "./Markdown";
 import { SettingsPanel } from "./Settings";
+import { TEMPLATE_GROUPS } from "./templates";
 import { ToolCard } from "./ToolCard";
 
 function useMessageText(): string {
@@ -172,6 +173,40 @@ function AssistantMessage() {
         <CopyMenu text={text} x={menu.x} y={menu.y} onClose={() => setMenu(null)} />
       )}
     </MessagePrimitive.Root>
+  );
+}
+
+function TemplateGrid() {
+  const aui = useAui();
+  return (
+    <div className="template-groups">
+      {TEMPLATE_GROUPS.map((group) => (
+        <div className="template-group" key={group.label}>
+          <div className="template-group-label">{group.label}</div>
+          <div className="template-grid">
+            {group.templates.map((t) => (
+              <button
+                type="button"
+                className="template-card"
+                key={t.title}
+                title={t.prompt}
+                onClick={() =>
+                  aui.thread.append({
+                    role: "user",
+                    content: [{ type: "text", text: t.prompt }],
+                  })
+                }
+              >
+                <span className="template-icon" aria-hidden="true">
+                  {t.icon}
+                </span>
+                <span className="template-title">{t.title}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -521,11 +556,7 @@ export default function App() {
                   <div className="empty-mark">A</div>
                   <h1>今天想让我做什么？</h1>
                   <p>我可以读取设备状态、分析存储与相册，并把结果整理成结论。</p>
-                  <div className="empty-hints">
-                    <span>“看看手机存储都被什么占满了”</span>
-                    <span>“相册里截图占多少空间？”</span>
-                    <span>“现在几点了？”</span>
-                  </div>
+                  <TemplateGrid />
                 </div>
               </ThreadPrimitive.Empty>
               <ThreadPrimitive.Messages

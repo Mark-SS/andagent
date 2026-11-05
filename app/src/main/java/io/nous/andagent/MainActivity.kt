@@ -46,6 +46,10 @@ import io.nous.andagent.tools.SqliteTool
 import io.nous.andagent.tools.DbGuiTool
 import io.nous.andagent.tools.TermuxTool
 import io.nous.andagent.tools.ScreenCaptureTool
+import io.nous.andagent.tools.ProjectionConsentActivity
+import io.nous.andagent.tools.ProjectionConsentBridge
+import io.nous.andagent.tools.ProjectionService
+import io.nous.andagent.tools.projectionStatusJson
 import io.nous.andagent.tools.ScreenRecordH264Tool
 import io.nous.andagent.tools.InputTool
 import io.nous.andagent.tools.BtScanTool
@@ -67,6 +71,7 @@ import io.nous.andagent.tools.DeviceInfoTool
 import io.nous.andagent.tools.FileDownloadTool
 import io.nous.andagent.tools.FileListTool
 import io.nous.andagent.tools.FileReadTool
+import io.nous.andagent.tools.FileReadB64Tool
 import io.nous.andagent.tools.FileSearchTool
 import io.nous.andagent.tools.DocumentCreateTool
 import io.nous.andagent.tools.FileWriteTool
@@ -277,6 +282,7 @@ class MainActivity : ComponentActivity() {
             "file_search" to FileSearchTool(appContext, permissionBroker),
             "file_write" to FileWriteTool(appContext, permissionBroker),
             "file_read" to FileReadTool(appContext),
+            "file_read_b64" to FileReadB64Tool(appContext),
             "file_list" to FileListTool(appContext, permissionBroker),
             // R3a: sensors + health
             "sensor_list" to SensorListTool(appContext),
@@ -328,6 +334,7 @@ class MainActivity : ComponentActivity() {
         tools.putAll(EMAIL_TOOLS.associateWith { EmailTool(appContext, it) })
         tools.putAll(STORE_TOOLS.associateWith { StoreTool(shizuku, it) })
         tools.putAll(DEVTOOLS_TOOLS.associateWith { DevToolsTool(appContext, it) })
+        tools.putAll(INTENT_TOOLS.associateWith { IntentTool(appContext, it) })
         tools.putAll(listOf("web_search", "web_read").associateWith { WebSearchTool(it) })
 
         WidgetToolRuntime.attach(tools, quickJsEngine)
@@ -348,6 +355,13 @@ class MainActivity : ComponentActivity() {
             termuxTerminalPoll = { termuxEnv.terminalPoll() },
             devtoolsStatusJson = { devtoolsStatusJson(appContext) },
             devtoolsSetDebugging = { enable -> setDevToolsDebugging(appContext, enable) },
+            projectionStatusJson = { projectionStatusJson(appContext, shizuku) },
+            projectionRequest = { requestProjectionConsent() },
+            projectionStop = {
+                val stopped = io.nous.andagent.tools.projectionStopRecording(appContext)
+                ProjectionService.stop(appContext)
+                stopped ?: "没有进行中的投影录屏；已停止屏幕捕获服务"
+            },
             embeddedWebviewOpen = { uri -> openEmbeddedWebview(uri) },
             dbGuiOpen = { name -> dbGuiOpen(name) },
             termuxGrant = {
@@ -609,6 +623,27 @@ class MainActivity : ComponentActivity() {
             put("requested", true)
             put("message", "已打开 Health Connect 授权页，请允许读取步数")
         }.toString()
+    }
+
+    /**
+     * R28: 设置页「授权屏幕捕获」——弹出系统 MediaProjection 同意框（透明
+     * trampoline Activity），返回即时 ack JSON；结果由工具调用与状态轮询消费。
+     */
+    private fun requestProjectionConsent(): String {
+        val id = ProjectionConsentBridge.newRequest()
+        return try {
+            startActivity(ProjectionConsentActivity.intent(this, id))
+            buildJsonObject {
+                put("requested", true)
+                put("message", "已弹出系统屏幕捕获授权，请在弹窗中点「立即开始」")
+            }.toString()
+        } catch (e: Throwable) {
+            ProjectionConsentBridge.report(id, false)
+            buildJsonObject {
+                put("requested", false)
+                put("message", "无法发起屏幕捕获授权：${e.message ?: e.javaClass.simpleName}")
+            }.toString()
+        }
     }
 
     /** Startup grants: album reads plus mic (WebView voice input + mic_record). */

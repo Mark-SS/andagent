@@ -4,8 +4,12 @@ import {
   type SyntaxHighlighterProps,
 } from "@assistant-ui/react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 import hljs from "highlight.js";
 import { ChartCard } from "./ChartCard";
+import { MermaidCard } from "./MermaidCard";
+import { NesCard } from "./NesCard";
 import { MediaCard } from "./MediaCard";
 import { PhotosCard, ImageCard, KvCard, TableCard, JsonTreeCard, GeoCard } from "./RichCards";
 import { CameraCard } from "./CameraCard";
@@ -17,7 +21,7 @@ import { WidgetPreviewCard } from "./WidgetPreviewCard";
 function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighlighterProps) {
   const [copied, setCopied] = useState(false);
   const kind = (language ?? "").toLowerCase();
-  const isChart = ["chart", "photos", "image", "kv", "table", "json-tree", "geo", "audio", "video", "camera", "widget", "canvas", "shader", "terminal"].includes(kind);
+  const isChart = ["chart", "photos", "image", "kv", "table", "json-tree", "geo", "audio", "video", "camera", "widget", "canvas", "shader", "terminal", "mermaid", "nes"].includes(kind);
 
   const html = useMemo(() => {
     if (isChart) return "";
@@ -33,6 +37,8 @@ function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighligh
 
   // ```chart fences carry ECharts option JSON, not source code.
   if (kind === "chart") return <ChartCard code={code} />;
+  if (kind === "mermaid") return <MermaidCard code={code} />;
+  if (kind === "nes") return <NesCard code={code} />;
   if (kind === "photos") return <PhotosCard code={code} />;
   if (kind === "image") return <ImageCard code={code} />;
   if (kind === "kv") return <KvCard code={code} />;
@@ -91,7 +97,8 @@ export const MarkdownText = memo(function MarkdownText() {
   return (
     <MarkdownTextPrimitive
       className="md"
-      remarkPlugins={[remarkGfm]}
+      remarkPlugins={[remarkGfm, remarkMath]}
+      rehypePlugins={[rehypeKatex]}
       components={MARKDOWN_COMPONENTS}
       defer
     />

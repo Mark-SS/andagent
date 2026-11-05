@@ -9,6 +9,8 @@ import android.os.Looper
 import android.provider.MediaStore
 import io.nous.andagent.bridge.PermissionBroker
 import io.nous.andagent.shell.ShizukuShell
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -51,19 +53,31 @@ class ScreenRecordTool(
 ) : Tool {
     override val name = "screen_record"
     override val description =
-        "开始录屏（通过 Shizuku 以 shell 身份调用 screenrecord，无系统录屏授权弹窗）。" +
+        "开始录屏（默认 MP4 到 Movies/AndAgent）。优先 MediaProjection（一次系统弹窗授权后全自动，Android 8+ 可用）；" +
+            "未授权且有 Shizuku 时以 shell 身份调用 screenrecord（需 Android 12+）。" +
             "duration 秒，默认 30，上限 300。立即返回文件路径；可随时调用 screen_record_stop 提前结束。"
     override val parameters = schemaOf(
         "duration" to intParam("录制秒数，默认 30，最大 300"),
     )
 
-    override suspend fun execute(args: JsonObject): String {
+    override suspend fun execute(args: JsonObject): String = withContext(Dispatchers.IO) {
+        val duration = (args.intArg("duration") ?: 30).coerceIn(1, 300)
+        when (ensureCaptureChannel(context, shizuku)) {
+            CaptureChannel.PROJECTION ->
+                projectionStartRecording(context, duration, 8_000_000)
+            CaptureChannel.NEED_CONSENT ->
+                "ERROR: 屏幕捕获未授权：请在系统弹窗中点「立即开始」后重试（也可到 设置 → 屏幕捕获 手动授权）"
+            CaptureChannel.SCRCPY -> shizukuRecord(duration)
+        }
+    }
+
+    /** Legacy shizuku screenrecord path (Android 12+, shell uid). */
+    private fun shizukuRecord(duration: Int): String {
         if (Build.VERSION.SDK_INT < 31) {
-            return "ERROR: 系统版本过低：screenrecord 录屏需要 Android 12（API 31）及以上"
+            return "ERROR: 系统版本过低：screenrecord 录屏需要 Android 12（API 31）及以上；或先授权屏幕捕获（MediaProjection）"
         }
         if (!shizuku.isGranted()) return "ERROR: ${ShizukuShell.SHIZUKU_REQUIRED}"
 
-        val duration = (args.intArg("duration") ?: 30).coerceIn(1, 300)
         val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val path = "/sdcard/Movies/andagent_$stamp.mp4"
         val command = "screenrecord --time-limit $duration $path"
@@ -96,10 +110,12 @@ class ScreenRecordTool(
 
 class ScreenRecordStopTool(private val context: Context, private val shizuku: ShizukuShell) : Tool {
     override val name = "screen_record_stop"
-    override val description = "停止正在进行的 screen_record 录屏，并让系统媒体库扫描已保存的视频。"
+    override val description = "停止正在进行的录屏（MediaProjection 或 Shizuku screenrecord），并让系统媒体库扫描已保存的视频。"
     override val parameters = schemaOf()
 
     override suspend fun execute(args: JsonObject): String {
+        // Projection recording first (tracker is authoritative for that path).
+        projectionStopRecording(context)?.let { return it }
         if (!shizuku.isGranted()) return "ERROR: ${ShizukuShell.SHIZUKU_REQUIRED}"
         val result = shizuku.run("pkill -INT screenrecord")
         val pending = ActiveRecordings.paths.toList()

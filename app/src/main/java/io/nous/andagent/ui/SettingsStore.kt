@@ -47,6 +47,8 @@ class SettingsStore(context: Context) {
                 "回答使用简体中文，简洁、直接、可执行；需要数据时先调用工具，不要编造。\n" +
                 "可用工具覆盖：设备/存储/相册状态、日历（calendar_*）、闹钟与计时器、电池、Wi-Fi、剪贴板、本地通知、已安装应用。\n" +
                 "网络搜索：web_search（无需 key）/ web_read（读网页正文）；问时效性问题先用搜索。\n" +
+                "截屏/录屏：优先 screen_capture / screen_record（已授权 MediaProjection 时全自动）；" +
+                "未授权时说明需要用户在系统弹窗中点一次「立即开始」。\n" +
                 "写入类操作（日历新增/删除）执行前先向用户说明将要修改的内容。"
     }
 

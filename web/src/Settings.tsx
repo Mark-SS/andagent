@@ -2,15 +2,19 @@ import { useEffect, useState } from "react";
 import type { Settings } from "./bridge";
 import {
   getDevToolsStatus,
+  getProjectionStatus,
   getShizukuStatus,
   getTermuxStatus,
   grantTermuxViaShizuku,
   hasBridge,
   persistSettings,
   requestHealthPermission,
+  requestProjectionConsent,
   requestShizukuPermission,
   setDevToolsEnabled,
+  stopProjection,
   type DevToolsStatus,
+  type ProjectionStatus,
   type ShizukuStatus,
   widgetList, widgetSave, widgetPin, widgetRefresh, widgetDelete,
   type SavedWidget,
@@ -35,12 +39,14 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
   const [widgetMsg, setWidgetMsg] = useState("");
   const refreshWidgets = () => setWidgets(widgetList());
   const [healthMsg, setHealthMsg] = useState<string | null>(null);
+  const [projection, setProjection] = useState<ProjectionStatus>(() => getProjectionStatus());
+  const [projectionMsg, setProjectionMsg] = useState<string | null>(null);
   const [devtools, setDevtools] = useState<DevToolsStatus | null>(() => (hasBridge() ? getDevToolsStatus() : null));
   const [devtoolsMsg, setDevtoolsMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (!hasBridge()) return;
-    const refresh = () => { setShizuku(getShizukuStatus()); setTermuxStatus(getTermuxStatus()); };
+    const refresh = () => { setShizuku(getShizukuStatus()); setTermuxStatus(getTermuxStatus()); setProjection(getProjectionStatus()); };
     refresh();
     const timer = window.setInterval(refresh, 4000);
     return () => window.clearInterval(timer);
@@ -57,12 +63,25 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
     setHealthMsg(ack.message ?? null);
   };
 
+  const askProjection = () => {
+    const ack = requestProjectionConsent();
+    setProjectionMsg(ack.message ?? null);
+    window.setTimeout(() => setProjection(getProjectionStatus()), 1500);
+  };
+
   const shizukuLabel =
     shizuku.status === "granted"
       ? "已授权"
       : shizuku.status === "not_granted"
         ? "未授权"
         : "不可用";
+
+  const projectionLabel =
+    projection.channel === "projection"
+      ? projection.recording ? "录屏中" : "已授权（MediaProjection）"
+      : projection.channel === "shizuku"
+        ? "走 Shizuku"
+        : "未配置";
 
   const save = () => {
     if (!draft.baseUrl.trim()) {
@@ -263,6 +282,36 @@ export function SettingsPanel({ settings, onClose, onSave }: Props) {
                 <li>Android 10 及以下需要电脑通过 ADB 启动 Shizuku 服务。</li>
               </ol>
             </details>
+          </div>
+
+          <div className="settings-card">
+            <div className="settings-card-head">
+              <span>屏幕捕获（截屏 / 录屏）</span>
+              <span className={`status-pill ${projection.channel === "projection" ? "status-granted" : "status-not_granted"}`}>
+                {projectionLabel}
+              </span>
+            </div>
+            <p className="settings-card-note">
+              截屏 / 录屏优先走 MediaProjection（无需 Shizuku，系统弹窗授权一次即可，之后全自动）；
+              未授权时回退 Shizuku（scrcpy / screenrecord）。授权后如需彻底关闭，点「停止」。
+            </p>
+            {projection.error && <p className="settings-error">{projection.error}</p>}
+            {projectionMsg && <p className="settings-card-note">{projectionMsg}</p>}
+            <div className="settings-card-actions">
+              <button type="button" className="btn-primary" onClick={askProjection}>
+                授权屏幕捕获
+              </button>
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => { setProjectionMsg(stopProjection()); window.setTimeout(() => setProjection(getProjectionStatus()), 600); }}
+              >
+                停止
+              </button>
+              <button type="button" className="btn-ghost" onClick={() => setProjection(getProjectionStatus())}>
+                刷新状态
+              </button>
+            </div>
           </div>
 
           <div className="settings-card">

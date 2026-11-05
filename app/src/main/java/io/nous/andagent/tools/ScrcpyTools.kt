@@ -115,9 +115,20 @@ private fun imageJpeg(image: Image): ByteArray {
 
 class ScreenCaptureTool(private val context: Context, private val shizuku: ShizukuShell) : Tool {
     override val name = "screen_capture"
-    override val description = "用 scrcpy-server 取一帧屏幕，保存 JPEG 并返回缩略图；失败时可用 screen_record 兜底。"
+    override val description =
+        "截取一帧屏幕，保存 JPEG 并返回缩略图。优先 MediaProjection（一次系统弹窗授权后全自动）；" +
+            "未授权且有 Shizuku 时走 scrcpy-server；两者都不可用时触发系统屏幕捕获授权弹窗。"
     override val parameters = schemaOf()
     override suspend fun execute(args: JsonObject): String = withContext(Dispatchers.IO) {
+        when (ensureCaptureChannel(context, shizuku)) {
+            CaptureChannel.PROJECTION -> projectionCaptureFrame(context)
+            CaptureChannel.NEED_CONSENT ->
+                "ERROR: 屏幕捕获未授权：请在系统弹窗中点「立即开始」后重试（也可到 设置 → 屏幕捕获 手动授权）"
+            CaptureChannel.SCRCPY -> scrcpyCapture()
+        }
+    }
+
+    private suspend fun scrcpyCapture(): String = withContext(Dispatchers.IO) {
         val session = ScrcpySession(context, shizuku)
         try {
             session.open(1280, 4_000_000)?.let { return@withContext "ERROR: $it；可调用 screen_record 兜底" }
@@ -170,15 +181,36 @@ private fun nalUnits(bytes: ByteArray): List<ByteArray> {
 
 class ScreenRecordH264Tool(private val context: Context, private val shizuku: ShizukuShell) : Tool {
     override val name = "screen_record_h264"
-    override val description = "scrcpy H.264 录制到 Movies MP4，可选时长、码率与最大边长。"
+    override val description =
+        "录制屏幕到 Movies/AndAgent MP4，可选时长、码率与最大边长。优先 MediaProjection（一次系统弹窗授权后全自动）；" +
+            "未授权且有 Shizuku 时走 scrcpy-server；两者都不可用时触发系统屏幕捕获授权弹窗。"
     override val parameters = schemaOf("duration_s" to intParam("时长秒数，默认 30，最大 180"), "bit_rate" to intParam("码率 bps，默认 4000000"), "max_size" to intParam("最大边长，默认 1280"))
     override suspend fun execute(args: JsonObject): String = withContext(Dispatchers.IO) {
-        if (Build.VERSION.SDK_INT < 29) return@withContext "ERROR: 此录制方式需要 Android 10+；可使用 screen_record"
+        val duration = (args.intArg("duration_s") ?: 30).coerceIn(1, 180)
+        val bitRate = args.intArg("bit_rate") ?: 4_000_000
+        when (ensureCaptureChannel(context, shizuku)) {
+            CaptureChannel.PROJECTION -> {
+                // MediaRecorder writes H.264 directly; start → wait → stop
+                // gives the same synchronous contract as the scrcpy path.
+                val started = projectionStartRecording(context, duration, bitRate)
+                if (started.startsWith("ERROR")) return@withContext started
+                Thread.sleep(duration * 1000L)
+                projectionStopRecording(context) ?: "ERROR: 录屏提前结束，请重试"
+            }
+            CaptureChannel.NEED_CONSENT ->
+                "ERROR: 屏幕捕获未授权：请在系统弹窗中点「立即开始」后重试（也可到 设置 → 屏幕捕获 手动授权）"
+            CaptureChannel.SCRCPY -> {
+                if (Build.VERSION.SDK_INT < 29) return@withContext "ERROR: 此录制方式需要 Android 10+；可使用 screen_record"
+                scrcpyRecord(duration, bitRate)
+            }
+        }
+    }
+
+    private suspend fun scrcpyRecord(duration: Int, bitRate: Int): String = withContext(Dispatchers.IO) {
         val session = ScrcpySession(context, shizuku)
         var uri: android.net.Uri? = null
         try {
-            session.open(args.intArg("max_size") ?: 1280, args.intArg("bit_rate") ?: 4_000_000)?.let { return@withContext "ERROR: $it；可用 screen_record 兜底" }
-            val duration = (args.intArg("duration_s") ?: 30).coerceIn(1, 180)
+            session.open(args.intArg("max_size") ?: 1280, bitRate)?.let { return@withContext "ERROR: $it；可用 screen_record 兜底" }
             val values = ContentValues().apply {
                 put(MediaStore.Video.Media.DISPLAY_NAME, "andagent_h264_${System.currentTimeMillis()}.mp4")
                 put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")

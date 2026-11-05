@@ -481,6 +481,52 @@ const TOOL_DEFS = [
     },
   },
   {
+    name: "intent_send",
+    description:
+      "发送任意 Android Intent（通用版 open_uri）：指定 action 构造意图并发给系统，支持拍照（android.media.action.IMAGE_CAPTURE）、分享（SEND）、选择（PICK）等任意 action，可带 uri/mime/extras/categories/component。不确定设备上谁能响应先 intent_resolve 探查；标准 scheme（https:// taobao:// geo: 等）优先 open_uri。",
+    parameters: {
+      type: "object",
+      properties: {
+        action: { type: "string", description: "Intent action，如 android.intent.action.SEND、android.media.action.IMAGE_CAPTURE" },
+        uri: { type: "string", description: "可选：data 部分，任意 scheme" },
+        mime_type: { type: "string", description: "可选：MIME 类型" },
+        extras: { type: "object", description: "可选 JSON 对象：key → string/int/bool/double/字符串数组" },
+        categories: { type: "array", items: { type: "string" }, description: "可选，如 [\"android.intent.category.LAUNCHER\"]" },
+        package: { type: "string", description: "可选：限定目标应用包名" },
+        component: { type: "string", description: "可选：\"pkg/.Class\" 精确指定接收方（仅 exported activity 可外部调用）" },
+        flags: { type: "integer", description: "可选：额外 Intent flags；默认已自动加 NEW_TASK" },
+        mode: { type: "string", description: "chooser（默认，弹选择器）| direct（唯一接收方直接发）| confirm（只列接收方不发送）" },
+      },
+      required: ["action"],
+    },
+  },
+  {
+    name: "intent_resolve",
+    description: "查询设备上哪些应用能响应指定 action 的 Intent（探查「这个动作手机能干吗」），返回接收方应用列表，不执行动作。",
+    parameters: {
+      type: "object",
+      properties: {
+        action: { type: "string", description: "要探查的 action，如 android.intent.action.SEND" },
+        uri: { type: "string", description: "可选：data 部分" },
+        mime_type: { type: "string", description: "可选：MIME 类型" },
+      },
+      required: ["action"],
+    },
+  },
+  {
+    name: "intent_broadcast",
+    description: "发送自定义广播（仅限自定义/厂商 action，android. 开头的系统保护广播被拦截；接收方需 exported 才能收到，否则静默无效）。",
+    parameters: {
+      type: "object",
+      properties: {
+        action: { type: "string", description: "自定义广播 action，如 com.example.MY_EVENT" },
+        extras: { type: "object", description: "可选 JSON 对象：key → string/int/bool/double/字符串数组" },
+        package: { type: "string", description: "可选：限定显式广播目标包名" },
+      },
+      required: ["action"],
+    },
+  },
+  {
     name: "album_photos",
     description:
       "查询相册照片（返回 id、content:// uri、文件名等，缩略图由工具卡片自动展示）。回复里用文字或表格列出文件名，不要输出 ```photos 围栏或复制图片数据。按文件夹/关键词过滤，默认最新 8 张。",
@@ -533,7 +579,8 @@ const CHART_GUIDE = [
   "2. 只能使用纯 JSON：禁止函数、注释、变量、单引号或 JS 表达式（例如 formatter 函数一律不要写）。",
   "3. 图表类型仅限 bar、line、pie，用 series[].type 指定；数据标签直接用字符串/数字数组。",
   "4. 工具返回 JSON 时，先读懂数据，再把整理后的 option 放进 chart 块，不要直接粘贴大段原始 JSON。",
-  "5. 示例：",
+  "5. 数学公式用 LaTeX 书写：行内用 $...$，块级用 $$...$$；流程图、时序图、架构图用 ```mermaid 围栏。",
+  "6. 示例：",
   "```chart",
   '{"tooltip":{},"legend":{},"xAxis":{"type":"category","data":["一月","二月","三月"]},"yAxis":{"type":"value"},"series":[{"name":"照片数","type":"bar","data":[12,20,8]}]}',
   "```",
@@ -543,6 +590,7 @@ const STORAGE_MEDIA_GUIDE = [
   "结构化存储：用户要记账、清单或笔记库时，先用 db_create 建库，再用 db_exec 建表，后续用参数化 INSERT 和 db_query SELECT。",
   "记账表例：CREATE TABLE records(id INTEGER PRIMARY KEY, date TEXT, item TEXT, amount REAL)。",
   "输出呈现：给用户音频或视频文件时，用 ```audio 或 ```video 围栏，内容为 JSON，例如 {\"uri\":\"/本地路径/file.mp4\",\"title\":\"文件名\"}；uri 可为本地文件路径或 https。",
+  "娱乐：用户想玩红白机游戏时输出 ```nes 围栏（内容为 {} 或 {\"title\":\"游戏\"}），引导用户在卡片里选择自己的 .nes ROM；支持触屏、键盘、保存状态和读档。",
 ].join("\n");
 
 /** Always appended, so prompts saved before this fix cannot re-enable base64 fences. */

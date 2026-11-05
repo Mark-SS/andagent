@@ -23,6 +23,9 @@
 
     <!-- Local notifications (runtime on Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- R28: MediaProjection screen capture — foreground service holding the projection -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <!-- Silent alarm/timer writes via AlarmClock intents (SKIP_UI=true) -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
     <!-- mic_record + WebView voice input (getUserMedia) -->
@@ -93,6 +96,19 @@
             android:name=".tools.FilePickActivity"
             android:exported="false"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- R28: MediaProjection consent trampoline + projection-holding FGS.
+             Android 14+ requires getMediaProjection() to run after
+             startForeground(type=mediaProjection) — see ProjectionService. -->
+        <activity
+            android:name=".tools.ProjectionConsentActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <service
+            android:name=".tools.ProjectionService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
 
         <receiver
             android:name=".shell.TermuxResultReceiver"

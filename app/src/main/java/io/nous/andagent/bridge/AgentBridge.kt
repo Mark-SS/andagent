@@ -68,6 +68,10 @@ class AgentBridge(
     // R25: 与同名 @JavascriptInterface 方法错开命名，避免调用点歧义。
     private val devtoolsStatusJson: () -> String = { "{\"enabled\":false,\"error\":\"devtools 桥不可用\"}" },
     private val devtoolsSetDebugging: (Boolean) -> String = { "ERROR: devtools 桥不可用" },
+    // R28: MediaProjection 屏幕捕获（设置页卡片）。
+    private val projectionStatusJson: () -> String = { "{\"channel\":\"none\",\"ready\":false}" },
+    private val projectionRequest: () -> String = { "{\"requested\":false,\"message\":\"屏幕捕获授权不可用\"}" },
+    private val projectionStop: () -> String = { "ERROR: 屏幕捕获通道不可用" },
     private val embeddedWebviewOpen: (String) -> String = { "ERROR: 浏览器不可用" },
     private val dbGuiOpen: (String) -> String = { "ERROR: 数据库浏览器不可用" },
 ) {
@@ -276,6 +280,24 @@ class AgentBridge(
     @JavascriptInterface
     fun devtoolsSetEnabled(enabled: Boolean): String = runCatching { devtoolsSetDebugging(enabled) }
         .getOrElse { "ERROR: 切换 DevTools 失败：${it.message ?: it.javaClass.simpleName}" }
+
+    /** R28: 屏幕捕获通道状态 {"channel":"projection"|"shizuku"|"none","ready":bool,"recording":bool}。 */
+    @JavascriptInterface
+    fun projectionStatus(): String = runCatching { projectionStatusJson() }
+        .getOrElse { "{\"channel\":\"none\",\"ready\":false,\"error\":\"${it.message ?: it.javaClass.simpleName}\"}" }
+
+    /** R28: 发起系统屏幕捕获授权弹窗（透明 trampoline Activity），返回即时 ack。 */
+    @JavascriptInterface
+    fun projectionRequest(): String = runCatching { projectionRequest() }
+        .getOrElse { buildJsonObject {
+            put("requested", false)
+            put("message", it.message ?: "屏幕捕获授权请求失败")
+        }.toString() }
+
+    /** R28: 停止进行中的投影录屏并释放 MediaProjection。 */
+    @JavascriptInterface
+    fun projectionStop(): String = runCatching { projectionStop() }
+        .getOrElse { "ERROR: 停止屏幕捕获失败：${it.message ?: it.javaClass.simpleName}" }
 
     @JavascriptInterface
     fun termuxGrantViaShizuku(): String = runCatching { runBlocking { termuxGrant() } }

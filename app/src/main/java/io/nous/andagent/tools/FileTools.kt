@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import android.provider.OpenableColumns
 import io.nous.andagent.bridge.PermissionBroker
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
@@ -20,6 +21,7 @@ import java.io.BufferedInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
+import android.util.Base64
 import java.net.URI
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -50,6 +52,47 @@ private const val BROWSER_UA =
         "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
 
 private const val READ_CAP = 100 * 1024
+private const val NES_CAP = 2 * 1024 * 1024
+
+/** SAF-backed, bounded ROM reader. The display name and header are both checked. */
+class FileReadB64Tool(private val context: Context) : Tool {
+    override val name = "file_read_b64"
+    override val description = "读取不超过 2MB 的 .nes ROM，返回 base64；仅接受有效 NES 文件头。"
+    override val parameters = schemaOf("uri" to strParam("file_pick 返回的 content:// URI"), required = listOf("uri"))
+
+    override suspend fun execute(args: JsonObject): String {
+        val raw = args.strArg("uri") ?: return "ERROR: 缺少 uri"
+        if (!raw.startsWith("content://")) return "ERROR: 只接受文件选择器的 content:// URI"
+        return runCatching {
+            val uri = Uri.parse(raw)
+            val name = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                ?.use { if (it.moveToFirst()) it.getString(0) else null }
+                ?: error("无法读取文件名")
+            require(name.endsWith(".nes", ignoreCase = true)) { "只支持 .nes 文件" }
+            val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
+                val out = ByteArrayOutputStream()
+                val buffer = ByteArray(8192)
+                while (true) {
+                    val n = input.read(buffer)
+                    if (n < 0) break
+                    require(out.size() + n <= NES_CAP) { "ROM 超过 2MB" }
+                    out.write(buffer, 0, n)
+                }
+                out.toByteArray()
+            } ?: error("无法打开 ROM")
+            require(validNesHeader(bytes)) { "无效 NES 文件头" }
+            buildJsonObject {
+                put("name", name)
+                put("bytes", bytes.size)
+                put("base64", Base64.encodeToString(bytes, Base64.NO_WRAP))
+            }.toString()
+        }.getOrElse { "ERROR: 读取 ROM 失败：${it.message ?: it.javaClass.simpleName}" }
+    }
+}
+
+internal fun validNesHeader(bytes: ByteArray): Boolean = bytes.size >= 16 &&
+    bytes[0] == 'N'.code.toByte() && bytes[1] == 'E'.code.toByte() &&
+    bytes[2] == 'S'.code.toByte() && bytes[3] == 0x1a.toByte()
 
 private fun dirRoot(token: String?): String? = when (token?.lowercase()) {
     null, "", "downloads", "download" -> Environment.DIRECTORY_DOWNLOADS
@@ -420,6 +463,7 @@ class FileReadTool(private val context: Context) : Tool {
                 if (looksBinary(head, headLen)) {
                     return@use "ERROR: 这不是文本文件（检测到二进制内容），已拒绝读取"
                 }
+                val cap = if (dir == "app_private" && name?.matches(Regex("nes-[0-9a-f]{8}\\.json")) == true) NES_CAP else READ_CAP
                 val out = ByteArrayOutputStream()
                 val buf = ByteArray(8192)
                 var total = 0
@@ -427,9 +471,9 @@ class FileReadTool(private val context: Context) : Tool {
                 while (true) {
                     val n = input.read(buf)
                     if (n < 0) break
-                    if (total + n > READ_CAP) {
-                        out.write(buf, 0, READ_CAP - total)
-                        total = READ_CAP
+                    if (total + n > cap) {
+                        out.write(buf, 0, cap - total)
+                        total = cap
                         truncated = true
                         break
                     }

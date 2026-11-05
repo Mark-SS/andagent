@@ -14,7 +14,8 @@ let page = 0;
 let hasMore = false;
 let currentRows: unknown[][] = [];
 let grid: Grid | null = null;
-const pageSize = 100;
+// Mobile gets fewer rows per page so rows stay tall/tappable without long scrolls.
+const pageSize = window.matchMedia("(max-width: 719px)").matches ? 15 : 50;
 function showError(message: string) { $('status').textContent = message; }
 function parseResult(raw: string): Result { const value = JSON.parse(raw); if (value.error) throw new Error(value.error); return value; }
 function read(sql: string): Result {
@@ -28,7 +29,7 @@ function renderGrid(result: Result) {
   const columns = result.columns.length ? result.columns : ['结果'];
   const data = currentRows.length ? currentRows.map(row => row.map(value => value == null ? 'NULL' : String(value))) : [];
   if (grid) { grid.destroy(); $('grid').replaceChildren(); }
-  grid = new Grid({ columns, data, sort: false, search: false, pagination: false, fixedHeader: true, height: '45dvh' });
+  grid = new Grid({ columns, data, sort: false, search: false, pagination: false, fixedHeader: true, width: '100%', height: '45dvh' });
   grid.render($('grid'));
   $('page').textContent = `第 ${page + 1} 页`;
   ($<HTMLButtonElement>('prev')).disabled = page === 0 || !selected;
