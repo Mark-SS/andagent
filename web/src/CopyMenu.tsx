@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "./i18n";
 import { createPortal } from "react-dom";
+import { hasBridge, uiShare } from "./bridge";
 
 /** Clipboard write with a legacy fallback for WebViews without async clipboard. */
 export async function copyText(text: string): Promise<boolean> {
@@ -87,8 +88,10 @@ interface CopyMenuProps {
 export function CopyMenu({ text, x, y, onClose }: CopyMenuProps) {
   const { t } = useI18n();
   const [state, setState] = useState<"idle" | "done" | "failed">("idle");
+  const [shareFailed, setShareFailed] = useState(false);
+  const nativeBridge = hasBridge();
   const left = Math.max(8, Math.min(x, window.innerWidth - 132));
-  const top = Math.max(8, Math.min(y, window.innerHeight - 54));
+  const top = Math.max(8, Math.min(y, window.innerHeight - (nativeBridge ? 92 : 54)));
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -102,6 +105,15 @@ export function CopyMenu({ text, x, y, onClose }: CopyMenuProps) {
     const ok = await copyText(text);
     setState(ok ? "done" : "failed");
     window.setTimeout(onClose, 700);
+  };
+
+  const share = () => {
+    if (!uiShare(text).ok) {
+      setShareFailed(true);
+      window.setTimeout(() => setShareFailed(false), 1200);
+      return;
+    }
+    onClose();
   };
 
   return createPortal(
@@ -118,6 +130,14 @@ export function CopyMenu({ text, x, y, onClose }: CopyMenuProps) {
           </span>
           {state === "idle" ? t("copyAll") : state === "done" ? t("copied") : t("copyFailed")}
         </button>
+        {nativeBridge && (
+          <button type="button" className="copy-menu-item" onClick={share} role="menuitem">
+            <span className="copy-menu-icon" aria-hidden="true">
+              ↗
+            </span>
+            {shareFailed ? t("copyFailed") : t("share")}
+          </button>
+        )}
       </div>
     </div>,
     document.body,

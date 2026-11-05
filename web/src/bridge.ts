@@ -198,6 +198,20 @@ interface AndroidBridge {
   reportTheme?(isDark: boolean): void;
   cancelTool?(reqId: string): void;
   lastShellResult?(): string;
+  /* R20: 八域 UI 命令（可选；浏览器预览下全部缺失）。 */
+  uiToast?(message: string, long: boolean): string;
+  uiHaptic?(pattern: string): string;
+  uiKeepScreenOn?(enabled: boolean): string;
+  uiImmersive?(enabled: boolean): string;
+  uiOrientation?(mode: string): string;
+  navBack?(): string;
+  navMinimize?(): string;
+  uiShare?(text: string, subject: string): string;
+  uiSecureFlag?(enabled: boolean): string;
+  uiKeyboard?(show: boolean): string;
+  uiStatus?(): string;
+  uiScreenMetrics?(): string;
+  webReload?(): string;
 }
 
 declare global {
@@ -225,6 +239,137 @@ export function skillManage(action: string, name = "", value = ""): string {
 export function hasBridge(): boolean {
   return !!bridge();
 }
+
+/* ------------------------------------------------------------------ */
+/* R20: 八域 UI 命令                                                   */
+/* ------------------------------------------------------------------ */
+
+export interface UiResult {
+  ok: boolean;
+  action?: string;
+  error?: string;
+  [key: string]: unknown;
+}
+
+export interface UiStatus {
+  ok?: boolean;
+  activityAlive: boolean;
+  keyboardVisible: boolean;
+  immersive: boolean;
+  keepScreenOn: boolean;
+  secure: boolean;
+  orientation: string;
+  requestedOrientation?: string;
+  webViewReady?: boolean;
+}
+
+export interface UiScreenMetrics {
+  ok?: boolean;
+  width: number;
+  height: number;
+  widthDp?: number;
+  heightDp?: number;
+  density: number;
+  densityDpi?: number;
+  orientation: string;
+  configurationOrientation?: number;
+}
+
+const UI_BRIDGE_MISSING = "设备桥不可用";
+
+function parseUiResult(raw: unknown): UiResult {
+  if (typeof raw !== "string" || !raw) return { ok: false, error: UI_BRIDGE_MISSING };
+  if (raw.startsWith("ERROR:")) return { ok: false, error: raw.slice(6).trim() || UI_BRIDGE_MISSING };
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const record = parsed as Record<string, unknown>;
+      return { ...record, ok: record.ok !== false } as UiResult;
+    }
+  } catch {
+    /* plain "OK" acknowledgement */
+  }
+  return { ok: true };
+}
+
+function callUi(fn: (() => string) | undefined): UiResult {
+  if (typeof fn !== "function") return { ok: false, error: UI_BRIDGE_MISSING };
+  try {
+    return parseUiResult(fn());
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+
+export function uiToast(message: string, long = false): UiResult {
+  const fn = bridge()?.uiToast;
+  return callUi(fn ? () => fn(message, long) : undefined);
+}
+
+export function uiHaptic(pattern: "click" | "double" | "heavy" | string): UiResult {
+  const fn = bridge()?.uiHaptic;
+  return callUi(fn ? () => fn(pattern) : undefined);
+}
+
+export function uiKeepScreenOn(enabled: boolean): UiResult {
+  const fn = bridge()?.uiKeepScreenOn;
+  return callUi(fn ? () => fn(enabled) : undefined);
+}
+
+export function uiImmersive(enabled: boolean): UiResult {
+  const fn = bridge()?.uiImmersive;
+  return callUi(fn ? () => fn(enabled) : undefined);
+}
+
+export function uiOrientation(mode: "portrait" | "landscape" | "auto" | string): UiResult {
+  const fn = bridge()?.uiOrientation;
+  return callUi(fn ? () => fn(mode) : undefined);
+}
+
+export function navBack(): UiResult {
+  const fn = bridge()?.navBack;
+  return callUi(fn ? () => fn() : undefined);
+}
+
+export function navMinimize(): UiResult {
+  const fn = bridge()?.navMinimize;
+  return callUi(fn ? () => fn() : undefined);
+}
+
+export function uiShare(text: string, subject = ""): UiResult {
+  const fn = bridge()?.uiShare;
+  return callUi(fn ? () => fn(text, subject) : undefined);
+}
+
+export function uiSecureFlag(enabled: boolean): UiResult {
+  const fn = bridge()?.uiSecureFlag;
+  return callUi(fn ? () => fn(enabled) : undefined);
+}
+
+export function uiKeyboard(show: boolean): UiResult {
+  const fn = bridge()?.uiKeyboard;
+  return callUi(fn ? () => fn(show) : undefined);
+}
+
+export function uiStatus(): UiStatus | null {
+  const fn = bridge()?.uiStatus;
+  const result = callUi(fn ? () => fn() : undefined);
+  if (!result.ok || typeof result.orientation !== "string" || typeof result.keyboardVisible !== "boolean") return null;
+  return result as unknown as UiStatus;
+}
+
+export function uiScreenMetrics(): UiScreenMetrics | null {
+  const fn = bridge()?.uiScreenMetrics;
+  const result = callUi(fn ? () => fn() : undefined);
+  if (!result.ok || typeof result.width !== "number" || typeof result.height !== "number") return null;
+  return result as unknown as UiScreenMetrics;
+}
+
+export function webReload(): UiResult {
+  const fn = bridge()?.webReload;
+  return callUi(fn ? () => fn() : undefined);
+}
+
 
 /* ------------------------------------------------------------------ */
 /* Settings                                                            */

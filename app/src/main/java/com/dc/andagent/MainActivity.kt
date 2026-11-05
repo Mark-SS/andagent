@@ -36,6 +36,7 @@ import androidx.webkit.WebViewAssetLoader
 import com.dc.andagent.bridge.AgentBridge
 import com.dc.andagent.bridge.DbGuiBridge
 import com.dc.andagent.bridge.PermissionBroker
+import com.dc.andagent.bridge.UiCommands
 import com.dc.andagent.shell.devtoolsStatusJson
 import com.dc.andagent.shell.setDevToolsDebugging
 import com.dc.andagent.shell.ShizukuShell
@@ -491,6 +492,7 @@ class MainActivity : ComponentActivity() {
             },
             embeddedWebviewOpen = { uri -> openEmbeddedWebview(uri) },
             dbGuiOpen = { name -> dbGuiOpen(name) },
+            uiCommands = UiCommands(this) { if (::webView.isInitialized) webView else null },
             themeChange = { dark -> runOnUiThread { applyUiTheme(dark) } },
             termuxGrant = {
                 if (!shizuku.isGranted()) "ERROR: 请先启动 Shizuku 并在设置页授权 AndAgent"

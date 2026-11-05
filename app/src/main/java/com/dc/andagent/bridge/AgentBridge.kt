@@ -81,7 +81,14 @@ class AgentBridge(
     private val themeChange: (Boolean) -> Unit = {},
     private val embeddedWebviewOpen: (String) -> String = { "ERROR: 浏览器不可用" },
     private val dbGuiOpen: (String) -> String = { "ERROR: 数据库浏览器不可用" },
+    // R20: 八域 UI 命令（Toast/震动/沉浸/方向/导航/分享/安全/输入法/状态）。
+    private val uiCommands: UiCommands? = null,
 ) {
+    /** 统一兜底：UI 通道缺失或 UiCommands 内部异常都变成 "ERROR:" 字符串。 */
+    private fun ui(call: (UiCommands) -> String): String = runCatching {
+        uiCommands?.let(call) ?: "ERROR: UI 通道不可用"
+    }.getOrElse { "ERROR: ${it.message ?: it.javaClass.simpleName}" }
+
     private val mainHandler = Handler(Looper.getMainLooper())
     private val toolExecutor = Executors.newFixedThreadPool(2)
     private val calls = ConcurrentHashMap<String, Call>()
@@ -153,6 +160,47 @@ class AgentBridge(
     @JavascriptInterface
     fun dbGuiOpen(name: String): String = runCatching { dbGuiOpen.invoke(name) }
         .getOrElse { "ERROR: 打开数据库浏览器失败：${it.message ?: it.javaClass.simpleName}" }
+
+    /* --------------------------- R20 UI 命令 ---------------------------- */
+
+    @JavascriptInterface
+    fun uiToast(message: String, long: Boolean): String = ui { it.toast(message, long) }
+
+    @JavascriptInterface
+    fun uiHaptic(pattern: String): String = ui { it.haptic(pattern) }
+
+    @JavascriptInterface
+    fun uiKeepScreenOn(enabled: Boolean): String = ui { it.keepScreenOn(enabled) }
+
+    @JavascriptInterface
+    fun uiImmersive(enabled: Boolean): String = ui { it.immersive(enabled) }
+
+    @JavascriptInterface
+    fun uiOrientation(mode: String): String = ui { it.orientation(mode) }
+
+    @JavascriptInterface
+    fun navBack(): String = ui { it.navBack() }
+
+    @JavascriptInterface
+    fun navMinimize(): String = ui { it.navMinimize() }
+
+    @JavascriptInterface
+    fun uiShare(text: String, subject: String): String = ui { it.share(text, subject) }
+
+    @JavascriptInterface
+    fun uiSecureFlag(enabled: Boolean): String = ui { it.secureFlag(enabled) }
+
+    @JavascriptInterface
+    fun uiKeyboard(show: Boolean): String = ui { it.keyboard(show) }
+
+    @JavascriptInterface
+    fun uiStatus(): String = ui { it.status() }
+
+    @JavascriptInterface
+    fun uiScreenMetrics(): String = ui { it.screenMetrics() }
+
+    @JavascriptInterface
+    fun webReload(): String = ui { it.reload() }
 
     /* ----------------------------- settings ----------------------------- */
 
