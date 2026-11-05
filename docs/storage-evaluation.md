@@ -63,14 +63,16 @@
 | datastore（Android 变体） | `androidx.datastore:datastore-android:1.1.1` | aar 26,511 | 27,809 | **25,608** |
 | datastore-preferences（Android 变体） | `androidx.datastore:datastore-preferences-android:1.1.1` | aar 16,726 | 17,254 | **16,252** |
 | datastore-core-okio（JVM 变体） | `androidx.datastore:datastore-core-okio:1.1.1` → `-jvm` | jar 29,754 | — | **24,448** |
-| **合计** | | | | **890,972 B ≈ 870 KiB** |
+| **合计** | | | | 分项相加 918,480 B；**五个 jar 一次性 d8 为 890,972 B ≈ 870 KiB** |
+
+> 口径说明：`d8` 的字符串池/类型池在多个输入之间共享，因此「分项各自 d8 后相加」（918,480 B）比「一次编译全部输入」（890,972 B）大约 3%。**集成后的真实增量按 890,972 B 计**；分项数字只用于定位体积来源（`datastore-preferences-core` 一个模块占 77.6%）。
 
 传递依赖增量：
 
 - `okio`：项目已由 `okhttp:4.12.0` 引入 `okio-jvm:3.6.0`（实测 Gradle 缓存中即有），**增量 0**。
 - `kotlinx-coroutines-core`：项目已有 `kotlinx-coroutines-android:1.9.0`，**增量 0**。
 - `kotlin-stdlib` / `kotlin-parcelize-runtime`：项目已有 stdlib；parcelize-runtime 是 `datastore-core-android` 声明的 runtime 依赖，量级为几十 KB，未单独 dex（可忽略，但**不是零**）。
-- 若走 **Proto DataStore**：额外需要 `com.google.protobuf:protobuf-javalite:3.25.5`（jar 711,462 → dex **650,796 B ≈ 636 KiB**）+ protobuf Gradle 插件与 `.proto` 代码生成。Proto 路线新增 dex 合计 **1,541,768 B ≈ 1.47 MiB**，是本项目已有 dex 的 10.0%。
+- 若走 **Proto DataStore**：额外需要 `com.google.protobuf:protobuf-javalite:3.25.5`（jar 711,462 → dex **650,796 B ≈ 636 KiB**）+ protobuf Gradle 插件与 `.proto` 代码生成。Proto 路线新增 dex 合计 **1,541,768 B ≈ 1.47 MiB**（保守估计，按各模块单测值相加），是本项目已有 dex 的 10.0%。
 
 AAR 元数据检测结果：`datastore-core-android` 与 `datastore-preferences-android` 均声明 `minCompileSdk=34`，与当前 `compileSdk = 34` **正好卡在边界**，没有任何余量。
 
@@ -269,7 +271,7 @@ Kotlin 多平台模块（`datastore-core` / `datastore-preferences-core` / `data
 | datastore-android-1.1.1 | 26,511 | 27,809 | 25,608 |
 | datastore-preferences-android-1.1.1 | 16,726 | 17,254 | 16,252 |
 | datastore-core-okio-jvm-1.1.1 | 29,754 | — | 24,448 |
-| **datastore 合计** | | | **890,972** |
+| **datastore 合计** | | | **890,972**（一次性 d8；分项相加 918,480，见 2.1 口径说明） |
 | protobuf-javalite-3.25.5 | 711,462 | — | 650,796 |
 | room-runtime-2.6.1 | 242,741 | 257,757 | 221,340 |
 | room-compiler-2.6.1（构建期） | 5,315,997 | — | — |
