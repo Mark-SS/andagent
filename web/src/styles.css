@@ -335,6 +335,15 @@ button:disabled {
   margin: 20px 0 10px;
 }
 
+/* R40: 每条助手消息的 token 消耗 meta 行 */
+.msg-meta {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
 .assistant-body {
   min-width: 0;
 }
@@ -1579,6 +1588,26 @@ button:disabled {
 .drawer-item-time {
   font-size: 10px;
   color: var(--faint);
+  flex-shrink: 0;
+}
+
+/* R40: token 消耗小字（会话头部与条目共用） */
+.usage-tag {
+  font-size: 10px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.drawer-item-usage {
+  display: flex;
+  min-width: 0;
+}
+
+.drawer-head-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex-shrink: 0;
 }
 

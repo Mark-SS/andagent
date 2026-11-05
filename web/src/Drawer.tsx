@@ -1,6 +1,17 @@
 import { useEffect, useState } from "react";
 import type { SessionMeta } from "./sessions";
 import { resolvedTheme, toggleTheme } from "./theme";
+import { fmtTokens, type UsageSum } from "./usage";
+
+/** ↑in ↓out 小字；会话头部与条目共用。 */
+function UsageTag({ input, output }: { input: number; output: number }) {
+  if (input <= 0 && output <= 0) return null;
+  return (
+    <span className="usage-tag" title={`输入 ${input} · 输出 ${output} tokens`}>
+      ↑{fmtTokens(input)} ↓{fmtTokens(output)}
+    </span>
+  );
+}
 
 /**
  * Android-style navigation drawer: slides in from the left, scrim backdrop,
@@ -12,6 +23,7 @@ export function Drawer({
   sessions,
   currentId,
   version,
+  sessionUsage,
   onClose,
   onNew,
   onSwitch,
@@ -22,6 +34,7 @@ export function Drawer({
   sessions: SessionMeta[];
   currentId: string;
   version: string;
+  sessionUsage: UsageSum;
   onClose: () => void;
   onNew: () => void;
   onSwitch: (id: string) => void;
@@ -58,15 +71,18 @@ export function Drawer({
             <strong>AndAgent</strong>
             <div className="drawer-sub">会话 · v{version}</div>
           </div>
-          <button
-            type="button"
-            className="icon-btn"
-            aria-label={theme === "dark" ? "切换到日间模式" : "切换到夜间模式"}
-            title={theme === "dark" ? "日间模式" : "夜间模式"}
-            onClick={toggleTheme}
-          >
-            {theme === "dark" ? "☀️" : "🌙"}
-          </button>
+          <div className="drawer-head-right">
+            <UsageTag input={sessionUsage.input} output={sessionUsage.output} />
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label={theme === "dark" ? "切换到日间模式" : "切换到夜间模式"}
+              title={theme === "dark" ? "日间模式" : "夜间模式"}
+              onClick={toggleTheme}
+            >
+              {theme === "dark" ? "☀️" : "🌙"}
+            </button>
+          </div>
         </div>
 
         <button type="button" className="drawer-new" onClick={onNew}>
@@ -104,6 +120,11 @@ export function Drawer({
                   minute: "2-digit",
                 })}
               </span>
+              {s.usage && (
+                <span className="drawer-item-usage">
+                  <UsageTag input={s.usage.input} output={s.usage.output} />
+                </span>
+              )}
               <button
                 type="button"
                 className="drawer-export"

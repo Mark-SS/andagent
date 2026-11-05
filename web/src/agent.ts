@@ -14,6 +14,7 @@ import { PERMISSION_GUIDE } from "./permissionGuide";
 import { toModelMessages } from "./modelMessages";
 import { SessionStore, type SessionMeta } from "./sessions";
 import { EXTRA_TOOL_DEFS } from "./extraTools";
+import { addUsage, emptyUsage, sumMessageUsage, type UsageSum } from "./usage";
 
 type PiModule = typeof import("@mariozechner/pi-ai");
 
@@ -645,12 +646,20 @@ export interface ToolView {
 type Draft = { text: string; thinking: string; tools: ToolView[] };
 type UiPart = Exclude<NonNullable<ThreadMessageLike["content"]>, string>[number];
 
+export interface LastUsage {
+  input: number;
+  output: number;
+  durationMs?: number;
+  aborted: boolean;
+}
+
 export interface AgentSnapshot {
   messages: ThreadMessageLike[];
   running: boolean;
   error: string | null;
   sessionId: string;
   sessions: SessionMeta[];
+  usage: { session: UsageSum; last: LastUsage | null };
 }
 
 function toUiMessages(messages: PiMessage[], draft: Draft | null): ThreadMessageLike[] {
@@ -702,6 +711,14 @@ function toUiMessages(messages: PiMessage[], draft: Draft | null): ThreadMessage
     }
     const incomplete =
       message.stopReason === "aborted" || message.stopReason === "error";
+    // R40: usage 走 metadata.custom 透传给消息组件；durationMs 是 AgentEngine
+    // 挂在消息对象上的 sidecar（随会话一并持久化）。
+    const custom: Record<string, unknown> = {
+      usage: { input: message.usage?.input ?? 0, output: message.usage?.output ?? 0 },
+      aborted: message.stopReason === "aborted",
+    };
+    const durationMs = (message as { durationMs?: number }).durationMs;
+    if (durationMs !== undefined) custom.durationMs = durationMs;
     ui.push({
       id: `a-${index}-${message.timestamp}`,
       role: "assistant",
@@ -712,6 +729,7 @@ function toUiMessages(messages: PiMessage[], draft: Draft | null): ThreadMessage
             reason: message.stopReason === "aborted" ? "cancelled" : "error",
           }
         : { type: "complete", reason: "stop" },
+      metadata: { custom },
       createdAt: new Date(message.timestamp),
     });
   });
@@ -757,6 +775,22 @@ function isAbortError(error: unknown): boolean {
   return name === "AbortError" || /abort|cancel/i.test(message);
 }
 
+/** Usage of the last assistant message in the transcript (null if none). */
+function lastUsage(messages: PiMessage[]): LastUsage | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message.role !== "assistant") continue;
+    const durationMs = (message as { durationMs?: number }).durationMs;
+    return {
+      input: message.usage?.input ?? 0,
+      output: message.usage?.output ?? 0,
+      ...(durationMs !== undefined ? { durationMs } : {}),
+      aborted: message.stopReason === "aborted",
+    };
+  }
+  return null;
+}
+
 function friendlyError(error: unknown): string {
   const raw = String((error as { message?: string })?.message ?? error);
   if (/Failed to fetch|NetworkError|Load failed/i.test(raw)) {
@@ -776,6 +810,8 @@ export class AgentEngine {
   private listeners = new Set<() => void>();
   private sessionId = "";
   private sessions: SessionMeta[] = [];
+  /** R40: 会话级 token 累计（仅当前会话；切换/新建时重算或清零）。 */
+  private sessionUsage: UsageSum = emptyUsage();
 
   constructor(settings: Settings) {
     this.settings = settings;
@@ -788,6 +824,7 @@ export class AgentEngine {
       error: null,
       sessionId: this.sessionId,
       sessions: this.sessions,
+      usage: { session: { ...this.sessionUsage }, last: null },
     };
   }
 
@@ -800,6 +837,7 @@ export class AgentEngine {
     this.messages = SessionStore.load(id);
     this.draft = null;
     this.error = null;
+    this.sessionUsage = sumMessageUsage(this.messages);
     this.sessions = SessionStore.list();
     this.emit();
   }
@@ -811,6 +849,7 @@ export class AgentEngine {
     this.messages = [];
     this.draft = null;
     this.error = null;
+    this.sessionUsage = emptyUsage();
     this.sessions = SessionStore.list();
     this.emit();
   }
@@ -823,6 +862,7 @@ export class AgentEngine {
       this.messages = [];
       this.draft = null;
       this.error = null;
+      this.sessionUsage = emptyUsage();
     }
     this.sessions = sessions;
     this.emit();
@@ -843,6 +883,7 @@ export class AgentEngine {
     this.messages = [];
     this.draft = null;
     this.error = null;
+    this.sessionUsage = emptyUsage();
     this.persist();
     this.emit();
   }
@@ -858,6 +899,7 @@ export class AgentEngine {
       error: this.error,
       sessionId: this.sessionId,
       sessions: this.sessions,
+      usage: { session: { ...this.sessionUsage }, last: lastUsage(this.messages) },
     };
     for (const listener of this.listeners) listener();
   }
@@ -915,6 +957,7 @@ export class AgentEngine {
         let liveText = "";
         let liveThinking = "";
         let liveTools: ToolView[] = [];
+        const roundStart = Date.now();
         for await (const event of stream as AsyncIterable<AssistantMessageEvent>) {
           if (event.type === "text_delta") {
             liveText += event.delta;
@@ -960,6 +1003,10 @@ export class AgentEngine {
 
         pendingText = "";
         this.draft = null;
+        // R40: 每轮 final 是一条独立助手消息——usage 进会话累计，
+        // 耗时（本轮流开始→final 到手）挂在消息对象上随会话持久化。
+        addUsage(this.sessionUsage, final.usage);
+        (final as { durationMs?: number }).durationMs = Date.now() - roundStart;
         this.messages = [...this.messages, final];
         this.persist();
         this.emit();

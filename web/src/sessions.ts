@@ -4,11 +4,14 @@
  * migrated into the index as the first session on first read.
  */
 
+import { sumMessageUsage } from "./usage";
 
 export interface SessionMeta {
   id: string;
   title: string;
   updatedAt: number;
+  /** R40: 会话 token 累计（input/output），保存时从助手消息 usage 求和。 */
+  usage?: { input: number; output: number };
 }
 
 const INDEX_KEY = "andagent.sessions.index.v1";
@@ -76,10 +79,12 @@ export const SessionStore = {
     const firstUser = messages.find((m) => m.role === "user");
     const autoTitle = firstText(firstUser).slice(0, 24) || "新对话";
     const existing = index.find((s) => s.id === id);
+    const total = sumMessageUsage(messages);
     const meta: SessionMeta = {
       id,
       title: existing?.title && existing.title !== "新对话" ? existing.title : autoTitle,
       updatedAt: Date.now(),
+      usage: { input: total.input, output: total.output },
     };
     const next = [meta, ...index.filter((s) => s.id !== id)];
     try {

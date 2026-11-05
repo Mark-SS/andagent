@@ -30,6 +30,37 @@ import { MarkdownText } from "./Markdown";
 import { SettingsPanel } from "./Settings";
 import { TEMPLATE_GROUPS } from "./templates";
 import { ToolCard } from "./ToolCard";
+import { fmtTokens } from "./usage";
+
+/** metadata.custom 透传的每条消息消耗（agent.ts toUiMessages 写入）。 */
+interface MessageUsageMeta {
+  usage?: { input?: number; output?: number };
+  durationMs?: number;
+  aborted?: boolean;
+}
+
+function useMessageUsageMeta(): MessageUsageMeta | null {
+  return useAuiState(
+    (state) => (state.message.metadata?.custom as MessageUsageMeta | undefined) ?? null,
+  );
+}
+
+/** 消息底部 meta 行：↑in ↓out · 耗时；中断消息如实标注。 */
+function MessageMetaLine() {
+  const running = useAuiState((state) => state.message.status?.type === "running");
+  const meta = useMessageUsageMeta();
+  if (running || !meta) return null;
+  if (meta.aborted) return <div className="msg-meta">已中断（消耗未回报）</div>;
+  const input = meta.usage?.input ?? 0;
+  const output = meta.usage?.output ?? 0;
+  if (input <= 0 && output <= 0) return null;
+  return (
+    <div className="msg-meta">
+      ↑{fmtTokens(input)} ↓{fmtTokens(output)}
+      {meta.durationMs !== undefined && <> · {(meta.durationMs / 1000).toFixed(1)}s</>}
+    </div>
+  );
+}
 
 function useMessageText(): string {
   return useAuiState((state) =>
@@ -165,6 +196,7 @@ function AssistantMessage() {
           }}
         />
         {running && <span className="stream-cursor" aria-hidden="true" />}
+        <MessageMetaLine />
         <MessagePrimitive.Error>
           <div className="msg-error">这条消息渲染失败。</div>
         </MessagePrimitive.Error>
@@ -584,6 +616,7 @@ export default function App() {
           sessions={snapshot.sessions}
           currentId={snapshot.sessionId}
           version={appVersion}
+          sessionUsage={snapshot.usage.session}
           onClose={() => setDrawerOpen(false)}
           onNew={() => {
             engine.newSession();
