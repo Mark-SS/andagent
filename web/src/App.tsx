@@ -24,14 +24,14 @@ import {
   type Settings,
 } from "./bridge";
 import { CopyMenu, useLongPress } from "./CopyMenu";
-import { Drawer } from "./Drawer";
 import { conversationMarkdown } from "./exportConversation";
 import { MarkdownText } from "./Markdown";
-import { SettingsPanel } from "./Settings";
 import { TEMPLATE_GROUPS } from "./templates";
 import { ToolCard } from "./ToolCard";
 import { fmtTokens } from "./usage";
 import { useI18n } from "./i18n";
+import { setLanguageMode } from "./i18n";
+import { setTheme } from "./theme";
 
 /** metadata.custom 透传的每条消息消耗（agent.ts toUiMessages 写入）。 */
 interface MessageUsageMeta {
@@ -447,8 +447,6 @@ function Composer({ hasKey }: { hasKey: boolean }) {
 export default function App() {
   const { t } = useI18n();
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
-  const [showSettings, setShowSettings] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [exportNotice, setExportNotice] = useState<string | null>(null);
   useEffect(() => {
     const onExported = (event: Event) => setExportNotice(t("exportedTo", { path: (event as CustomEvent<string>).detail }));
@@ -510,93 +508,32 @@ export default function App() {
     installLLMFetch(next.baseUrl);
   };
 
+  useEffect(() => {
+    const command = (event: Event) => {
+      const detail = (event as CustomEvent<{ action: string; id?: string; settings?: Settings }>).detail;
+      if (detail.action === "new") engine.newSession();
+      if (detail.action === "switch" && detail.id) engine.switchSession(detail.id);
+      if (detail.action === "delete" && detail.id) engine.deleteSession(detail.id);
+      if (detail.action === "settings" && detail.settings) saveSettings(detail.settings);
+      if (detail.action === "export" && detail.id) {
+        const session = engine.getSnapshot().sessions.find((s) => s.id === detail.id);
+        if (session) exportConversation(session.title, conversationMarkdown(detail.id, session.title));
+      }
+    };
+    window.addEventListener("andagent:native-command", command);
+    const theme = (event: Event) => setTheme((event as CustomEvent<"system" | "light" | "dark">).detail);
+    const language = (event: Event) => setLanguageMode((event as CustomEvent<"system" | "zh" | "en">).detail);
+    window.addEventListener("andagent:native-theme", theme);
+    window.addEventListener("andagent:native-language", language);
+    return () => { window.removeEventListener("andagent:native-command", command); window.removeEventListener("andagent:native-theme", theme); window.removeEventListener("andagent:native-language", language); };
+  }, [engine]);
+
   const hasMessages = snapshot.messages.length > 0;
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <div className="app">
         {exportNotice && <div className="banner" role="status">{exportNotice}<button type="button" onClick={() => setExportNotice(null)}>{t("close")}</button></div>}
-        <header className="app-head">
-          <div className="head-left">
-            <button
-              type="button"
-              className="icon-btn"
-              title={t("sessions")}
-              aria-label={t("sessions")}
-              onClick={() => setDrawerOpen(true)}
-            >
-              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                <path
-                  d="M4 6h16M4 12h16M4 18h16"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </button>
-            <div className="brand">
-              <div className="brand-text">
-                <strong>AndAgent</strong>
-                <span>{hasBridge() ? `v${appVersion}` : t("browserPreviewVersion", { version: appVersion })}</span>
-              </div>
-            </div>
-          </div>
-          <div className="head-actions">
-            <span className="model-chip" title={settings.baseUrl}>
-              {settings.model}
-            </span>
-            <button
-              type="button"
-              className="icon-btn"
-              title={t("newChat")}
-              aria-label={t("newChat")}
-              disabled={!hasMessages || snapshot.running}
-              onClick={() => engine.newSession()}
-            >
-              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                <path
-                  d="M12 5v14M5 12h14"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </button>
-            <button
-              type="button"
-              className="icon-btn"
-              title={t("settings")}
-              aria-label={t("settings")}
-              onClick={() => setShowSettings(true)}
-            >
-              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                <path
-                  d="M12 15.2a3.2 3.2 0 100-6.4 3.2 3.2 0 000 6.4z"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  fill="none"
-                />
-                <path
-                  d="M19.4 13a7.8 7.8 0 000-2l2-1.5-2-3.4-2.3 1a7.6 7.6 0 00-1.7-1L15 3.6h-4l-.4 2.5a7.6 7.6 0 00-1.7 1l-2.3-1-2 3.4L6.6 11a7.8 7.8 0 000 2l-2 1.5 2 3.4 2.3-1a7.6 7.6 0 001.7 1l.4 2.5h4l.4-2.5a7.6 7.6 0 001.7-1l2.3 1 2-3.4-2-1.5z"
-                  stroke="currentColor"
-                  strokeWidth="1.4"
-                  fill="none"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
-          </div>
-        </header>
-
-        {!settings.apiKey && (
-          <div className="banner">
-            <span>{t("missingKey")}</span>
-            <button type="button" onClick={() => setShowSettings(true)}>
-              {t("goSettings")}
-            </button>
-          </div>
-        )}
-
         {snapshot.error && (
           <div className="error-bar" role="alert">
             <strong>{t("requestFailed")}</strong>
@@ -609,7 +546,7 @@ export default function App() {
             <div className="thread-inner">
               <ThreadPrimitive.Empty>
                 <div className="empty">
-                  <div className="empty-mark">A</div>
+                  <div className="empty-mark" aria-hidden="true"><svg viewBox="0 0 48 48" width="30" height="30"><path d="M24 5 42 39H6L24 5Z" fill="none" stroke="currentColor" strokeWidth="3" strokeLinejoin="round"/><circle cx="24" cy="29" r="4" fill="currentColor"/></svg></div>
                   <h1>{t("emptyTitle")}</h1>
                   <p>{t("emptyBody")}</p>
                   <TemplateGrid />
@@ -627,34 +564,6 @@ export default function App() {
 
         <Composer hasKey={!!settings.apiKey} />
 
-        {showSettings && (
-          <SettingsPanel
-            settings={settings}
-            onClose={() => setShowSettings(false)}
-            onSave={saveSettings}
-          />
-        )}
-
-        <Drawer
-          open={drawerOpen}
-          sessions={snapshot.sessions}
-          currentId={snapshot.sessionId}
-          version={appVersion}
-          sessionUsage={snapshot.usage.session}
-          onClose={() => setDrawerOpen(false)}
-          onNew={() => {
-            engine.newSession();
-            setDrawerOpen(false);
-          }}
-          onSwitch={(id) => engine.switchSession(id)}
-          onDelete={(id) => engine.deleteSession(id)}
-          onExport={(id) => {
-            const session = snapshot.sessions.find((s) => s.id === id);
-            if (!session) return;
-            const result = exportConversation(session.title, conversationMarkdown(id, session.title));
-            if (result.startsWith("ERROR:")) setExportNotice(result);
-          }}
-        />
       </div>
     </AssistantRuntimeProvider>
   );

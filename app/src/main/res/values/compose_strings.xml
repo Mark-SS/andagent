@@ -1,0 +1,40 @@
+<resources>
+<string name="ui_sessions">Conversations</string><string name="ui_new_chat">New conversation</string><string name="ui_settings">Settings</string><string name="ui_about">About</string><string name="ui_back">Back</string><string name="ui_save">Save</string><string name="ui_saved">Saved</string><string name="ui_cancel">Cancel</string><string name="ui_delete">Delete</string><string name="ui_export">Export</string><string name="ui_model">Model connection</string><string name="ui_appearance">Appearance</string><string name="ui_language">Language</string><string name="ui_memory">Memory</string><string name="ui_automation">Automation</string><string name="ui_extensions">Extensions</string><string name="ui_data">Data</string><string name="ui_clear_memory">Clear all memory?</string><string name="ui_no_sessions">No conversations yet</string><string name="ui_notices">Third-party notices</string>
+<string name="ui_api_url">API URL</string>
+<string name="ui_api_key">API key</string>
+<string name="ui_model_id">Model ID</string>
+<string name="ui_system_prompt">System prompt</string>
+<string name="ui_stt_model">Speech to text model</string>
+<string name="ui_stt_url">Speech to text URL</string>
+<string name="ui_tts_url">Text to speech URL</string>
+<string name="ui_tts_model">Text to speech model</string>
+<string name="ui_tts_voice">Text to speech voice</string>
+<string name="ui_theme">Theme</string>
+<string name="ui_system">System</string>
+<string name="ui_light">Light</string>
+<string name="ui_dark">Dark</string>
+<string name="ui_new_memory">New memory</string>
+<string name="ui_add_memory">Add memory</string>
+<string name="ui_no_tasks">No scheduled tasks</string>
+<string name="ui_task_name">Task name</string>
+<string name="ui_schedule">Schedule · daily 09:00</string>
+<string name="ui_task_type">Task type</string>
+<string name="ui_notification">Notification</string>
+<string name="ui_script">Script</string>
+<string name="ui_shell">Shell</string>
+<string name="ui_payload">Message, script name or command</string>
+<string name="ui_create_task">Create task</string>
+<string name="ui_run_now">Run now</string>
+<string name="ui_exact_alarms">Exact alarms</string>
+<string name="ui_skill_source">Skill URL or local path</string>
+<string name="ui_install_skill">Install skill</string>
+<string name="ui_no_skills">No installed skills</string>
+<string name="ui_steps_access">Steps access</string>
+<string name="ui_capture_access">Capture access</string>
+<string name="ui_stop_projection">Stop projection</string>
+<string name="ui_clear_memory_body">This removes all saved memories from this device.</string>
+<string name="ui_version">Version</string>
+<string name="ui_task_queued">Task queued</string>
+<string name="ui_web_debugging">WebView debugging</string>
+<string name="ui_tokens">tokens</string>
+</resources>

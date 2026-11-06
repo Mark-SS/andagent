@@ -1,5 +1,6 @@
 import { useI18n } from "./i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { kvCall } from "./bridge";
 
 /**
  * ```canvas fence: scripted 2D drawing inside a sandboxed iframe.
@@ -26,6 +27,38 @@ canvas{display:block;width:100%;height:100%}
 </style></head><body><canvas id="c"></canvas><script>
 var canvas=document.getElementById('c'),ctx=canvas.getContext('2d');
 var spec=null,started=0,raf=0;
+// ===== andagent 全局对象（统一 JS 命名空间）=====
+// sandbox 是 opaque origin，拿不到 AndroidBridge——通过 postMessage RPC 代理到
+// 父页（CanvasCard 转发 kvCall）。状态分两层：
+//   andagent.state  围栏内存级（同一 iframe 生命周期跨帧保留，canvas 动画/live 累计数据）
+//   andagent.kv     原生 KV 持久化（异步，走父页桥）
+var rpcSeq=0, rpcPending={};
+addEventListener('message',function(ev){
+  var d=ev.data||{};
+  if(d.type==='canvas'){ handleCanvas(d); return; }
+  if(d.type==='andagent-rpc-result'){
+    var pending=rpcPending[d.seq];
+    if(pending){ delete rpcPending[d.seq]; pending(d.value); }
+  }
+});
+function rpc(tool,args){
+  return new Promise(function(resolve){
+    var seq=++rpcSeq;
+    rpcPending[seq]=resolve;
+    parent.postMessage({type:'andagent-rpc',tool:tool,args:args,seq:seq},'*');
+    setTimeout(function(){ if(rpcPending[seq]){ delete rpcPending[seq]; resolve(null); } },5000);
+  });
+}
+var andagent={
+  state:{},
+  kv:{
+    get:function(ns,key){ return rpc('kv_get',{namespace:ns||'default',key:key}).then(function(r){ return (r&&r.found)?r.value:null; }); },
+    set:function(ns,key,value,ttlMs){ var a={namespace:ns||'default',key:key,value_json:JSON.stringify(value)}; if(ttlMs!==undefined&&ttlMs!==null)a.ttl_ms=ttlMs; return rpc('kv_set',a); },
+    delete:function(ns,key){ return rpc('kv_delete',{namespace:ns||'default',key:key}); }
+  }
+};
+window.andagent=andagent;
+// ===== canvas 渲染管线 =====
 // 显示区尺寸驱动内部缓冲：canvas 内部分辨率始终跟随 iframe 实际渲染尺寸，
 // 绘图坐标 w/h 即显示区大小——绘图内容自动铺满，不再有未绘制的黑色空区。
 function fit(){
@@ -34,24 +67,22 @@ function fit(){
   if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;return true;}
   return false;
 }
+function handleCanvas(d){
+  cancelAnimationFrame(raf);
+  spec=d.spec;
+  started=Date.now();
+  frame();
+}
 function frame(){
   if(!spec)return;
   if(fit()){started=Date.now();cancelAnimationFrame(raf);}
   var t=(Date.now()-started)/1000;
   ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,canvas.width,canvas.height);
-  try{ new Function('ctx','t','w','h','data',spec.code)(ctx,t,canvas.width,canvas.height,spec.data); }
+  try{ new Function('ctx','t','w','h','data','andagent',spec.code)(ctx,t,canvas.width,canvas.height,spec.data,andagent); }
   catch(e){ ctx.fillStyle='#ff9c9c';ctx.font='14px sans-serif';ctx.fillText(String(e),12,24); }
   ctx.restore();
   if(spec.animate)raf=requestAnimationFrame(frame);
 }
-addEventListener('message',function(ev){
-  var d=ev.data||{};
-  if(d.type!=='canvas')return;
-  cancelAnimationFrame(raf);
-  spec=d.spec;
-  started=Date.now();
-  frame();
-});
 addEventListener('resize',function(){ if(spec)frame(); });
 frame();
 </script></body></html>`;
@@ -94,6 +125,19 @@ export function CanvasCard({ code, data }: { code: string; data?: unknown }) {
     if (!frame || !spec || frame.dataset.ready !== "1") return;
     frame.contentWindow?.postMessage({ type: "canvas", spec: { ...spec, data } }, "*");
   }, [spec, data, visible]);
+
+  // andagent 全局对象 RPC 代理：sandbox iframe 的 andagent.kv.* → 这里转发到
+  // 原生 KV 通道（kvCall）。异步结果以 andagent-rpc-result 回传给 iframe。
+  useEffect(() => {
+    const onRpc = (ev: MessageEvent) => {
+      const d = ev.data as { type?: string; tool?: string; args?: Record<string, unknown>; seq?: number };
+      if (d?.type !== "andagent-rpc" || !d.seq || typeof d.tool !== "string") return;
+      const value = kvCall(d.tool, d.args ?? {});
+      frameRef.current?.contentWindow?.postMessage({ type: "andagent-rpc-result", seq: d.seq, value: value ?? null }, "*");
+    };
+    window.addEventListener("message", onRpc);
+    return () => window.removeEventListener("message", onRpc);
+  }, []);
 
   const onFrameLoad = () => {
     const frame = frameRef.current;
