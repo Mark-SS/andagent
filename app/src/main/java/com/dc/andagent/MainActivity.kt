@@ -131,6 +131,7 @@ import com.dc.andagent.tools.SystemApiTool
 import com.dc.andagent.tools.SYSTEM_API_TOOLS
 import com.dc.andagent.tools.AutomationTool
 import com.dc.andagent.tools.AUTOMATION_TOOLS
+import com.dc.andagent.tools.TtsFileTool
 import com.dc.andagent.tools.ExternalDataTool
 import com.dc.andagent.tools.EXTERNAL_DATA_TOOLS
 import com.dc.andagent.tools.FileOpsTool
@@ -382,6 +383,7 @@ class MainActivity : ComponentActivity() {
             "screen_record_list" to ScreenRecordListTool(appContext, shizuku, permissionBroker),
             // R3a: files
             "file_download" to FileDownloadTool(appContext, permissionBroker),
+            "tts_to_file" to TtsFileTool(appContext),
             "file_search" to FileSearchTool(appContext, permissionBroker),
             "file_write" to FileWriteTool(appContext, permissionBroker),
             "file_read" to FileReadTool(appContext),

@@ -6,6 +6,7 @@ import type { Tool as PiTool } from "@mariozechner/pi-ai";
  * FILE_OPS_TOOLS / ZIP_TOOLS / EMAIL_TOOLS / STORE_TOOLS plus NFC/Termux).
  */
 export const EXTRA_TOOL_DEFS = [
+  { name: "tts_to_file", description: "用系统 TTS 将文本合成为 WAV 音频文件，返回可用 ```audio 围栏展示的本地路径。", parameters: { type: "object", properties: { text: { type: "string", description: "待合成文本，最多 4000 字符" }, rate: { type: "number", description: "语速倍率 0.5..2.0，默认 1.0" } }, required: ["text"] } },
   { name: "live_start", description: "循环执行 JS。循环体内用 andagent.tool(name, JSON.stringify(args)) 获取设备数据，andagent.kv.get/set 跨 tick 保存状态，live.result(data) 提交本轮结果。每 tick 最多 500ms；结果最多 16KB。", parameters: { type: "object", properties: { name: { type: "string" }, code: { type: "string" }, interval_ms: { type: "integer", description: "默认 1000，最小 200" }, consumer: { type: "string", enum: ["dialog", "overlay", "kv"] } }, required: ["name", "code"] } },
   { name: "live_stop", description: "停止指定实时循环，当前 tick 完成后退出。", parameters: { type: "object", properties: { id: { type: "string" } }, required: ["id"] } },
   { name: "live_list", description: "列出实时循环的状态与最近 10 次结果。", parameters: { type: "object", properties: {}, required: [] } },

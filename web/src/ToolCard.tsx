@@ -15,6 +15,7 @@ interface ToolMeta {
 
 const META: Record<string, ToolMeta> = {
   get_time: { label: "获取时间", labelEn: "Get time", icon: "🕐" },
+  tts_to_file: { label: "文本转音频", labelEn: "Text to audio", icon: "🎵" },
   db_create: { label: "创建数据库", labelEn: "Create database", icon: "🗄️" },
   db_list: { label: "数据库列表", labelEn: "List databases", icon: "🗄️" },
   db_gui: { label: "打开数据库", labelEn: "Open database", icon: "🗄️" },
@@ -230,7 +231,7 @@ export function ToolCard(props: ToolCallMessagePartProps) {
 
   const preview = running ? (props.toolName.startsWith("nfc_") && !["nfc_status", "nfc_hce_status", "nfc_keys_manage"].includes(props.toolName) ? t("toolNfcWaiting") : t("toolRunning")) : summarize(raw, { array: t("array"), items: t("items") });
   const parsed = useMemo(() => { try { return formatted.json ? JSON.parse(raw) : null; } catch { return null; } }, [raw, formatted.json]);
-  const media = !running && !failed && ["file_download", "mic_record", "screen_record_h264", "screen_record", "screen_record_stop"].includes(props.toolName) ? mediaFromResult(raw) : null;
+  const media = !running && !failed && ["file_download", "tts_to_file", "mic_record", "screen_record_h264", "screen_record", "screen_record_stop"].includes(props.toolName) ? mediaFromResult(raw) : null;
   const webUri = props.toolName === "web_embed" && parsed?.type === "webview" && typeof parsed.uri === "string" ? parsed.uri : null;
   const photoGrid = !running && !failed && props.toolName === "album_photos" && Array.isArray(parsed?.photos) && parsed.photos.length > 0;
 

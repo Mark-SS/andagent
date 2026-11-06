@@ -660,6 +660,7 @@ const LIVE_GUIDE_EN = [
 ].join("\n");
 
 const STORAGE_MEDIA_GUIDE = [
+  "文本转音频文件用 tts_to_file；返回 path 后，用 ```audio 围栏展示，内容为 JSON：{\"uri\":\"返回的 path\",\"title\":\"音频\"}。用户可点播放器播放；文件保存在应用 exports 目录。",
   "结构化存储：用户要记账、清单或笔记库时，先用 db_create 建库，再用 db_exec 建表，后续用参数化 INSERT 和 db_query SELECT。",
   "轻量键值：用户要记住偏好、计数器或小型状态时，用 kv_set 写入，kv_get/kv_keys 读取；临时数据加 ttl_ms；清空命名空间用 kv_clear 且 confirm=true；备份/恢复用 kv_export/kv_import（replace 需 confirm=true）（最多 64 个命名空间、每命名空间 512 键、单值 64KB）。",
   "记账表例：CREATE TABLE records(id INTEGER PRIMARY KEY, date TEXT, item TEXT, amount REAL)。",
@@ -667,6 +668,7 @@ const STORAGE_MEDIA_GUIDE = [
 ].join("\n");
 
 const STORAGE_MEDIA_GUIDE_EN = [
+  "Use tts_to_file to create an audio file from text. After it returns path, show a ```audio fence containing JSON {\"uri\":\"returned path\",\"title\":\"Audio\"}. The user can play it in the card; the file is saved in the app exports directory.",
   "Structured storage: for expenses, lists, or notes, create a database with db_create, then a table with db_exec; use parameterized INSERT and db_query SELECT afterward.",
   "Key-value storage: use kv_set for preferences, counters, or small state; kv_get/kv_keys to read. Use ttl_ms for temporary values. kv_clear requires confirm=true; kv_export/kv_import handle JSON backups (replace requires confirm=true) (up to 64 namespaces, 512 keys per namespace, 64KB per value).",
   "Example expense schema: CREATE TABLE records(id INTEGER PRIMARY KEY, date TEXT, item TEXT, amount REAL).",
