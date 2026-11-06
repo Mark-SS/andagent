@@ -450,6 +450,27 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [exportNotice, setExportNotice] = useState<string | null>(null);
+  // 返回键层级：覆盖层（设置/抽屉）打开时各占一条 history 记录——Android 返回
+  // 手势/按键先收起覆盖层，而不是退出 App。popstate 弹栈时按序关闭最上层。
+  useEffect(() => {
+    const layers: string[] = [];
+    const push = (name: string) => { layers.push(name); history.pushState({ layer: name }, ""); };
+    const closeTop = (): boolean => {
+      if (showSettings) { setShowSettings(false); return true; }
+      if (drawerOpen) { setDrawerOpen(false); return true; }
+      return false;
+    };
+    // 状态变化时同步 history 栈（目标态 = 覆盖层数量）
+    const target = (showSettings ? 1 : 0) + (drawerOpen ? 1 : 0);
+    while (layers.length < target) push(layers.length === 0 ? "overlay" : "overlay");
+    while (layers.length > target) { history.back(); layers.pop(); }
+    const onPop = () => {
+      if (layers.length > 0) layers.pop();
+      closeTop();
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [showSettings, drawerOpen]);
   useEffect(() => {
     const onExported = (event: Event) => setExportNotice(t("exportedTo", { path: (event as CustomEvent<string>).detail }));
     window.addEventListener("andagent:conversation-exported", onExported);
