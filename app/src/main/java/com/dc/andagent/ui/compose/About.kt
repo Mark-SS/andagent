@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -21,7 +21,7 @@ fun AboutScreen(version: String, onBack: () -> Unit) {
     val context = LocalContext.current
     val notices = context.assets.open("THIRD-PARTY-NOTICES.md").bufferedReader().use { it.readText() }
     Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.ui_about)) },
-        navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.ui_back)) } }) }) { padding ->
+        navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.ui_back)) } }) }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("AndAgent", style = MaterialTheme.typography.headlineMedium)
             Text("${stringResource(R.string.ui_version)} $version", color = MaterialTheme.colorScheme.onSurfaceVariant)

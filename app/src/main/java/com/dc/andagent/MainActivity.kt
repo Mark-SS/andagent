@@ -185,7 +185,6 @@ import java.util.concurrent.atomic.AtomicReference
 class MainActivity : ComponentActivity() {
 
     private var composeThemeMode by mutableStateOf("system")
-    private var composeLanguageMode by mutableStateOf("system")
 
     private lateinit var webView: WebView
     private lateinit var nfcSession: NfcSession
@@ -305,7 +304,6 @@ class MainActivity : ComponentActivity() {
 
         val settingsStore = SettingsStore(this)
         composeThemeMode = getSharedPreferences("ui", MODE_PRIVATE).getString("mode", "system") ?: "system"
-        composeLanguageMode = getSharedPreferences("ui", MODE_PRIVATE).getString("language", "system") ?: "system"
         val appContext = applicationContext
         permissionBroker = PermissionBroker(this, permissionLauncher)
         shizuku = ShizukuShell(appContext).also { it.init() }
@@ -577,25 +575,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
             webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView, url: String) {
-                    super.onPageFinished(view, url)
-                    val prefs = getSharedPreferences("ui", MODE_PRIVATE)
-                    if (!prefs.contains("mode")) view.evaluateJavascript("localStorage.getItem('andagent.theme.v1')") { raw ->
-                        val mode = raw.trim('"')
-                        if (mode in setOf("system", "light", "dark")) {
-                            prefs.edit().putString("mode", mode).apply()
-                            composeThemeMode = mode
-                        }
-                    }
-                    if (!prefs.contains("language")) view.evaluateJavascript("localStorage.getItem('andagent.language')") { raw ->
-                        val mode = raw.trim('"')
-                        if (mode in setOf("system", "zh", "en")) {
-                            prefs.edit().putString("language", mode).apply()
-                            composeLanguageMode = mode
-                        }
-                    }
-                }
-
                 override fun shouldInterceptRequest(
                     view: WebView,
                     request: WebResourceRequest,
@@ -677,16 +656,13 @@ class MainActivity : ComponentActivity() {
 
     private fun sessionItems(): List<SessionItem> = runCatching {
         val raw = KvStore(this).get("sessions", "index")?.jsonPrimitive?.content ?: return emptyList()
-        Json.parseToJsonElement(raw).jsonArray.mapNotNull { item ->
-            // 逐条容错：单条坏记录跳过，不让整个抽屉列表变空
-            runCatching {
-                val obj = item.jsonObject
-                val usage = obj["usage"]?.jsonObject
-                SessionItem(obj.getValue("id").jsonPrimitive.content, obj.getValue("title").jsonPrimitive.content,
-                    obj["updatedAt"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0,
-                    (usage?.get("input")?.jsonPrimitive?.content?.toIntOrNull() ?: 0) +
-                        (usage?.get("output")?.jsonPrimitive?.content?.toIntOrNull() ?: 0))
-            }.getOrNull()
+        Json.parseToJsonElement(raw).jsonArray.map { item ->
+            val obj = item.jsonObject
+            val usage = obj["usage"]?.jsonObject
+            SessionItem(obj.getValue("id").jsonPrimitive.content, obj.getValue("title").jsonPrimitive.content,
+                obj["updatedAt"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0,
+                (usage?.get("input")?.jsonPrimitive?.content?.toIntOrNull() ?: 0) +
+                    (usage?.get("output")?.jsonPrimitive?.content?.toIntOrNull() ?: 0))
         }.sortedByDescending { it.updatedAt }
     }.getOrDefault(emptyList())
 
@@ -698,6 +674,8 @@ class MainActivity : ComponentActivity() {
         val scope = rememberCoroutineScope()
         var sessions by remember { mutableStateOf(sessionItems()) }
         var selected by remember { mutableStateOf<String?>(null) }
+        val language = getSharedPreferences("ui", MODE_PRIVATE).getString("language", "system") ?: "system"
+        var languageMode by remember { mutableStateOf(language) }
         ModalNavigationDrawer(drawerState = drawer, gesturesEnabled = true, drawerContent = {
             ConversationDrawer(sessions, selected,
                 onNew = { command("new"); selected = null; scope.launch { drawer.close() } },
@@ -721,7 +699,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 composable("settings") {
-                    SettingsScreen(settingsStore, memoryStore, composeThemeMode, composeLanguageMode,
+                    SettingsScreen(settingsStore, memoryStore, composeThemeMode, languageMode,
                         onTheme = { mode ->
                             composeThemeMode = mode
                             getSharedPreferences("ui", MODE_PRIVATE).edit().putString("mode", mode).apply()
@@ -729,7 +707,7 @@ class MainActivity : ComponentActivity() {
                             applyUiTheme(mode == "dark" || (mode == "system" &&
                                 (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES))
                         },
-                        onLanguage = { mode -> composeLanguageMode = mode
+                        onLanguage = { mode -> languageMode = mode
                             getSharedPreferences("ui", MODE_PRIVATE).edit().putString("language", mode).apply()
                             webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('andagent:native-language',{detail:'$mode'}))", null)
                         },

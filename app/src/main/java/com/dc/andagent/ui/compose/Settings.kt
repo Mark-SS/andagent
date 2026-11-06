@@ -9,7 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -53,7 +53,7 @@ fun SettingsScreen(store: SettingsStore, memory: MemoryStore, themeMode: String,
     val memories = remember(refresh) { memory.getAll() }
     val skills = remember(refresh) { runCatching { JSONArray(onAction("skills")) }.getOrDefault(JSONArray()) }
     Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.ui_settings)) },
-        navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.ui_back)) } },
+        navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.ui_back)) } },
         actions = { if (saved) Text(stringResource(R.string.ui_saved), modifier = Modifier.padding(end = 16.dp), color = MaterialTheme.colorScheme.primary) }) }) { padding ->
         LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize().padding(padding)) {
