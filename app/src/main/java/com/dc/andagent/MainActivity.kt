@@ -5,6 +5,7 @@ import android.app.Dialog
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Button
+import android.widget.FrameLayout
 import android.nfc.NfcAdapter
 import com.dc.andagent.tools.NfcSession
 import com.dc.andagent.tools.NfcTool
@@ -25,25 +26,7 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
-import com.dc.andagent.ui.compose.*
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.coroutines.launch
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
@@ -66,7 +49,6 @@ import com.dc.andagent.live.LiveOverlayHost
 import com.dc.andagent.tools.LiveTool
 import com.dc.andagent.tools.LIVE_TOOLS
 import com.dc.andagent.tools.KvStore
-import kotlinx.serialization.json.Json
 import com.dc.andagent.script.JsEvalTool
 import com.dc.andagent.tools.IntentTool
 import com.dc.andagent.tools.INTENT_TOOLS
@@ -179,12 +161,10 @@ import android.os.Looper
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Compose navigation shell with a retained WebView for the pi agent + assistant-ui conversation.
+ * Full-screen WebView for the pi agent + assistant-ui conversation.
  * Tools remain exposed to conversation content through [AgentBridge].
  */
 class MainActivity : ComponentActivity() {
-
-    private var composeThemeMode by mutableStateOf("system")
 
     private lateinit var webView: WebView
     private lateinit var nfcSession: NfcSession
@@ -303,7 +283,6 @@ class MainActivity : ComponentActivity() {
         FilePickResultBridge.launcher = filePickLaunchCallback
 
         val settingsStore = SettingsStore(this)
-        composeThemeMode = getSharedPreferences("ui", MODE_PRIVATE).getString("mode", "system") ?: "system"
         val appContext = applicationContext
         permissionBroker = PermissionBroker(this, permissionLauncher)
         shizuku = ShizukuShell(appContext).also { it.init() }
@@ -605,11 +584,21 @@ class MainActivity : ComponentActivity() {
             WebView.setWebContentsDebuggingEnabled(true)
         }
 
-        setContent {
-            AndAgentTheme(composeThemeMode) {
-                MainShell(settingsStore, memoryStore)
-            }
+        val webViewContainer = FrameLayout(this).apply {
+            addView(webView)
         }
+        setContentView(webViewContainer)
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (webView.canGoBack()) {
+                    webView.goBack()
+                } else {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                    isEnabled = true
+                }
+            }
+        })
         applyUiTheme(isDarkThemeStored())
 
         webView.loadUrl("https://appassets.androidplatform.net/assets/web/index.html")
@@ -636,105 +625,6 @@ class MainActivity : ComponentActivity() {
         WindowCompat.getInsetsController(window, window.decorView).apply {
             isAppearanceLightStatusBars = !dark
             isAppearanceLightNavigationBars = !dark
-        }
-    }
-
-    private fun command(action: String, id: String? = null) {
-        val detail = org.json.JSONObject().put("action", action).apply { if (id != null) put("id", id) }
-        webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('andagent:native-command',{detail:$detail}))", null)
-    }
-
-    private fun syncSettings(store: SettingsStore) {
-        val settings = org.json.JSONObject()
-            .put("baseUrl", store.baseUrl).put("apiKey", store.apiKey).put("model", store.model)
-            .put("systemPrompt", store.systemPrompt).put("transcribeModel", store.transcribeModel)
-            .put("transcribeBaseUrl", store.transcribeBaseUrl).put("ttsBaseUrl", store.ttsBaseUrl)
-            .put("ttsModel", store.ttsModel).put("ttsVoice", store.ttsVoice)
-        val detail = org.json.JSONObject().put("action", "settings").put("settings", settings)
-        webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('andagent:native-command',{detail:$detail}))", null)
-    }
-
-    private fun sessionItems(): List<SessionItem> = runCatching {
-        val raw = KvStore(this).get("sessions", "index")?.jsonPrimitive?.content ?: return emptyList()
-        Json.parseToJsonElement(raw).jsonArray.map { item ->
-            val obj = item.jsonObject
-            val usage = obj["usage"]?.jsonObject
-            SessionItem(obj.getValue("id").jsonPrimitive.content, obj.getValue("title").jsonPrimitive.content,
-                obj["updatedAt"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0,
-                (usage?.get("input")?.jsonPrimitive?.content?.toIntOrNull() ?: 0) +
-                    (usage?.get("output")?.jsonPrimitive?.content?.toIntOrNull() ?: 0))
-        }.sortedByDescending { it.updatedAt }
-    }.getOrDefault(emptyList())
-
-    @OptIn(ExperimentalMaterial3Api::class)
-    @Composable
-    private fun MainShell(settingsStore: SettingsStore, memoryStore: com.dc.andagent.memory.MemoryStore) {
-        val nav = rememberNavController()
-        val drawer = rememberDrawerState(DrawerValue.Closed)
-        val scope = rememberCoroutineScope()
-        var sessions by remember { mutableStateOf(sessionItems()) }
-        var selected by remember { mutableStateOf<String?>(null) }
-        val language = getSharedPreferences("ui", MODE_PRIVATE).getString("language", "system") ?: "system"
-        var languageMode by remember { mutableStateOf(language) }
-        ModalNavigationDrawer(drawerState = drawer, gesturesEnabled = true, drawerContent = {
-            ConversationDrawer(sessions, selected,
-                onNew = { command("new"); selected = null; scope.launch { drawer.close() } },
-                onSwitch = { id -> command("switch", id); selected = id; scope.launch { drawer.close() } },
-                onDelete = { id -> command("delete", id); sessions = sessions.filterNot { it.id == id } },
-                onExport = { id -> command("export", id); scope.launch { drawer.close() } },
-                onSettings = { scope.launch { drawer.close() }; nav.navigate("settings") },
-                version = BuildConfig.VERSION_NAME)
-        }) {
-            NavHost(navController = nav, startDestination = "chat") {
-                composable("chat") {
-                    Scaffold(topBar = { TopAppBar(title = { Text("AndAgent") },
-                        navigationIcon = { IconButton(onClick = { sessions = sessionItems(); scope.launch { drawer.open() } }) {
-                            Icon(Icons.Default.Menu, contentDescription = stringResource(R.string.ui_sessions)) } },
-                        actions = { IconButton(onClick = { nav.navigate("settings") }) {
-                            Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.ui_settings)) } }) }) { padding ->
-                        AndroidView(factory = {
-                            (webView.parent as? ViewGroup)?.removeView(webView)
-                            webView
-                        }, modifier = Modifier.fillMaxSize().padding(padding))
-                    }
-                }
-                composable("settings") {
-                    SettingsScreen(settingsStore, memoryStore, composeThemeMode, languageMode,
-                        onTheme = { mode ->
-                            composeThemeMode = mode
-                            getSharedPreferences("ui", MODE_PRIVATE).edit().putString("mode", mode).apply()
-                            webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('andagent:native-theme',{detail:'$mode'}))", null)
-                            applyUiTheme(mode == "dark" || (mode == "system" &&
-                                (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES))
-                        },
-                        onLanguage = { mode -> languageMode = mode
-                            getSharedPreferences("ui", MODE_PRIVATE).edit().putString("language", mode).apply()
-                            webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('andagent:native-language',{detail:'$mode'}))", null)
-                        },
-                        onSaved = { syncSettings(settingsStore) },
-                        onAction = { action -> when (action) {
-                            "shizuku" -> shizuku.statusJson()
-                            "shizuku_request" -> shizuku.requestPermission()
-                            "devtools" -> devtoolsStatusJson(this@MainActivity.applicationContext)
-                            "devtools_toggle" -> { val enabled = !settingsStore.devtoolsDebugging
-                                settingsStore.devtoolsDebugging = enabled
-                                setDevToolsDebugging(applicationContext, enabled) }
-                            "health" -> requestHealthPermission()
-                            "projection" -> requestProjectionConsent()
-                            "projection_status" -> projectionStatusJson(applicationContext, shizuku)
-                            "projection_stop" -> { ProjectionService.stop(applicationContext); "OK" }
-                            "skills" -> skillRegistry.list()
-                            else -> when {
-                                action.startsWith("skill_enable:") -> { skillRegistry.enable(action.removePrefix("skill_enable:"), true); "OK" }
-                                action.startsWith("skill_disable:") -> { skillRegistry.enable(action.removePrefix("skill_disable:"), false); "OK" }
-                                action.startsWith("skill_delete:") -> { skillRegistry.delete(action.removePrefix("skill_delete:"), true); "OK" }
-                                action.startsWith("skill_install:") -> { skillRegistry.install(action.removePrefix("skill_install:")); "OK" }
-                                else -> ""
-                            }
-                        } }, onAbout = { nav.navigate("about") }, onBack = { nav.popBackStack() })
-                }
-                composable("about") { AboutScreen(BuildConfig.VERSION_NAME) { nav.popBackStack() } }
-            }
         }
     }
 
