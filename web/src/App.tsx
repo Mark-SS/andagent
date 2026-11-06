@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   AssistantRuntimeProvider,
   ComposerPrimitive,
@@ -11,6 +11,7 @@ import {
   type ThreadMessageLike,
 } from "@assistant-ui/react";
 import { AgentEngine } from "./agent";
+import { createBackLayerManager } from "./backLayers";
 import {
   consumeDeeplink,
   getAppVersion,
@@ -451,26 +452,29 @@ export default function App() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [exportNotice, setExportNotice] = useState<string | null>(null);
   // 返回键层级：覆盖层（设置/抽屉）打开时各占一条 history 记录——Android 返回
-  // 手势/按键先收起覆盖层，而不是退出 App。popstate 弹栈时按序关闭最上层。
+  // 手势/按键先收起覆盖层，而不是退出 App。depth 由 backLayers 模块持久持有，
+  // effect 重跑只做 attach + sync，不会把已压入的记录丢在栈里。
+  const layerMgrRef = useRef<ReturnType<typeof createBackLayerManager> | null>(null);
+  const overlayRef = useRef({ showSettings, drawerOpen });
+  overlayRef.current = { showSettings, drawerOpen };
+  const closeTop = useCallback((): boolean => {
+    if (overlayRef.current.showSettings) { setShowSettings(false); return true; }
+    if (overlayRef.current.drawerOpen) { setDrawerOpen(false); return true; }
+    return false;
+  }, []);
+  const getLayerMgr = () =>
+    layerMgrRef.current ?? (layerMgrRef.current = createBackLayerManager(closeTop));
   useEffect(() => {
-    const layers: string[] = [];
-    const push = (name: string) => { layers.push(name); history.pushState({ layer: name }, ""); };
-    const closeTop = (): boolean => {
-      if (showSettings) { setShowSettings(false); return true; }
-      if (drawerOpen) { setDrawerOpen(false); return true; }
-      return false;
-    };
-    // 状态变化时同步 history 栈（目标态 = 覆盖层数量）
-    const target = (showSettings ? 1 : 0) + (drawerOpen ? 1 : 0);
-    while (layers.length < target) push(layers.length === 0 ? "overlay" : "overlay");
-    while (layers.length > target) { history.back(); layers.pop(); }
-    const onPop = () => {
-      if (layers.length > 0) layers.pop();
-      closeTop();
-    };
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
+    const mgr = getLayerMgr();
+    mgr.attach();
+    mgr.sync((showSettings ? 1 : 0) + (drawerOpen ? 1 : 0));
+    return () => mgr.detach();
   }, [showSettings, drawerOpen]);
+  // 卸载（页面销毁 / StrictMode 双挂载）时清空 history 栈，避免残留记录。
+  useEffect(() => {
+    getLayerMgr().attach();
+    return () => getLayerMgr().destroy();
+  }, []);
   useEffect(() => {
     const onExported = (event: Event) => setExportNotice(t("exportedTo", { path: (event as CustomEvent<string>).detail }));
     window.addEventListener("andagent:conversation-exported", onExported);

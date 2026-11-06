@@ -1,5 +1,5 @@
 import { useI18n } from "./i18n";
-import { memo, useMemo, useState, useSyncExternalStore } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
   MarkdownTextPrimitive,
   type SyntaxHighlighterProps,
@@ -20,28 +20,29 @@ import { LiveCard } from "./LiveCard";
 import { ShaderCard } from "./ShaderCard";
 import { WidgetPreviewCard } from "./WidgetPreviewCard";
 
-/** 流式标记的外部 store 订阅（挂载即读快照 + 持续订阅，无事件错过窗口）。 */
-const subscribeStreaming = (listener: () => void) => {
-  window.addEventListener("andagent-streaming", listener);
-  return () => window.removeEventListener("andagent-streaming", listener);
-};
-const getStreaming = () => !!window.__andagentStreaming;
-
 function CodeBlock({ language, code, components: { Pre, Code } }: SyntaxHighlighterProps) {
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const kind = (language ?? "").toLowerCase();
   const isChart = ["chart", "photos", "image", "kv", "table", "json-tree", "geo", "audio", "video", "camera", "widget", "canvas", "live", "shader", "terminal", "mermaid", "svg"].includes(kind);
 
-  // 流式防护：围栏渲染组件（chart/mermaid/...）在代码流式到达时反复重挂载会
-  // 闪烁。assistant-ui 不把「生成中」状态传进 markdown 组件，这里订阅
-  // window.__andagentStreaming（agent.ts 在流开始/结束时置位）判断：流式中
-  // 重围栏只渲染占位，流结束全量重渲染为真正卡片。
-  // 用 useSyncExternalStore：挂载即读当前值 + 订阅后续变化——不会错过事件
-  // （旧版手写 addEventListener 有「重挂载晚于 dispatch」的错过窗口，导致
-  // live 围栏永远卡在「生成中」）。
-  const streaming = useSyncExternalStore(subscribeStreaming, getStreaming, getStreaming);
-  const liveFence = streaming && isChart;
+  // 流式中重围栏只渲染占位（防闪烁）。判定源 = 本围栏的 code 是否在 800ms 内
+  // 变过：draft 流式的围栏随 delta 持续更新；历史消息的围栏 code 恒定 → 永不
+  // 误伤（旧版全局 streaming flag 会让新一轮对话时历史卡片全部变「生成中」）。
+  const [codeChanging, setCodeChanging] = useState(false);
+  const prevCodeRef = useRef(code);
+  const stableTimerRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!isChart) { setCodeChanging(false); return; }
+    if (prevCodeRef.current !== code) {
+      prevCodeRef.current = code;
+      setCodeChanging(true);
+      if (stableTimerRef.current) window.clearTimeout(stableTimerRef.current);
+      stableTimerRef.current = window.setTimeout(() => setCodeChanging(false), 800);
+    }
+    return () => { if (stableTimerRef.current) window.clearTimeout(stableTimerRef.current); };
+  }, [code, isChart]);
+  const liveFence = codeChanging && isChart;
 
   const html = useMemo(() => {
     if (isChart) return "";
