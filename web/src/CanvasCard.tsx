@@ -129,10 +129,19 @@ export function CanvasCard({ code, data }: { code: string; data?: unknown }) {
   // andagent 全局对象 RPC 代理：sandbox iframe 的 andagent.kv.* → 这里转发到
   // 原生 KV 通道（kvCall）。异步结果以 andagent-rpc-result 回传给 iframe。
   useEffect(() => {
+    // 安全：只接受本卡片 iframe 的消息；只放行 kv_get/kv_set/kv_delete 三个工具
+    // （kv_export/kv_import/kv_clear 等一律拒绝，防围栏经 kv_export include_secure
+    // 读到 secure 加密命名空间）；secure/sessions 命名空间对围栏不可见。
+    const RPC_TOOLS = ["kv_get", "kv_set", "kv_delete"];
     const onRpc = (ev: MessageEvent) => {
+      if (ev.source !== frameRef.current?.contentWindow) return;
       const d = ev.data as { type?: string; tool?: string; args?: Record<string, unknown>; seq?: number };
       if (d?.type !== "andagent-rpc" || !d.seq || typeof d.tool !== "string") return;
-      const value = kvCall(d.tool, d.args ?? {});
+      if (!RPC_TOOLS.includes(d.tool)) return;
+      const args = d.args ?? {};
+      const ns = typeof args.namespace === "string" ? args.namespace : "default";
+      if (ns === "secure" || ns === "sessions") return;
+      const value = kvCall(d.tool, args);
       frameRef.current?.contentWindow?.postMessage({ type: "andagent-rpc-result", seq: d.seq, value: value ?? null }, "*");
     };
     window.addEventListener("message", onRpc);

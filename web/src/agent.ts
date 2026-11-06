@@ -632,7 +632,8 @@ const LIVE_GUIDE = [
   "- 实时加速度示例：{\"name\":\"加速度\",\"interval_ms\":200,\"code\":\"const s=JSON.parse(andagent.tool('sensor_read',JSON.stringify({sensor:'accelerometer'})));const pts=andagent.kv.get('live_accel','pts')||[];pts.push(s.values.slice(0,3));const next=pts.slice(-60);andagent.kv.set('live_accel','pts',next);live.result({type:'line',points:next})\"}。根据 sensor_read 实际返回结构提取轴值。",
   "- 要画实时曲线时必须提供 render：从 data.points 读点，使用 ctx.beginPath / moveTo / lineTo / stroke 在 canvas 上绘制；省略 render 时卡片只显示本轮 JSON 文本。",
   "- 单 tick 500ms 硬超时；连续 5 次异常自动停止；用户可在卡片上暂停、停止或重启。",
-  "- 静态 canvas 2D 绘图用 ```canvas 围栏，内容可为 JS 或 {\"code\":\"...\",\"animate\":true} JSON；运行在 sandbox iframe，代码接收 ctx,t,w,h，animate:true 可随 requestAnimationFrame 重绘。",
+  "- 静态 canvas 2D 绘图用 ```canvas 围栏，内容可为 JS 或 {\"code\":\"...\",\"animate\":true} JSON；运行在 sandbox iframe，代码接收 ctx,t,w,h,data,andagent，animate:true 可随 requestAnimationFrame 重绘。",
+  "- canvas 围栏里用 andagent 全局对象保存状态：andagent.state 是内存级跨帧状态，仅 canvas 渲染代码可用（同一画布生命周期内保留，如动画偏移、累计数组）；andagent.kv.get(ns,key)/set(ns,key,value)/delete(ns,key) 是持久化 KV（set/delete 返回 Promise，走原生存储，重启后仍在）。live 的 code 循环体运行在原生 QuickJS，只有 andagent.tool/andagent.kv，没有 andagent.state——跨 tick 状态用 andagent.kv。示例：andagent.state.offset=(andagent.state.offset||0)+1; 或 andagent.kv.set('mycanvas','high',v)。",
 ].join("\n");
 
 const CHART_GUIDE_EN = [
@@ -656,7 +657,8 @@ const LIVE_GUIDE_EN = [
   "- Accelerometer example: {\"name\":\"Acceleration\",\"interval_ms\":200,\"code\":\"const s=JSON.parse(andagent.tool('sensor_read',JSON.stringify({sensor:'accelerometer'})));const pts=andagent.kv.get('live_accel','pts')||[];pts.push(s.values.slice(0,3));const next=pts.slice(-60);andagent.kv.set('live_accel','pts',next);live.result({type:'line',points:next})\"}.",
   "- For a live curve include render: read data.points and draw with ctx.beginPath, moveTo, lineTo, and stroke. Without render the card shows JSON text.",
   "- Each tick has a hard 500ms timeout. Five consecutive failures stop the loop. The user can pause, stop, or restart it from the card.",
-  "- For static 2D drawing, output a ```canvas fence with JS or JSON {\"code\":\"...\",\"animate\":true}. It runs in a sandbox iframe with ctx,t,w,h; animate:true redraws with requestAnimationFrame.",
+  "- For static 2D drawing, output a ```canvas fence with JS or JSON {\"code\":\"...\",\"animate\":true}. It runs in a sandbox iframe with ctx,t,w,h,data,andagent; animate:true redraws with requestAnimationFrame.",
+  "- Use the andagent global object for state in canvas fences: andagent.state is in-memory cross-frame state, available only inside canvas render code (kept for the fence lifetime — animation offsets, accumulators); andagent.kv.get(ns,key)/set(ns,key,value)/delete(ns,key) is persistent KV (set/delete return Promises, backed by native storage, survives restarts). The live code loop body runs in native QuickJS with only andagent.tool/andagent.kv — there is no andagent.state there; use andagent.kv for cross-tick state. Example: andagent.state.offset=(andagent.state.offset||0)+1; or andagent.kv.set('mycanvas','high',v).",
 ].join("\n");
 
 const STORAGE_MEDIA_GUIDE = [
